@@ -1,0 +1,23 @@
+[
+    {
+        "topic_name": "Tensor and Datasets"
+    },
+    {
+        "topic_name": "Linear Regression"
+    },
+    {
+        "topic_name": "Multiple Input Output Linear Regression"
+    },
+    {
+        "topic_name": "Logistic Regression for Classification"
+    },
+    {
+        "topic_name": "Softmax Rergresstion"
+    },
+    {
+        "topic_name": "Shallow Neural Networks"
+    },
+    {
+        "topic_name": "Deep Neural Networks"
+    }
+]

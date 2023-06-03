@@ -1,0 +1,20 @@
+[
+    {
+        "topic_name": "Creating, Reading and Writing"
+    },
+    {
+        "topic_name": "Indexing, Selecting & Assigning"
+    },
+    {
+        "topic_name": "Summary Functions and Maps"
+    },
+    {
+        "topic_name": "Grouping and Sorting"
+    },
+    {
+        "topic_name": "Data Types and Missing Values"
+    },
+    {
+        "topic_name": "Renaming and Combining"
+    }
+]
