@@ -20,11 +20,11 @@ class OpenAIChatRole(Enum):
     SYSTEM = "system"
 
 
-class OpenAIChatMessage(BaseModel):
+class ChatMarkupLanguage(BaseModel):
     role: OpenAIChatRole
     content: str
 
 
 # class GenerateQuestionre
 class TrainingChatRequest(BaseModel):
-    messages: List[OpenAIChatMessage]
+    messages: List[ChatMarkupLanguage]

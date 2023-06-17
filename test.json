@@ -1,0 +1,20 @@
+{
+    "messages": [
+        {
+            "role": "assistant",
+            "content": "Topic: \u201cJavascript\u201d -> \u201cBasics\u201d -> \u201cOperators\u201d\n                Blooms level: \u201cAnalysing\u201d\n                Learning outcome: \u201cAnalyze complex expressions containing multiple operators, and break them down into simpler parts.\u201d\n                Question: Please analyze the following JavaScript expression and break it down into simpler parts, explaining the order of operations and the intermediate results at each step: `3 + 5 * 2 - 4 / 2`. Write your answer in the format of step-by-step explanations.\n                "
+        },
+        {
+            "role": "user",
+            "content": "\n            - 3 + 5 = 8\n            - 2 - 4 = -2\n            - 8 * -2 / 2\n            - 8 * -2 = -16\n            - -16/2 = -8"
+        },
+        {
+            "role": "assistant",
+            "content": "Actual solution:\n    ```\n    1. 5 * 2 = 10 (multiplication has higher precedence than addition and subtraction)\n    2. 4 / 2 = 2 (division has higher precedence than addition and subtraction)\n    3. 3 + 10 = 13 (addition)\n    4. 13 - 2 = 11 (subtraction)\n    ```\n    {\"Answer\": 0, \"feedback\": \"You didn't follow the correct order of operations. Remember that multiplication and division have higher precedence than addition and subtraction. Please try again, keeping the order of operations in mind.\"}"
+        },
+        {
+            "role": "user",
+            "content": "'1. 5 * 2 = 10 (multiplication)\n2. 4 / 2 = 2 (division)\n3. 3 + 10 = 13 (addition)\n4. 13 - 2 = 11 (subtraction)'"
+        }
+    ]
+}
