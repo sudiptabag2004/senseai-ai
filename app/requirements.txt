@@ -1,0 +1,9 @@
+langchain
+fastapi
+openai
+backoff
+pathlib
+openai
+python-dotenv
+wandb
+uvicorn[standard]
