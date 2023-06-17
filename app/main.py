@@ -24,7 +24,8 @@ from gpt import call_openai_chat_model, parse_llm_output, run_openai_chat_chain
 from models import (
     GenerateTrainingQuestionRequest,
     GenerateTrainingQuestionResponse,
-    ChatMarkupLanguage,
+    TrainingChatRequest,
+    TrainingChatResponse,
 )
 from settings import settings, get_env_file_path
 
@@ -268,10 +269,10 @@ def get_training_chat_callbacks():
         WandbTracer.finish()
 
 
-@app.post("/training/chat")
+@app.post("/training/chat", response_model=TrainingChatResponse)
 def training_chat(
     callbacks: Annotated[List, Depends(get_training_chat_callbacks)],
-    messages: Annotated[List[ChatMarkupLanguage], Body(embed=True)],
+    messages: TrainingChatRequest,
 ):
     # TODO: handle memory
     # TODO: make sure to handle wandb exception when deploying as well
@@ -298,7 +299,7 @@ def training_chat(
         )
         if evaluator_response["success"]:
             evaluator_response.pop("success")
-            return {"response": evaluator_response}
+            return {"type": query_type, "response": evaluator_response}
 
         raise HTTPException(
             status_code=500, detail="Something went wrong with Evaluator"
@@ -310,10 +311,10 @@ def training_chat(
         )
         if clarifier_response["success"]:
             clarifier_response.pop("success")
-            return clarifier_response
+            return {"type": query_type, **clarifier_response}
 
         raise HTTPException(
             status_code=500, detail="Something went wrong with Clarifier"
         )
 
-    return {"response": "irrelevant query"}
+    return {"type": query_type}

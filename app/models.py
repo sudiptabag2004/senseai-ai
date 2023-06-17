@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Union, Optional
+from typing_extensions import TypedDict
 from enum import Enum
 from pydantic import BaseModel
 
@@ -14,7 +15,7 @@ class GenerateTrainingQuestionResponse(BaseModel):
     question: str
 
 
-class OpenAIChatRole(Enum):
+class OpenAIChatRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
@@ -25,6 +26,21 @@ class ChatMarkupLanguage(BaseModel):
     content: str
 
 
-# class GenerateQuestionre
 class TrainingChatRequest(BaseModel):
     messages: List[ChatMarkupLanguage]
+
+
+class TrainingEvaluatorResponse(BaseModel):
+    answer: int
+    feedback: str
+
+
+class TrainingChatQueryType(str, Enum):
+    ANSWER = "answer"
+    CLARIFICATION = "clarification"
+    IRRELEVANT = "irrelevant"
+
+
+class TrainingChatResponse(BaseModel):
+    type: TrainingChatQueryType
+    response: Optional[Union[str, TrainingEvaluatorResponse]]
