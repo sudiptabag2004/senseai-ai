@@ -16,6 +16,7 @@
   ```
   pip install -r app/requirements.txt
   ```
+- Update environment variables inside `app/.env`.
 
 ## Running locally
 
