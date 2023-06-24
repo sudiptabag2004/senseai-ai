@@ -1,0 +1,53 @@
+stages:
+  - build
+  - deploy-staging
+  - deploy-production
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+
+deploy-staging:
+  stage: deploy-staging
+  image: ubuntu:latest
+  before_script:
+    - apt-get update
+    - apt-get install -y openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_DEV_PRIVATE_KEY" | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $DEPLOY_DEV_SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - scp -o StrictHostKeyChecking=no docker-compose.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.staging.yml
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml pull'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml down'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml up -d'
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
+
+deploy-production:
+  stage: deploy-production
+  image: ubuntu:latest
+  before_script:
+    - apt-get update
+    - apt-get install -y openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PROD_PRIVATE_KEY" | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $DEPLOY_PROD_SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - scp -o StrictHostKeyChecking=no docker-compose.production.yml $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP:~/docker-compose.production.yml
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml pull'
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml down'
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml up -d'
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "production" '
