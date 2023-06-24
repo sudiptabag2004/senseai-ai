@@ -1,11 +1,11 @@
 version: '3'
 services:
   app:
-    image: dalmiamanhv/sensai-ai:staging
+    image: dalmiamanhv/sensai-ai:production
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
     environment:
-      - ENV=staging
+      - ENV=production
