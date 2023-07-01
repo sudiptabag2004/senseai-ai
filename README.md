@@ -21,7 +21,7 @@
 ## Running locally
 
 ```
-cd app; uvicorn main:app --reload
+cd app; uvicorn main:app --reload --port 8001
 ```
 
 The app will be hosted on http://localhost:3000.
