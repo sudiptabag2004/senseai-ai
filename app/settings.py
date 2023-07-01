@@ -2,6 +2,11 @@ import os
 from pydantic import BaseSettings
 
 
+def is_local_env():
+    env = os.getenv("ENV")
+    return not env or env in ['local', 'dev']
+
+
 def get_env_file_path() -> str:
     if os.getenv("ENV") == "production":
         return ".env.production"

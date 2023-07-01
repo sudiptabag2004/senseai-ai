@@ -27,7 +27,7 @@ from models import (
     TrainingChatRequest,
     TrainingChatResponse,
 )
-from settings import settings, get_env_file_path
+from settings import settings, get_env_file_path, is_local_env
 
 load_dotenv(get_env_file_path())
 
@@ -51,19 +51,25 @@ app = FastAPI()
 
 
 def get_generate_training_question_callbacks():
-    wandb.init(
-        project="sensai-ai",
-        entity="sensaihv",
-        group="training",
-        job_type="generate_question",
-    )
+    if is_local_env():
+        wandb.init(
+            project="sensai-ai",
+            entity="sensaihv",
+            group="training",
+            job_type="generate_question",
+            reinit=True,
+            settings=wandb.Settings(start_method="fork")
+        )
 
-    wandb_trace_callback = WandbTracer()
-    callbacks = [wandb_trace_callback]
-    try:
-        yield callbacks
-    finally:
-        WandbTracer.finish()
+        wandb_trace_callback = WandbTracer()
+        callbacks = [wandb_trace_callback]
+        try:
+            yield callbacks
+        finally:
+            WandbTracer.finish()
+            wandb.finish(quiet=True)
+    else:
+        yield []
 
 
 @app.post("/training/question", response_model=GenerateTrainingQuestionResponse)
@@ -104,7 +110,8 @@ def generate_training_question(
         type="string",
     )
 
-    output_parser = StructuredOutputParser.from_response_schemas([question_schema])
+    output_parser = StructuredOutputParser.from_response_schemas([
+                                                                 question_schema])
     format_instructions = output_parser.get_format_instructions()
 
     messages = chat_prompt_template.format_prompt(
@@ -152,7 +159,8 @@ def run_router_chain(input, history, callbacks: List = []):
         description="either of 'answer', 'clarification', 'irrelevant'",
         type="answer | clarification | irrelevant",
     )
-    output_parser = StructuredOutputParser.from_response_schemas([output_schema])
+    output_parser = StructuredOutputParser.from_response_schemas([
+                                                                 output_schema])
     format_instructions = output_parser.get_format_instructions()
     system_prompt = system_prompt_template.format(
         format_instructions=format_instructions
@@ -254,40 +262,47 @@ def run_clarifier_chain(input, history, callbacks: List = []):
 
 
 def get_training_chat_callbacks():
-    wandb.init(
-        project="sensai-ai",
-        entity="sensaihv",
-        group="training",
-        job_type="chat",
-    )
+    if is_local_env():
+        wandb.init(
+            project="sensai-ai",
+            entity="sensaihv",
+            group="training",
+            job_type="chat",
+            reinit=True,
+            settings=wandb.Settings(start_method="fork")
+        )
 
-    wandb_trace_callback = WandbTracer()
-    callbacks = [wandb_trace_callback]
-    try:
-        yield callbacks
-    finally:
-        WandbTracer.finish()
+        wandb_trace_callback = WandbTracer()
+        callbacks = [wandb_trace_callback]
+        try:
+            yield callbacks
+        finally:
+            WandbTracer.finish()
+            wandb.finish(quiet=True)
+    else:
+        yield []
 
 
 @app.post("/training/chat", response_model=TrainingChatResponse)
 def training_chat(
     callbacks: Annotated[List, Depends(get_training_chat_callbacks)],
-    messages: TrainingChatRequest,
+    training_chat_request: TrainingChatRequest,
 ):
     # TODO: handle memory
     # TODO: make sure to handle wandb exception when deploying as well
 
-    if not messages:
+    if not training_chat_request.messages:
         raise HTTPException(status_code=400, detail="messages cannot be empty")
 
-    history = messages[:-1]
-    query = messages[-1]
+    history = training_chat_request.training_chat_request[:-1]
+    query = training_chat_request.messages[-1]
 
     router_response = run_router_chain(
         input=query, history=history, callbacks=callbacks
     )
     if not router_response["success"]:
-        raise HTTPException(status_code=500, detail="Something went wrong with router")
+        raise HTTPException(
+            status_code=500, detail="Something went wrong with router")
 
     query_type = router_response["type"]
 
