@@ -2,7 +2,7 @@ import os
 from typing import List
 from typing_extensions import Annotated
 
-from fastapi import FastAPI, Depends, HTTPException, Body
+from fastapi import FastAPI, Depends, HTTPException, Request
 import openai
 from langchain.prompts import (
     SystemMessagePromptTemplate,
@@ -14,9 +14,6 @@ from langchain.output_parsers import (
     StructuredOutputParser,
 )
 
-import wandb
-from wandb.integration.langchain import WandbTracer
-
 from langchain.schema import SystemMessage
 from dotenv import load_dotenv
 
@@ -27,55 +24,26 @@ from models import (
     TrainingChatRequest,
     TrainingChatResponse,
 )
-from settings import settings, get_env_file_path, is_local_env
+from settings import settings, get_env_file_path
 
 load_dotenv(get_env_file_path())
-
-# from sensai import create_learning_outcomes
-# client = MongoClient(mongodb_uri)
-# db = client["sensai"]
-# subjects_collection = db["subjects"]
-# users_collection = db["users"]
-# assessments_collection = db["assessments"]
 
 openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
-
+os.environ['LANGCHAIN_WANDB_TRACING'] = "true"
+os.environ['WANDB_PROJECT'] = 'sensai-ai'
+os.environ['WANDB_ENTITY'] = 'sensaihv'
+        
 app = FastAPI()
 
-# @app.get("/")
-# def read_root():
-#     print(subjects_collection.find_one({"subject": "JavaScript"}))
-#     return subjects_collection.find_one({"subject": "JavaScript"})
+def init_wandb_for_generate_question():
+    os.environ['WANDB_RUN_GROUP'] = 'training'
+    os.environ['WANDB_JOB_TYPE'] = 'generate_question'
 
-
-def get_generate_training_question_callbacks():
-    if is_local_env():
-        wandb.init(
-            project="sensai-ai",
-            entity="sensaihv",
-            group="training",
-            job_type="generate_question",
-            reinit=True,
-            settings=wandb.Settings(start_method="fork")
-        )
-
-        wandb_trace_callback = WandbTracer()
-        callbacks = [wandb_trace_callback]
-        try:
-            yield callbacks
-        finally:
-            WandbTracer.finish()
-            wandb.finish(quiet=True)
-    else:
-        yield []
-
-
-@app.post("/training/question", response_model=GenerateTrainingQuestionResponse)
+@app.post("/training/question", response_model=GenerateTrainingQuestionResponse, dependencies=[Depends(init_wandb_for_generate_question)])
 def generate_training_question(
-    callbacks: Annotated[List, Depends(get_generate_training_question_callbacks)],
-    question_params: GenerateTrainingQuestionRequest,
+    question_params: GenerateTrainingQuestionRequest
 ):
     model = "gpt-4-0613"
 
@@ -126,7 +94,6 @@ def generate_training_question(
             messages,
             model=model,
             max_tokens=1024,
-            callbacks=callbacks,
         )
 
         response = parse_llm_output(
@@ -144,7 +111,7 @@ def generate_training_question(
         return {"sucess": False}
 
 
-def run_router_chain(input, history, callbacks: List = []):
+def run_router_chain(input, history):
     system_prompt_template = """You will be provided with a series of interactions between a student and an interviewer along with a student query. The interviewer has asked the student a particular question. The student query will be delimited with #### characters.
  
     Classify each query into one of the categories below:
@@ -174,7 +141,6 @@ def run_router_chain(input, history, callbacks: List = []):
         history,
         output_parser,
         verbose=True,
-        callbacks=callbacks,
     )
 
     if "type" in response:
@@ -183,7 +149,7 @@ def run_router_chain(input, history, callbacks: List = []):
     return {"success": False}
 
 
-def run_evaluator_chain(input, history, callbacks: List = []):
+def run_evaluator_chain(input, history):
     system_prompt_template = """You are a helpful and encouraging interviewer.
     You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on as well as the student's response to the question. You need to provide an evaluation based on the student's response. The student's response will be delimited with #### characters.
 
@@ -228,7 +194,6 @@ def run_evaluator_chain(input, history, callbacks: List = []):
         ],
         output_parser,
         verbose=True,
-        callbacks=callbacks,
     )
 
     if "answer" in response and "feedback" in response:
@@ -237,7 +202,7 @@ def run_evaluator_chain(input, history, callbacks: List = []):
     return {"success": False}
 
 
-def run_clarifier_chain(input, history, callbacks: List = []):
+def run_clarifier_chain(input, history):
     system_prompt = """You are a helpful and encouraging interviewer.
     You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.
 
@@ -255,38 +220,19 @@ def run_clarifier_chain(input, history, callbacks: List = []):
         system_prompt,
         history,
         verbose=True,
-        callbacks=callbacks,
     )
 
     return {"success": True, "response": response}
 
 
-def get_training_chat_callbacks():
-    if is_local_env():
-        wandb.init(
-            project="sensai-ai",
-            entity="sensaihv",
-            group="training",
-            job_type="chat",
-            reinit=True,
-            settings=wandb.Settings(start_method="fork")
-        )
-
-        wandb_trace_callback = WandbTracer()
-        callbacks = [wandb_trace_callback]
-        try:
-            yield callbacks
-        finally:
-            WandbTracer.finish()
-            wandb.finish(quiet=True)
-    else:
-        yield []
+def init_wandb_for_training_chat():
+    os.environ['WANDB_RUN_GROUP'] = 'training'
+    os.environ['WANDB_JOB_TYPE'] = 'chat'
 
 
-@app.post("/training/chat", response_model=TrainingChatResponse)
+@app.post("/training/chat", response_model=TrainingChatResponse, dependencies=[Depends(init_wandb_for_training_chat)])
 def training_chat(
-    callbacks: Annotated[List, Depends(get_training_chat_callbacks)],
-    training_chat_request: TrainingChatRequest,
+    training_chat_request: TrainingChatRequest
 ):
     # TODO: handle memory
     # TODO: make sure to handle wandb exception when deploying as well
@@ -294,11 +240,11 @@ def training_chat(
     if not training_chat_request.messages:
         raise HTTPException(status_code=400, detail="messages cannot be empty")
 
-    history = training_chat_request.training_chat_request[:-1]
+    history = training_chat_request.messages[:-1]
     query = training_chat_request.messages[-1]
 
     router_response = run_router_chain(
-        input=query, history=history, callbacks=callbacks
+        input=query, history=history
     )
     if not router_response["success"]:
         raise HTTPException(
@@ -310,7 +256,7 @@ def training_chat(
 
     if query_type == "answer":
         evaluator_response = run_evaluator_chain(
-            input=query, history=history, callbacks=callbacks
+            input=query, history=history
         )
         if evaluator_response["success"]:
             evaluator_response.pop("success")
@@ -322,7 +268,7 @@ def training_chat(
 
     if query_type == "clarification":
         clarifier_response = run_clarifier_chain(
-            input=query, history=history, callbacks=callbacks
+            input=query, history=history
         )
         if clarifier_response["success"]:
             clarifier_response.pop("success")
