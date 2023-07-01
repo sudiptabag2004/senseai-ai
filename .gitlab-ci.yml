@@ -25,10 +25,11 @@ deploy-staging:
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_DEV_SERVER_IP >> ~/.ssh/known_hosts
   script:
-    - scp -o StrictHostKeyChecking=no docker-compose.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.staging.yml
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml pull'
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml down'
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.staging.yml up -d'
+    - scp -o StrictHostKeyChecking=no docker-compose.ai.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.ai.staging.yml
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml down -rmi "all"'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml pull'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml up -d'
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
 
@@ -44,10 +45,11 @@ deploy-production:
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_PROD_SERVER_IP >> ~/.ssh/known_hosts
   script:
-    - scp -o StrictHostKeyChecking=no docker-compose.production.yml $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP:~/docker-compose.production.yml
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml pull'
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml down'
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.production.yml up -d'
+    - scp -o StrictHostKeyChecking=no docker-compose.ai.production.yml $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP:~/docker-compose.ai.production.yml
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml down -rmi "all"'
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml pull'
+    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml up -d'
 
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "production" '
