@@ -16,6 +16,7 @@ from langchain.output_parsers import (
 
 from langchain.schema import SystemMessage
 from dotenv import load_dotenv
+import wandb
 
 from gpt import call_openai_chat_model, parse_llm_output, run_openai_chat_chain
 from models import (
@@ -32,14 +33,22 @@ openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 os.environ['LANGCHAIN_WANDB_TRACING'] = "true"
-os.environ['WANDB_PROJECT'] = 'sensai-ai'
-os.environ['WANDB_ENTITY'] = 'sensaihv'
         
 app = FastAPI()
 
+@app.middleware("http")
+async def finish_wandb_process(request: Request, call_next):
+    response = await call_next(request)
+    wandb.finish(quiet=True)
+    return response
+
 def init_wandb_for_generate_question():
-    os.environ['WANDB_RUN_GROUP'] = 'training'
-    os.environ['WANDB_JOB_TYPE'] = 'generate_question'
+    wandb.init(
+        project="sensai-ai",
+        entity="sensaihv",
+        group="training",
+        job_type="generate_question",
+    )
 
 @app.post("/training/question", response_model=GenerateTrainingQuestionResponse, dependencies=[Depends(init_wandb_for_generate_question)])
 def generate_training_question(
@@ -226,8 +235,12 @@ def run_clarifier_chain(input, history):
 
 
 def init_wandb_for_training_chat():
-    os.environ['WANDB_RUN_GROUP'] = 'training'
-    os.environ['WANDB_JOB_TYPE'] = 'chat'
+    wandb.init(
+        project="sensai-ai",
+        entity="sensaihv",
+        group="training",
+        job_type="chat",
+    )
 
 
 @app.post("/training/chat", response_model=TrainingChatResponse, dependencies=[Depends(init_wandb_for_training_chat)])
