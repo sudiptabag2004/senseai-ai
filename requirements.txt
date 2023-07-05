@@ -7,3 +7,4 @@ openai
 python-dotenv
 wandb
 uvicorn[standard]
+streamlit
