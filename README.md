@@ -18,7 +18,7 @@
   ```
 - Update environment variables inside `app/.env`.
 
-## Running locally
+## Running the API locally
 
 ```
 cd app; uvicorn main:app --reload --port 8001
@@ -26,3 +26,13 @@ cd app; uvicorn main:app --reload --port 8001
 
 The app will be hosted on http://localhost:3000.
 The docs will be available on http://localhost:3000/docs
+
+## Running the demo app locally
+
+```
+cd demo; streamlit run app.py
+```
+
+The app will be hosted on http://localhost:8501.
+
+
