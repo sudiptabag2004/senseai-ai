@@ -1,43 +1,102 @@
-import streamlit as st
 import requests
 import json
+import os
+from collections import defaultdict
 from functools import partial
+from dotenv import load_dotenv
+import streamlit as st
 
-subject_col, topic_col, sub_topic_col = st.columns(3)
+load_dotenv()
+
+topic_col, sub_topic_col, concept_col = st.columns(3)
 
 if "is_training_started" not in st.session_state:
     st.session_state.is_training_started = False
 
-with subject_col:
-    subject = st.selectbox(
-        "Choose Subject",
-        ["Javascript", "J2"],
-        key="subject",
-        disabled=st.session_state.is_training_started,
+
+@st.cache_resource(show_spinner=True)
+def fetch_topic_list():
+    fetch_topics_response = requests.get(
+        f"{os.environ['BACKEND_URL']}/api/roadmaps/list",
     )
+    print(fetch_topics_response)
+    if fetch_topics_response.status_code != 200:
+        st.error("Something went wrong. Please reload the page")
+        st.stop()
+
+    topics = fetch_topics_response.json()["topics"]
+
+    return topics
+
+
+@st.cache_resource(show_spinner=True)
+def fetch_topic_tree(topic: str):
+    fetch_topic_tree_response = requests.post(
+        f"{os.environ['BACKEND_URL']}/api/roadmaps/load",
+        data=json.dumps({"topic": topic}),
+    )
+    if fetch_topic_tree_response.status_code != 200:
+        st.error("Something went wrong. Please reload the page")
+        st.stop()
+
+    return fetch_topic_tree_response.json()
+
+
+@st.cache_resource(show_spinner=True)
+def fetch_learning_outcomes(concept: str):
+    fetch_learning_outcome_response = requests.get(
+        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/{concept}",
+    )
+    if fetch_learning_outcome_response.status_code != 200:
+        st.error("Something went wrong. Please reload the page")
+        st.stop()
+
+    learning_outcomes_list = fetch_learning_outcome_response.json()
+    blooms_level_to_learning_outcomes_map = defaultdict(list)
+    for value in learning_outcomes_list:
+        blooms_level_to_learning_outcomes_map[value["blooms_level"]].append(
+            value["learning_outcome"]
+        )
+    return blooms_level_to_learning_outcomes_map
+
+
+topics = fetch_topic_list()
+
 
 with topic_col:
     topic = st.selectbox(
-        "Choose Topic",
-        ["Basics"],
+        "Choose topic",
+        topics,
         key="topic",
         disabled=st.session_state.is_training_started,
     )
 
+topic_tree = fetch_topic_tree(topic)
+
 with sub_topic_col:
     sub_topic = st.selectbox(
-        "Choose Sub-topic",
-        ["Operators"],
+        "Choose Sub-Topic",
+        topic_tree.keys(),
         key="sub_topic",
         disabled=st.session_state.is_training_started,
     )
+
+with concept_col:
+    concept = st.selectbox(
+        "Choose Concept",
+        topic_tree[sub_topic],
+        key="concept",
+        disabled=st.session_state.is_training_started,
+    )
+
+learning_outcomes_dict = fetch_learning_outcomes(concept)
 
 blooms_level_col, learning_outcome_col = st.columns(2)
 
 with blooms_level_col:
     blooms_level = st.selectbox(
         "Choose Bloom's Level",
-        ["Analyzing"],
+        learning_outcomes_dict.keys(),
         key="blooms_level",
         disabled=st.session_state.is_training_started,
     )
@@ -45,9 +104,7 @@ with blooms_level_col:
 with learning_outcome_col:
     learning_outcome = st.selectbox(
         "Choose Learning Outcome",
-        [
-            "Analyze complex expressions containing multiple operators, and break them down into simpler parts"
-        ],
+        learning_outcomes_dict[blooms_level],
         key="learning_outcome",
         disabled=st.session_state.is_training_started,
     )
@@ -104,7 +161,7 @@ if is_training_started:
                     "http://127.0.0.1:8001/training/question",
                     data=json.dumps(
                         {
-                            "topic": f"{subject} -> {topic} -> {sub_topic}",
+                            "topic": f"{topic} -> {sub_topic} -> {concept}",
                             "blooms_level": blooms_level,
                             "learning_outcome": learning_outcome,
                         }
@@ -126,7 +183,7 @@ if is_training_started:
             st.session_state.ai_chat_history.append(
                 {
                     "role": "assistant",
-                    "content": f"Topic: {subject} -> {topic} -> {sub_topic}\nBlooms level: {blooms_level}\nLearning outcome: {learning_outcome}\nQuestion: {generated_question}",
+                    "content": f"Topic: {topic} -> {sub_topic} -> {concept}\nBlooms level: {blooms_level}\nLearning outcome: {learning_outcome}\nQuestion: {generated_question}",
                 }
             )
 
