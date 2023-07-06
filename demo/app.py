@@ -4,20 +4,42 @@ import json
 from functools import partial
 
 subject_col, topic_col, sub_topic_col = st.columns(3)
+
+if "is_training_started" not in st.session_state:
+    st.session_state.is_training_started = False
+
 with subject_col:
-    subject = st.selectbox("Choose Subject", ["Javascript", "J2"], key="subject")
+    subject = st.selectbox(
+        "Choose Subject",
+        ["Javascript", "J2"],
+        key="subject",
+        disabled=st.session_state.is_training_started,
+    )
 
 with topic_col:
-    topic = st.selectbox("Choose Topic", ["Basics"], key="topic")
+    topic = st.selectbox(
+        "Choose Topic",
+        ["Basics"],
+        key="topic",
+        disabled=st.session_state.is_training_started,
+    )
 
 with sub_topic_col:
-    sub_topic = st.selectbox("Choose Sub-topic", ["Operators"], key="sub_topic")
+    sub_topic = st.selectbox(
+        "Choose Sub-topic",
+        ["Operators"],
+        key="sub_topic",
+        disabled=st.session_state.is_training_started,
+    )
 
 blooms_level_col, learning_outcome_col = st.columns(2)
 
 with blooms_level_col:
     blooms_level = st.selectbox(
-        "Choose Bloom's Level", ["Analyzing"], key="blooms_level"
+        "Choose Bloom's Level",
+        ["Analyzing"],
+        key="blooms_level",
+        disabled=st.session_state.is_training_started,
     )
 
 with learning_outcome_col:
@@ -27,10 +49,8 @@ with learning_outcome_col:
             "Analyze complex expressions containing multiple operators, and break them down into simpler parts"
         ],
         key="learning_outcome",
+        disabled=st.session_state.is_training_started,
     )
-
-if "is_training_started" not in st.session_state:
-    st.session_state.is_training_started = False
 
 
 def on_start_training_click():
@@ -48,7 +68,8 @@ else:
 
 is_training_started = st.session_state.is_training_started
 
-st.session_state.is_training_started
+with st.expander("See variables"):
+    st.session_state
 
 
 def delete_user_chat_message(index_to_delete: int):
@@ -125,7 +146,21 @@ if is_training_started:
                         key=index,
                     )
 
-    user_answer = st.chat_input("Your answer")
+    # reset AI response state
+    if "ai_response_in_progress" not in st.session_state:
+        st.session_state.ai_response_in_progress = False
+
+    def toggle_ai_response_state():
+        st.session_state.ai_response_in_progress = (
+            not st.session_state.ai_response_in_progress
+        )
+
+    user_answer = st.chat_input(
+        "Your answer",
+        on_submit=toggle_ai_response_state,
+        disabled=st.session_state.ai_response_in_progress,
+    )
+
     if user_answer:
         with st.chat_message("user"):
             user_answer_cols = st.columns([7, 1])
@@ -153,8 +188,8 @@ if is_training_started:
                 ai_chat_history.pop()
                 st.stop()
 
+            toggle_ai_response_state()
             training_chat_response = training_chat_response.json()
-            print(training_chat_response)
 
             user_answer_type = training_chat_response["type"]
             if user_answer_type == "irrelevant":
@@ -186,6 +221,3 @@ if is_training_started:
             {"role": "assistant", "content": json.dumps(training_chat_response)},
         )
         st.session_state.ai_chat_history = ai_chat_history
-
-with st.expander('See variables'):
-    st.session_state
