@@ -1,8 +1,7 @@
 import os
-from typing import List
-from typing_extensions import Annotated
 
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 import openai
 from langchain.prompts import (
     SystemMessagePromptTemplate,
@@ -18,7 +17,7 @@ from langchain.schema import SystemMessage
 from dotenv import load_dotenv
 import wandb
 
-from gpt import call_openai_chat_model, parse_llm_output, run_openai_chat_chain
+from gpt import call_openai_chat_model, run_openai_chat_chain
 from models import (
     GenerateTrainingQuestionRequest,
     GenerateTrainingQuestionResponse,
@@ -32,15 +31,17 @@ load_dotenv(get_env_file_path())
 openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
-os.environ['LANGCHAIN_WANDB_TRACING'] = "true"
-        
+os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
+
 app = FastAPI()
+
 
 @app.middleware("http")
 async def finish_wandb_process(request: Request, call_next):
     response = await call_next(request)
     wandb.finish(quiet=True)
     return response
+
 
 def init_wandb_for_generate_question():
     wandb.init(
@@ -50,10 +51,14 @@ def init_wandb_for_generate_question():
         job_type="generate_question",
     )
 
-@app.post("/training/question", response_model=GenerateTrainingQuestionResponse, dependencies=[Depends(init_wandb_for_generate_question)])
-def generate_training_question(
-    question_params: GenerateTrainingQuestionRequest
-):
+
+@app.post(
+    "/training/question",
+    response_model=GenerateTrainingQuestionResponse,
+    dependencies=[Depends(init_wandb_for_generate_question)],
+)
+def generate_training_question(question_params: GenerateTrainingQuestionRequest):
+    print("here")
     model = "gpt-4-0613"
 
     system_prompt_template = """
@@ -61,8 +66,6 @@ def generate_training_question(
     You will be specified with a topic, a blooms level, and learning outcome that the user needs to be tested on. 
     Ask one question for the specified topic, blooms level and learning outcome.
     Include the answer format you expect from user in the question itself.
-    
-    {format_instructions}
     """
 
     user_prompt_template = """
@@ -81,43 +84,19 @@ def generate_training_question(
         [system_prompt_template, user_prompt_template]
     )
 
-    question_schema = ResponseSchema(
-        name="question",
-        description="The generated question",
-        type="string",
-    )
-
-    output_parser = StructuredOutputParser.from_response_schemas([
-                                                                 question_schema])
-    format_instructions = output_parser.get_format_instructions()
-
     messages = chat_prompt_template.format_prompt(
-        format_instructions=format_instructions,
         topic=question_params.topic,
         blooms_level=question_params.blooms_level,
         learning_outcome=question_params.learning_outcome,
     ).to_messages()
 
-    try:
-        response = call_openai_chat_model(
-            messages,
-            model=model,
-            max_tokens=1024,
-        )
+    def stream_question():
+        for chunk in call_openai_chat_model(
+            messages, model=model, max_tokens=1024, streaming=True
+        ):
+            yield chunk
 
-        response = parse_llm_output(
-            output_parser, response, model, default={"question": ""}
-        )
-
-        question = response["question"]
-        # import ipdb
-        # ipdb.set_trace()
-        if not question:
-            return {"success": False}
-
-        return {"success": True, "question": question}
-    except:
-        return {"sucess": False}
+    return StreamingResponse(stream_question())
 
 
 def run_router_chain(input, history):
@@ -135,8 +114,7 @@ def run_router_chain(input, history):
         description="either of 'answer', 'clarification', 'irrelevant'",
         type="answer | clarification | irrelevant",
     )
-    output_parser = StructuredOutputParser.from_response_schemas([
-                                                                 output_schema])
+    output_parser = StructuredOutputParser.from_response_schemas([output_schema])
     format_instructions = output_parser.get_format_instructions()
     system_prompt = system_prompt_template.format(
         format_instructions=format_instructions
@@ -243,10 +221,12 @@ def init_wandb_for_training_chat():
     )
 
 
-@app.post("/training/chat", response_model=TrainingChatResponse, dependencies=[Depends(init_wandb_for_training_chat)])
-def training_chat(
-    training_chat_request: TrainingChatRequest
-):
+@app.post(
+    "/training/chat",
+    response_model=TrainingChatResponse,
+    dependencies=[Depends(init_wandb_for_training_chat)],
+)
+def training_chat(training_chat_request: TrainingChatRequest):
     # TODO: handle memory
     # TODO: make sure to handle wandb exception when deploying as well
 
@@ -256,21 +236,16 @@ def training_chat(
     history = training_chat_request.messages[:-1]
     query = training_chat_request.messages[-1]
 
-    router_response = run_router_chain(
-        input=query, history=history
-    )
+    router_response = run_router_chain(input=query, history=history)
     if not router_response["success"]:
-        raise HTTPException(
-            status_code=500, detail="Something went wrong with router")
+        raise HTTPException(status_code=500, detail="Something went wrong with router")
 
     query_type = router_response["type"]
 
     print(f"Query type: {query_type}")
 
     if query_type == "answer":
-        evaluator_response = run_evaluator_chain(
-            input=query, history=history
-        )
+        evaluator_response = run_evaluator_chain(input=query, history=history)
         if evaluator_response["success"]:
             evaluator_response.pop("success")
             return {"type": query_type, "response": evaluator_response}
@@ -280,9 +255,7 @@ def training_chat(
         )
 
     if query_type == "clarification":
-        clarifier_response = run_clarifier_chain(
-            input=query, history=history
-        )
+        clarifier_response = run_clarifier_chain(input=query, history=history)
         if clarifier_response["success"]:
             clarifier_response.pop("success")
             return {"type": query_type, **clarifier_response}

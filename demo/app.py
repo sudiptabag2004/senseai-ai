@@ -78,6 +78,8 @@ topics = fetch_topic_list()
 selected_topic_index = 0
 if "topic" not in st.session_state:
     selected_topic_index = topics.index("Javascript")
+else:
+    selected_topic_index = topics.index(st.session_state.topic)
 
 with topic_col:
     topic = st.selectbox(
@@ -182,26 +184,31 @@ if is_training_started:
 
     if not chat_history:
         with st.chat_message("assistant"):
-            with st.spinner("Generating question..."):
-                question_generation_response = requests.post(
-                    "http://127.0.0.1:8001/training/question",
-                    data=json.dumps(
-                        {
-                            "topic": f"{topic} -> {sub_topic} -> {concept}",
-                            "blooms_level": blooms_level,
-                            "learning_outcome": learning_outcome,
-                        }
-                    ),
-                )
+            print("sending request")
+            question_generation_response = requests.post(
+                "http://127.0.0.1:8001/training/question",
+                data=json.dumps(
+                    {
+                        "topic": f"{topic} -> {sub_topic} -> {concept}",
+                        "blooms_level": blooms_level,
+                        "learning_outcome": learning_outcome,
+                    }
+                ),
+                stream=True,
+            )
+            generated_question = ""
 
-            question_generation_response = question_generation_response.json()
+            # refer: https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
+            question_placeholder = st.empty()
 
-            if not question_generation_response["success"]:
-                st.error("Something went wrong. Please try again!")
-                st.stop()
+            for line in question_generation_response.iter_lines():
+                # print(line)
+                generated_question += line.decode()
+                question_placeholder.markdown(generated_question + "▌")
 
-            generated_question = question_generation_response["question"]
-            st.write(generated_question)
+            question_placeholder.markdown(generated_question)
+
+            print("done")
 
             st.session_state.chat_history.append(
                 {"role": "assistant", "content": generated_question}

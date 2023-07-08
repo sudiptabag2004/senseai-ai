@@ -42,7 +42,11 @@ def parse_llm_output(output_parser, response, model, default={}):
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def call_openai_chat_model(
-    messages: List, model: str, max_tokens: int, callbacks: List = []
+    messages: List,
+    model: str,
+    max_tokens: int,
+    callbacks: List = [],
+    streaming: bool = False,
 ):
     chat_model = ChatOpenAI(
         model_name=model,
@@ -53,6 +57,7 @@ def call_openai_chat_model(
             "frequency_penalty": 0,
             "presence_penalty": 0,
         },
+        streaming=streaming,
     )
     response = chat_model(messages, callbacks=callbacks)
 
