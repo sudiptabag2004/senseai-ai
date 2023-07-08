@@ -20,7 +20,6 @@ import wandb
 from gpt import call_openai_chat_model, run_openai_chat_chain
 from models import (
     GenerateTrainingQuestionRequest,
-    GenerateTrainingQuestionResponse,
     TrainingChatRequest,
     TrainingChatResponse,
 )
@@ -31,7 +30,7 @@ load_dotenv(get_env_file_path())
 openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
-os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
+# os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 app = FastAPI()
 
@@ -54,10 +53,11 @@ def init_wandb_for_generate_question():
 
 @app.post(
     "/training/question",
-    response_model=GenerateTrainingQuestionResponse,
-    dependencies=[Depends(init_wandb_for_generate_question)],
+    # dependencies=[Depends(init_wandb_for_generate_question)],
 )
-def generate_training_question(question_params: GenerateTrainingQuestionRequest):
+async def generate_training_question(
+    question_params: GenerateTrainingQuestionRequest,
+) -> str:
     print("here")
     model = "gpt-4-0613"
 
@@ -90,13 +90,10 @@ def generate_training_question(question_params: GenerateTrainingQuestionRequest)
         learning_outcome=question_params.learning_outcome,
     ).to_messages()
 
-    def stream_question():
-        for chunk in call_openai_chat_model(
-            messages, model=model, max_tokens=1024, streaming=True
-        ):
-            yield chunk
-
-    return StreamingResponse(stream_question())
+    return StreamingResponse(
+        call_openai_chat_model(messages, model=model, max_tokens=1024, streaming=True),
+        media_type="text/event-stream",
+    )
 
 
 def run_router_chain(input, history):
@@ -224,11 +221,10 @@ def init_wandb_for_training_chat():
 @app.post(
     "/training/chat",
     response_model=TrainingChatResponse,
-    dependencies=[Depends(init_wandb_for_training_chat)],
+    # dependencies=[Depends(init_wandb_for_training_chat)],
 )
 def training_chat(training_chat_request: TrainingChatRequest):
     # TODO: handle memory
-    # TODO: make sure to handle wandb exception when deploying as well
 
     if not training_chat_request.messages:
         raise HTTPException(status_code=400, detail="messages cannot be empty")

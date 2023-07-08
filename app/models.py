@@ -10,11 +10,6 @@ class GenerateTrainingQuestionRequest(BaseModel):
     learning_outcome: str
 
 
-class GenerateTrainingQuestionResponse(BaseModel):
-    success: bool
-    question: str
-
-
 class OpenAIChatRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
