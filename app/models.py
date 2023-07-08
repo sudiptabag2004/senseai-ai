@@ -16,9 +16,26 @@ class OpenAIChatRole(str, Enum):
     SYSTEM = "system"
 
 
+class TrainingChatUserResponseType(str, Enum):
+    ANSWER = "answer"  # irrelevant response by user
+    CLARIFICATION = "clarification"  # clarification requested by user
+    IRRELEVANT = "irrelevant"  # answer given by user to the question asked
+
+
+class ChatMessageType(str, Enum):
+    QUESTION = "question"  # ai-generated question
+    RESPONSE = "response"  # ai-response
+    ANSWER = "answer"  # irrelevant response by user
+    CLARIFICATION = "clarification"  # clarification requested by user
+    IRRELEVANT = "irrelevant"  # answer given by user to the question asked
+
+
 class ChatMarkupLanguage(BaseModel):
     role: OpenAIChatRole
     content: str
+    type: Optional[
+        ChatMessageType
+    ] = None  # optional as there will be no "type" for the latest user response
 
 
 class TrainingChatRequest(BaseModel):
@@ -30,12 +47,6 @@ class TrainingEvaluatorResponse(BaseModel):
     feedback: str
 
 
-class TrainingChatQueryType(str, Enum):
-    ANSWER = "answer"
-    CLARIFICATION = "clarification"
-    IRRELEVANT = "irrelevant"
-
-
 class TrainingChatResponse(BaseModel):
-    type: TrainingChatQueryType
+    type: TrainingChatUserResponseType
     response: Optional[Union[str, TrainingEvaluatorResponse]]

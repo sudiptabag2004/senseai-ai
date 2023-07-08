@@ -1,5 +1,6 @@
 import os
 
+from typing import List
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import openai
@@ -20,6 +21,7 @@ import wandb
 from gpt import call_openai_chat_model, run_openai_chat_chain
 from models import (
     GenerateTrainingQuestionRequest,
+    ChatMarkupLanguage,
     TrainingChatRequest,
     TrainingChatResponse,
 )
@@ -58,7 +60,6 @@ def init_wandb_for_generate_question():
 async def generate_training_question(
     question_params: GenerateTrainingQuestionRequest,
 ) -> str:
-    print("here")
     model = "gpt-4-0613"
 
     system_prompt_template = """
@@ -96,7 +97,9 @@ async def generate_training_question(
     )
 
 
-def run_router_chain(input, history):
+def run_router_chain(
+    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+):
     system_prompt_template = """You will be provided with a series of interactions between a student and an interviewer along with a student query. The interviewer has asked the student a particular question. The student query will be delimited with #### characters.
  
     Classify each query into one of the categories below:
@@ -116,11 +119,14 @@ def run_router_chain(input, history):
     system_prompt = system_prompt_template.format(
         format_instructions=format_instructions
     )
+    # since this will be interpreted as a format string, we need to escape the curly braces
+    system_prompt = system_prompt.replace("{", "{{").replace("}", "}}")
+
     user_prompt_template_message = "####{input}####"
-    chain_input = user_prompt_template_message.format(input=input)
 
     response = run_openai_chat_chain(
-        chain_input,
+        user_prompt_template_message,
+        user_response.content,
         system_prompt,
         history,
         output_parser,
@@ -133,7 +139,9 @@ def run_router_chain(input, history):
     return {"success": False}
 
 
-def run_evaluator_chain(input, history):
+def run_evaluator_chain(
+    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+):
     system_prompt_template = """You are a helpful and encouraging interviewer.
     You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on as well as the student's response to the question. You need to provide an evaluation based on the student's response. The student's response will be delimited with #### characters.
 
@@ -144,7 +152,7 @@ def run_evaluator_chain(input, history):
 
     Use the following format:
     Actual solution:
-    {{ concise steps to work out the solution and your solution here }}
+    {{concise steps to work out the solution and your solution}}
 
     {format_instructions}"""
 
@@ -165,18 +173,24 @@ def run_evaluator_chain(input, history):
     system_prompt = system_prompt_template.format(
         format_instructions=format_instructions
     )
+    # since this will be interpreted as a format string, we need to escape the curly braces
+    # first convert any existing double curly braces to single curly braces
+    system_prompt = system_prompt.replace("{{", "{").replace("}}", "}")
+    # now escape all the curly braces
+    system_prompt = system_prompt.replace("{", "{{").replace("}", "}}")
+
     user_prompt_template_message = "####{input}####"
-    chain_input = user_prompt_template_message.format(input=input)
 
     response = run_openai_chat_chain(
-        chain_input,
+        user_prompt_template_message,
+        user_response.content,
         system_prompt,
-        [
-            history[
-                0
-            ]  # first message should contain detail about topic/question/LO/blooms level
-        ],
+        history,
         output_parser,
+        ignore_types=[
+            "clarification",
+            "irrelevant",
+        ],  # during evaluation, don't need to consider past clarifications or irrelevant messages
         verbose=True,
     )
 
@@ -186,7 +200,9 @@ def run_evaluator_chain(input, history):
     return {"success": False}
 
 
-def run_clarifier_chain(input, history):
+def run_clarifier_chain(
+    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+):
     system_prompt = """You are a helpful and encouraging interviewer.
     You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.
 
@@ -194,13 +210,17 @@ def run_clarifier_chain(input, history):
 
     Important:
     - Make sure to not give hints or answer the question.
-    - If the student asks for the answer, refrain from answering."""
+    - If the student asks for the answer, refrain from answering.
+    
+    The final output should be just a string with the clarification asked for and nothing else.
+    """
 
-    user_prompt_template_message = "####{input}####"
-    chain_input = user_prompt_template_message.format(input=input)
+    user_prompt_template = "####{input}####"
+    # chain_input = user_prompt_template_message.format(input=input.content)
 
     response = run_openai_chat_chain(
-        chain_input,
+        user_prompt_template,
+        user_response.content,
         system_prompt,
         history,
         verbose=True,
@@ -232,7 +252,7 @@ def training_chat(training_chat_request: TrainingChatRequest):
     history = training_chat_request.messages[:-1]
     query = training_chat_request.messages[-1]
 
-    router_response = run_router_chain(input=query, history=history)
+    router_response = run_router_chain(user_response=query, history=history)
     if not router_response["success"]:
         raise HTTPException(status_code=500, detail="Something went wrong with router")
 
@@ -241,7 +261,7 @@ def training_chat(training_chat_request: TrainingChatRequest):
     print(f"Query type: {query_type}")
 
     if query_type == "answer":
-        evaluator_response = run_evaluator_chain(input=query, history=history)
+        evaluator_response = run_evaluator_chain(user_response=query, history=history)
         if evaluator_response["success"]:
             evaluator_response.pop("success")
             return {"type": query_type, "response": evaluator_response}
@@ -251,7 +271,7 @@ def training_chat(training_chat_request: TrainingChatRequest):
         )
 
     if query_type == "clarification":
-        clarifier_response = run_clarifier_chain(input=query, history=history)
+        clarifier_response = run_clarifier_chain(user_response=query, history=history)
         if clarifier_response["success"]:
             clarifier_response.pop("success")
             return {"type": query_type, **clarifier_response}

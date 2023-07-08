@@ -12,6 +12,12 @@ from langchain.output_parsers import OutputFixingParser
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain.schema import SystemMessage, BaseOutputParser
+from langchain.prompts import (
+    SystemMessagePromptTemplate,
+    MessagesPlaceholder,
+    HumanMessagePromptTemplate,
+    ChatPromptTemplate,
+)
 from langchain.callbacks.base import BaseCallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
@@ -149,27 +155,44 @@ def call_openai_chat_model(
 
 # @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def run_openai_chat_chain(
-    input: str,
+    user_prompt_template: str,
+    user_message: str,
     system_prompt: str,
     messages: List[ChatMarkupLanguage],
     output_parser: BaseOutputParser = None,
+    ignore_types: List[str] = ["irrelevant"],
     model: str = "gpt-4",
     verbose: bool = False,
     callbacks: List = [],
 ):
     chat_model = ChatOpenAI(temperature=0, model=model)
-    langchain_messages = [SystemMessage(content=system_prompt)]
+    # langchain_messages = [SystemMessage(content=system_prompt)]
+    langchain_messages = []
     if messages:
-        langchain_messages.extend(convert_cml_messages_to_langchain_format(messages))
+        langchain_messages.extend(
+            convert_cml_messages_to_langchain_format(messages, ignore_types)
+        )
 
-    memory = ConversationBufferMemory()
+    memory = ConversationBufferMemory(return_messages=True)
     memory.chat_memory.messages = langchain_messages
 
-    chat_chain = ConversationChain(
-        llm=chat_model, memory=memory, verbose=verbose, callbacks=callbacks
+    chat_prompt_template = ChatPromptTemplate.from_messages(
+        [
+            SystemMessagePromptTemplate.from_template(system_prompt),
+            MessagesPlaceholder(variable_name="history"),
+            HumanMessagePromptTemplate.from_template(user_prompt_template),
+        ]
     )
 
-    response = chat_chain.run(input)
+    chat_chain = ConversationChain(
+        llm=chat_model,
+        memory=memory,
+        prompt=chat_prompt_template,
+        verbose=verbose,
+        callbacks=callbacks,
+    )
+
+    response = chat_chain.run(user_message)
 
     if output_parser:
         response = parse_llm_output(output_parser, response, model=model)

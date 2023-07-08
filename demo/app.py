@@ -213,6 +213,7 @@ if is_training_started:
                 {
                     "role": "assistant",
                     "content": f"Topic: {topic} -> {sub_topic} -> {concept}\nBlooms level: {blooms_level}\nLearning outcome: {learning_outcome}\nQuestion: {generated_question}",
+                    "type": "question",
                 }
             )
 
@@ -272,6 +273,7 @@ if is_training_started:
                 st.error("Something went wrong. Please try again!")
                 # remove the last user input from ai_chat_history
                 ai_chat_history.pop()
+                st.session_state.ai_response_in_progress = False
                 st.stop()
 
             toggle_ai_response_state()
@@ -303,7 +305,15 @@ if is_training_started:
             {"role": "assistant", "content": ai_response},
         ]
 
+        # update type of user message
+        ai_chat_history[-1]["type"] = user_answer_type
+
         ai_chat_history.append(
-            {"role": "assistant", "content": json.dumps(training_chat_response)},
+            {
+                "role": "assistant",
+                "content": json.dumps(training_chat_response),
+                "type": "response",
+            },
         )
         st.session_state.ai_chat_history = ai_chat_history
+        st.experimental_rerun()
