@@ -14,7 +14,7 @@ if "is_training_started" not in st.session_state:
     st.session_state.is_training_started = False
 
 
-@st.cache_resource(show_spinner=True)
+# @st.cache_resource()
 def fetch_topic_list():
     fetch_topics_response = requests.get(
         f"{os.environ['BACKEND_URL']}/api/roadmaps/list",
@@ -28,7 +28,7 @@ def fetch_topic_list():
     return topics
 
 
-@st.cache_resource(show_spinner=True)
+# @st.cache_data
 def fetch_topic_tree(topic: str):
     fetch_topic_tree_response = requests.post(
         f"{os.environ['BACKEND_URL']}/api/roadmaps/load",
@@ -41,7 +41,7 @@ def fetch_topic_tree(topic: str):
     return fetch_topic_tree_response.json()
 
 
-@st.cache_resource(show_spinner=True)
+# @st.cache_resource()
 def fetch_learning_outcomes(concept: str):
     import urllib
 
@@ -110,12 +110,11 @@ with concept_col:
 
 learning_outcomes_dict = fetch_learning_outcomes(concept)
 
-blooms_level_col, learning_outcome_col = st.columns(2)
-
 if not learning_outcomes_dict:
     st.warning("No learning outcomes available for this concept")
     st.stop()
 
+blooms_level_col, learning_outcome_col = st.columns(2)
 
 with blooms_level_col:
     blooms_level = st.selectbox(
@@ -184,7 +183,6 @@ if is_training_started:
 
     if not chat_history:
         with st.chat_message("assistant"):
-            print("sending request")
             question_generation_response = requests.post(
                 "http://127.0.0.1:8001/training/question",
                 data=json.dumps(
@@ -196,19 +194,17 @@ if is_training_started:
                 ),
                 stream=True,
             )
-            generated_question = ""
 
             # refer: https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
             question_placeholder = st.empty()
+            generated_question = ""
 
-            for line in question_generation_response.iter_lines():
-                # print(line)
+            question_placeholder.write("▌")
+            for line in question_generation_response.iter_content(chunk_size=20):
                 generated_question += line.decode()
-                question_placeholder.markdown(generated_question + "▌")
+                question_placeholder.write(generated_question + "▌")
 
-            question_placeholder.markdown(generated_question)
-
-            print("done")
+            question_placeholder.write(generated_question)
 
             st.session_state.chat_history.append(
                 {"role": "assistant", "content": generated_question}
