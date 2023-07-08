@@ -19,7 +19,6 @@ def fetch_topic_list():
     fetch_topics_response = requests.get(
         f"{os.environ['BACKEND_URL']}/api/roadmaps/list",
     )
-    print(fetch_topics_response)
     if fetch_topics_response.status_code != 200:
         st.error("Something went wrong. Please reload the page")
         st.stop()
@@ -33,7 +32,7 @@ def fetch_topic_list():
 def fetch_topic_tree(topic: str):
     fetch_topic_tree_response = requests.post(
         f"{os.environ['BACKEND_URL']}/api/roadmaps/load",
-        data=json.dumps({"topic": topic}),
+        json={"topic": topic},
     )
     if fetch_topic_tree_response.status_code != 200:
         st.error("Something went wrong. Please reload the page")
@@ -44,30 +43,48 @@ def fetch_topic_tree(topic: str):
 
 @st.cache_resource(show_spinner=True)
 def fetch_learning_outcomes(concept: str):
+    import urllib
+
     fetch_learning_outcome_response = requests.get(
-        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/{concept}",
+        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/{urllib.parse.quote(concept)}",
     )
     if fetch_learning_outcome_response.status_code != 200:
         st.error("Something went wrong. Please reload the page")
         st.stop()
 
-    learning_outcomes_list = fetch_learning_outcome_response.json()
+    learning_outcomes = fetch_learning_outcome_response.json().get(
+        "learning_outcomes", []
+    )
     blooms_level_to_learning_outcomes_map = defaultdict(list)
-    for value in learning_outcomes_list:
+
+    valid_blooms_levels = {
+        "Remembering",
+        "Applying",
+        "Creating",
+    }
+
+    for value in learning_outcomes:
+        if value["blooms_level"] not in valid_blooms_levels:
+            continue
+
         blooms_level_to_learning_outcomes_map[value["blooms_level"]].append(
             value["learning_outcome"]
         )
-    return blooms_level_to_learning_outcomes_map
+    return dict(blooms_level_to_learning_outcomes_map)
 
 
 topics = fetch_topic_list()
 
+selected_topic_index = 0
+if "topic" not in st.session_state:
+    selected_topic_index = topics.index("Javascript")
 
 with topic_col:
     topic = st.selectbox(
         "Choose topic",
         topics,
         key="topic",
+        index=selected_topic_index,
         disabled=st.session_state.is_training_started,
     )
 
@@ -93,6 +110,11 @@ learning_outcomes_dict = fetch_learning_outcomes(concept)
 
 blooms_level_col, learning_outcome_col = st.columns(2)
 
+if not learning_outcomes_dict:
+    st.warning("No learning outcomes available for this concept")
+    st.stop()
+
+
 with blooms_level_col:
     blooms_level = st.selectbox(
         "Choose Bloom's Level",
@@ -108,6 +130,10 @@ with learning_outcome_col:
         key="learning_outcome",
         disabled=st.session_state.is_training_started,
     )
+
+if not learning_outcome:
+    st.warning("Please choose a learning outcome")
+    st.stop()
 
 
 def on_start_training_click():
