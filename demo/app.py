@@ -60,6 +60,7 @@ def fetch_learning_outcomes(concept: Node):
 
     valid_blooms_levels = {
         "Remembering",
+        "Analyzing",
         "Applying",
         "Creating",
     }
@@ -145,6 +146,8 @@ def on_start_training_click():
 
 def on_reset_training_click():
     st.session_state.is_training_started = False
+    st.session_state.chat_history = []
+    st.session_state.ai_chat_history = []
 
 
 if not st.session_state.is_training_started:
@@ -190,6 +193,7 @@ if is_training_started:
                 data=json.dumps(
                     {
                         "topic": topic["name"],
+                        "sub_topic": sub_topic,
                         "concept": concept["name"],
                         "blooms_level": blooms_level,
                         "learning_outcome": learning_outcome,
@@ -215,7 +219,7 @@ if is_training_started:
             st.session_state.ai_chat_history.append(
                 {
                     "role": "assistant",
-                    "content": f"Topic - {topic['name']}\nConcept - {concept['name']}\nBlooms level - {blooms_level}\nLearning outcome - {learning_outcome}\nQuestion - {generated_question}",
+                    "content": f"Topic - {topic['name']}\Sub-Topic - {sub_topic}\nConcept - {concept['name']}\nBlooms level - {blooms_level}\nLearning outcome - {learning_outcome}\nQuestion - {generated_question}",
                     "type": "question",
                 }
             )

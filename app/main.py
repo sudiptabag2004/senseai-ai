@@ -64,8 +64,8 @@ async def generate_training_question(
 
     system_prompt_template = """
     You are a helpful and encouraging interviewer. 
-    You will be specified with a topic, concept, blooms level, and learning outcome that the user needs to be tested on. 
-    Ask one question for the specified topic, concept, blooms level and learning outcome.
+    You will be specified with a topic, sub-topic, concept, blooms level, and learning outcome that the user needs to be tested on. 
+    Ask one question for the specified topic, sub-topic, concept, blooms level and learning outcome.
     Include the answer format you expect from user in the question itself. 
     
     Important:
@@ -76,6 +76,7 @@ async def generate_training_question(
 
     user_prompt_template = """
     Topic - {topic}\n
+    Sub-Topic - {sub_topic}\n
     Concept - {concept}\n
     Blooms level - {blooms_level}\n
     Learning outcome - {learning_outcome}
@@ -93,6 +94,7 @@ async def generate_training_question(
 
     messages = chat_prompt_template.format_prompt(
         topic=question_params.topic,
+        sub_topic=question_params.sub_topic,
         concept=question_params.concept,
         blooms_level=question_params.blooms_level,
         learning_outcome=question_params.learning_outcome,
@@ -162,7 +164,9 @@ def run_evaluator_chain(
     user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
 ):
     system_prompt_template = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on as well as the student's response to the question. You need to provide an evaluation based on the student's response. The student's response will be delimited with #### characters.
+    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on as well as the student's response to the question. 
+    You need to provide an evaluation based on the student's response. 
+    The student's response will be delimited with #### characters.
 
     To solve the problem, do the following
     - First, work out your own solution to the problem
@@ -227,7 +231,7 @@ def run_clarifier_chain(
     user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
 ):
     system_prompt = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.
+    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.
 
     The student has asked a clarifying question that you need to answer. The student's response will be delimited with #### characters
 
