@@ -6,6 +6,8 @@ from functools import partial
 from dotenv import load_dotenv
 import streamlit as st
 
+from models import Node
+
 load_dotenv()
 
 topic_col, sub_topic_col, concept_col = st.columns(3)
@@ -29,10 +31,10 @@ def fetch_topic_list():
 
 
 # @st.cache_data
-def fetch_topic_tree(topic: str):
-    fetch_topic_tree_response = requests.post(
+def fetch_topic_tree(topic: Node):
+    fetch_topic_tree_response = requests.get(
         f"{os.environ['BACKEND_URL']}/api/roadmaps/load",
-        json={"topic": topic},
+        params={"parentId": topic["id"]},
     )
     if fetch_topic_tree_response.status_code != 200:
         st.error("Something went wrong. Please reload the page")
@@ -42,19 +44,18 @@ def fetch_topic_tree(topic: str):
 
 
 # @st.cache_resource()
-def fetch_learning_outcomes(concept: str):
+def fetch_learning_outcomes(concept: Node):
     import urllib
 
     fetch_learning_outcome_response = requests.get(
-        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/{urllib.parse.quote(concept)}",
+        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/",
+        params={"nodeId": concept["id"]},
     )
     if fetch_learning_outcome_response.status_code != 200:
         st.error("Something went wrong. Please reload the page")
         st.stop()
 
-    learning_outcomes = fetch_learning_outcome_response.json().get(
-        "learning_outcomes", []
-    )
+    learning_outcomes = fetch_learning_outcome_response.json()
     blooms_level_to_learning_outcomes_map = defaultdict(list)
 
     valid_blooms_levels = {
@@ -63,12 +64,12 @@ def fetch_learning_outcomes(concept: str):
         "Creating",
     }
 
-    for value in learning_outcomes:
-        if value["blooms_level"] not in valid_blooms_levels:
+    for learning_outcome in learning_outcomes:
+        if learning_outcome["blooms_level"] not in valid_blooms_levels:
             continue
 
-        blooms_level_to_learning_outcomes_map[value["blooms_level"]].append(
-            value["learning_outcome"]
+        blooms_level_to_learning_outcomes_map[learning_outcome["blooms_level"]].append(
+            learning_outcome["value"]
         )
     return dict(blooms_level_to_learning_outcomes_map)
 
@@ -76,10 +77,6 @@ def fetch_learning_outcomes(concept: str):
 topics = fetch_topic_list()
 
 selected_topic_index = 0
-if "topic" not in st.session_state:
-    selected_topic_index = topics.index("Javascript")
-else:
-    selected_topic_index = topics.index(st.session_state.topic)
 
 with topic_col:
     topic = st.selectbox(
@@ -87,6 +84,7 @@ with topic_col:
         topics,
         key="topic",
         index=selected_topic_index,
+        format_func=lambda val: val["name"],
         disabled=st.session_state.is_training_started,
     )
 
@@ -105,6 +103,7 @@ with concept_col:
         "Choose Concept",
         topic_tree[sub_topic],
         key="concept",
+        format_func=lambda val: val["name"],
         disabled=st.session_state.is_training_started,
     )
 
@@ -113,6 +112,7 @@ learning_outcomes_dict = fetch_learning_outcomes(concept)
 if not learning_outcomes_dict:
     st.warning("No learning outcomes available for this concept")
     st.stop()
+
 
 blooms_level_col, learning_outcome_col = st.columns(2)
 
@@ -131,6 +131,8 @@ with learning_outcome_col:
         key="learning_outcome",
         disabled=st.session_state.is_training_started,
     )
+
+# st.stop()
 
 if not learning_outcome:
     st.warning("Please choose a learning outcome")
@@ -187,7 +189,8 @@ if is_training_started:
                 "http://127.0.0.1:8001/training/question",
                 data=json.dumps(
                     {
-                        "topic": f"{topic} -> {sub_topic} -> {concept}",
+                        "topic": topic["name"],
+                        "concept": concept["name"],
                         "blooms_level": blooms_level,
                         "learning_outcome": learning_outcome,
                     }
@@ -212,7 +215,7 @@ if is_training_started:
             st.session_state.ai_chat_history.append(
                 {
                     "role": "assistant",
-                    "content": f"Topic: {topic} -> {sub_topic} -> {concept}\nBlooms level: {blooms_level}\nLearning outcome: {learning_outcome}\nQuestion: {generated_question}",
+                    "content": f"Topic - {topic['name']}\nConcept - {concept['name']}\nBlooms level - {blooms_level}\nLearning outcome - {learning_outcome}\nQuestion - {generated_question}",
                     "type": "question",
                 }
             )
@@ -295,7 +298,7 @@ if is_training_started:
                 elif score == 0:
                     result = "You can do better :hugging_face:"
 
-                ai_response = f"Result: {result}  \nFeedback: {training_chat_response['response']['feedback']}"
+                ai_response = f"Result - {result}  \nFeedback - {training_chat_response['response']['feedback']}"
 
             st.write(ai_response)
 
@@ -311,7 +314,7 @@ if is_training_started:
         ai_chat_history.append(
             {
                 "role": "assistant",
-                "content": json.dumps(training_chat_response),
+                "content": ai_response,
                 "type": "response",
             },
         )

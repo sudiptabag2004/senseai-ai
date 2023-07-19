@@ -22,6 +22,7 @@ from langchain.callbacks.base import BaseCallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 from models import ChatMarkupLanguage
+from prompts import EXTRACT_ANSWER_PROMPT
 from utils.langchain import convert_cml_messages_to_langchain_format
 
 root_dir = pathlib.Path(__file__).parent.resolve()
@@ -42,7 +43,9 @@ def parse_llm_output(output_parser, response, model, default={}):
         return output_parser.parse(response)
     except:
         output_fixing_parser = OutputFixingParser.from_llm(
-            parser=output_parser, llm=ChatOpenAI(model_name=model, temperature=0)
+            parser=output_parser,
+            llm=ChatOpenAI(model_name=model, temperature=0),
+            prompt=EXTRACT_ANSWER_PROMPT,
         )
         try:
             return output_fixing_parser.parse(response)
@@ -161,7 +164,7 @@ def run_openai_chat_chain(
     messages: List[ChatMarkupLanguage],
     output_parser: BaseOutputParser = None,
     ignore_types: List[str] = ["irrelevant"],
-    model: str = "gpt-4",
+    model: str = "gpt-4-0613",
     verbose: bool = False,
     callbacks: List = [],
 ):
@@ -184,6 +187,10 @@ def run_openai_chat_chain(
         ]
     )
 
+    # import ipdb
+
+    # ipdb.set_trace()
+
     chat_chain = ConversationChain(
         llm=chat_model,
         memory=memory,
@@ -193,6 +200,10 @@ def run_openai_chat_chain(
     )
 
     response = chat_chain.run(user_message)
+
+    logging.info(
+        f"model: {model} history: {memory.chat_memory.messages} query: {user_message} response: {response}"
+    )
 
     if output_parser:
         response = parse_llm_output(output_parser, response, model=model)

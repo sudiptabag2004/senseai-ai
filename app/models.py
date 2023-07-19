@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class GenerateTrainingQuestionRequest(BaseModel):
     topic: str
+    concept: str
     blooms_level: str
     learning_outcome: str
 

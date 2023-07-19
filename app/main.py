@@ -32,7 +32,7 @@ load_dotenv(get_env_file_path())
 openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
-# os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
+os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 app = FastAPI()
 
@@ -64,15 +64,21 @@ async def generate_training_question(
 
     system_prompt_template = """
     You are a helpful and encouraging interviewer. 
-    You will be specified with a topic, a blooms level, and learning outcome that the user needs to be tested on. 
-    Ask one question for the specified topic, blooms level and learning outcome.
-    Include the answer format you expect from user in the question itself.
+    You will be specified with a topic, concept, blooms level, and learning outcome that the user needs to be tested on. 
+    Ask one question for the specified topic, concept, blooms level and learning outcome.
+    Include the answer format you expect from user in the question itself. 
+    
+    Important:
+    - Avoid including any heading or section in your answer
+    - Use the appropriate formatting for any part of the question that involves code (e.g. enclosing variables within ``)
+    - Do not reveal the answer to the question or include any hints
     """
 
     user_prompt_template = """
-    Topic: {topic}
-    Blooms level: {blooms_level}
-    Learning outcome: {learning_outcome}
+    Topic - {topic}\n
+    Concept - {concept}\n
+    Blooms level - {blooms_level}\n
+    Learning outcome - {learning_outcome}
     """
 
     system_prompt_template = SystemMessagePromptTemplate.from_template(
@@ -87,6 +93,7 @@ async def generate_training_question(
 
     messages = chat_prompt_template.format_prompt(
         topic=question_params.topic,
+        concept=question_params.concept,
         blooms_level=question_params.blooms_level,
         learning_outcome=question_params.learning_outcome,
     ).to_messages()
@@ -100,12 +107,24 @@ async def generate_training_question(
 def run_router_chain(
     user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
 ):
-    system_prompt_template = """You will be provided with a series of interactions between a student and an interviewer along with a student query. The interviewer has asked the student a particular question. The student query will be delimited with #### characters.
+    system_prompt_template = """You will be provided with a series of interactions between a student and an interviewer along with a student query. 
+    The interviewer has asked the student a particular question and the student has responded back with a query. 
+    The student query will be delimited with #### characters.
  
     Classify each query into one of the categories below:
     - Answer to the question
     - Clarifying question
     - Irrelevant to the question
+    
+    Important:
+    - If the query does not clearly provide a valid answer to the question asked before, it is not an answer.
+    - If the query does not clearly seek clarification based on the conversation before, it is not a clarifying question.
+    - If the query is neither an answer nor a clarifying question, it is irrelevant.
+    - Give a short explanation before giving the answer.
+    
+    Provide the answer in the following format:
+    Let's think step by step
+    {{concise explanation (< 20 words)}}
 
     {format_instructions}
     """
@@ -147,8 +166,12 @@ def run_evaluator_chain(
 
     To solve the problem, do the following
     - First, work out your own solution to the problem
-    - Then, compare your solution to the student's solution. Don’t give any answers or hints. Assess the student on the learning outcome provided using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
+    - Then, compare your solution to the student's solution.
+    - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
     - At the end, give some actionable feedback too.
+    
+    Important:
+    - Don’t reveal the answer or give any hints as part of your feedback. 
 
     Use the following format:
     Actual solution:
@@ -159,7 +182,7 @@ def run_evaluator_chain(
     answer_schema = ResponseSchema(
         name="answer",
         description="the final evaluation",
-        type="integer",
+        type="0 | 1 | 2",
     )
     feedback_schema = ResponseSchema(
         name="feedback",
