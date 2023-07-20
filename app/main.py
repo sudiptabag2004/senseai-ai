@@ -219,6 +219,7 @@ def run_evaluator_chain(
             "irrelevant",
         ],  # during evaluation, don't need to consider past clarifications or irrelevant messages
         verbose=True,
+        parse_llm_output_for_key="answer",
     )
 
     if "answer" in response and "feedback" in response:

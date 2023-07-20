@@ -1,5 +1,6 @@
 import logging
 import pathlib
+import json
 import os
 from os.path import dirname
 from typing import List, Dict
@@ -49,6 +50,29 @@ def parse_llm_output(output_parser, response, model, default={}):
         )
         try:
             return output_fixing_parser.parse(response)
+        except:
+            return default
+
+
+def parse_llm_output_with_key(output_parser, response: str, key: str, default={}):
+    try:
+        return output_parser.parse(response)
+    except:
+        # search for key in the response
+        key_search_index = response.find(key)
+
+        if key_search_index == -1:
+            return default
+
+        # find the { bracket the appears right before the key
+        json_start_index = response[:key_search_index].rfind("{")
+        json_end_index = response[json_start_index:].rfind("}")
+        valid_json_string = response[
+            json_start_index : json_start_index + json_end_index + 1
+        ]
+
+        try:
+            return json.loads(valid_json_string)
         except:
             return default
 
@@ -167,6 +191,7 @@ def run_openai_chat_chain(
     model: str = "gpt-4-0613",
     verbose: bool = False,
     callbacks: List = [],
+    parse_llm_output_for_key: str = None,
 ):
     chat_model = ChatOpenAI(temperature=0, model=model)
     # langchain_messages = [SystemMessage(content=system_prompt)]
@@ -206,6 +231,11 @@ def run_openai_chat_chain(
     )
 
     if output_parser:
-        response = parse_llm_output(output_parser, response, model=model)
+        if parse_llm_output_for_key:
+            response = parse_llm_output_with_key(
+                output_parser, response, parse_llm_output_for_key
+            )
+        else:
+            response = parse_llm_output(output_parser, response, model=model)
 
     return response
