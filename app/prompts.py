@@ -15,10 +15,8 @@ Error:
 {error}
 --------------
 
-If the Completion contains a value as specified in the Instructions, simply extract that value from the Completion without modifying it.
-If the Completion doesn't contain any valid value, please try again. 
-
-Please only respond with an answer that satisfies the constraints laid out in the Instructions:"""
+If the Completion contains a value in the format specified in the Instructions, simply extract that value from the Completion without modifying it.
+If the Completion doesn't contain any valid value, please try again and respond with an answer that satisfies the constraints laid out in the Instructions:"""
 
 
 EXTRACT_ANSWER_PROMPT = PromptTemplate.from_template(EXTRACT_ANSWER)
