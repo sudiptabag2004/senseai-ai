@@ -33,7 +33,8 @@ openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 
-# os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
+if not os.getenv("ENV"):
+    os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 app = FastAPI()
 
