@@ -34,6 +34,7 @@ openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 
 if not os.getenv("ENV"):
+    # only run W&B for local
     os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 app = FastAPI()
