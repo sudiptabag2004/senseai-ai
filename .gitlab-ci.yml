@@ -32,6 +32,8 @@ deploy-staging:
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml up -d'
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "staging"'
 
 deploy-production:
   stage: deploy-production
@@ -52,4 +54,5 @@ deploy-production:
     - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml up -d'
 
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "production" '
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "master"'
