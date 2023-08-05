@@ -31,7 +31,6 @@ deploy-staging:
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml pull'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml up -d'
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "staging"'
 
 deploy-production:
