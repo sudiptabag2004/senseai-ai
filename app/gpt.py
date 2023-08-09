@@ -8,6 +8,7 @@ import queue
 import threading
 
 import backoff
+import langchain
 from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import OutputFixingParser
 from langchain.memory import ConversationBufferMemory
@@ -22,6 +23,7 @@ from langchain.prompts import (
 from langchain.callbacks.base import BaseCallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
+from settings import settings
 from models import ChatMarkupLanguage
 from prompts import EXTRACT_ANSWER_PROMPT
 from utils.langchain import convert_cml_messages_to_langchain_format
@@ -37,6 +39,43 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
     level=logging.INFO,
 )
+
+from gptcache import Cache, cache
+from gptcache.manager.factory import manager_factory
+from gptcache.processor.pre import get_prompt
+from gptcache.embedding import LangChain
+from gptcache.adapter.langchain_models import LangChainChat
+from langchain.embeddings.openai import OpenAIEmbeddings
+from gptcache.similarity_evaluation.distance import SearchDistanceEvaluation
+from gptcache.manager import CacheBase, VectorBase, get_data_manager
+from langchain.cache import GPTCache
+import hashlib
+
+
+# get the content(only question) form the prompt to cache
+def get_msg_func(data, **_):
+    return data.get("messages")[-1].content
+
+
+def get_hashed_name(name):
+    return hashlib.sha256(name.encode()).hexdigest()
+
+
+embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key)
+encoder = LangChain(embeddings=embeddings)
+cache_base = CacheBase("sqlite")
+vector_base = VectorBase("faiss", dimension=1536, top_k=3)
+data_manager = get_data_manager(cache_base, vector_base)
+
+# cache.init(pre_embedding_func=get_msg_func)
+cache.init(
+    pre_embedding_func=get_msg_func,
+    embedding_func=encoder.to_embeddings,
+    data_manager=data_manager,
+    similarity_evaluation=SearchDistanceEvaluation(),
+)
+
+cache.set_openai_key()
 
 
 def parse_llm_output(output_parser, response, model, default={}):
@@ -139,6 +178,7 @@ def call_openai_chat_model(
     max_tokens: int,
     callbacks: List = [],
     streaming: bool = False,
+    cache: bool = False,
 ):
     chat_model_init_kwargs = {
         "model_name": model,
@@ -150,6 +190,7 @@ def call_openai_chat_model(
             "presence_penalty": 0,
         },
         "streaming": streaming,
+        "cache": cache,
     }
 
     if streaming:
@@ -166,6 +207,9 @@ def call_openai_chat_model(
         return stream_chat_model_response(
             chat_model, messages, threaded_generator, callbacks=callbacks
         )
+
+    if cache:
+        chat_model = LangChainChat(chat=chat_model)
 
     response = chat_model(messages, callbacks=callbacks)
 
@@ -210,6 +254,7 @@ def prepare_chat_chain(
     verbose: bool = False,
     callbacks: List = [],
     callback_manager: BaseCallbackManager = None,
+    cache: bool = False,
 ):
     chat_model_init_kwargs = {
         "model_name": model,
@@ -221,6 +266,7 @@ def prepare_chat_chain(
             "presence_penalty": 0,
         },
         "streaming": streaming,
+        "cache": cache,
     }
 
     if streaming:
@@ -273,6 +319,7 @@ def run_openai_chat_chain(
     verbose: bool = False,
     callbacks: List = [],
     parse_llm_output_for_key: str = None,
+    cache: bool = False,
 ):
     chat_chain, memory = prepare_chat_chain(
         user_prompt_template,
@@ -282,6 +329,7 @@ def run_openai_chat_chain(
         ignore_types,
         verbose=verbose,
         callbacks=callbacks,
+        cache=cache,
     )
     response = chat_chain.run(user_message)
 
@@ -311,6 +359,7 @@ def stream_openai_chat_chain(
     model: str = "gpt-4-0613",
     verbose: bool = False,
     callbacks: List = [],
+    cache: bool = False,
 ):
     threaded_generator = ThreadedGenerator()
 
@@ -329,6 +378,7 @@ def stream_openai_chat_chain(
         verbose=verbose,
         callbacks=callbacks,
         callback_manager=callback_manager,
+        cache=cache,
     )
 
     # response = chat_chain.run(user_message)

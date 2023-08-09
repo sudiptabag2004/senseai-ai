@@ -24,6 +24,8 @@ from models import (
     ChatMarkupLanguage,
     TrainingChatRequest,
     TrainingChatResponse,
+    OpenAIChatRole,
+    ChatMessageType,
 )
 from settings import settings, get_env_file_path
 
@@ -129,11 +131,6 @@ def run_router_chain(
     - If the query does not clearly provide a valid answer to the question asked before, it is not an answer.
     - If the query does not clearly seek clarification based on the conversation before, it is not a clarifying question.
     - If the query is neither an answer nor a clarifying question, it is irrelevant.
-    - Give a short explanation before giving the answer.
-    
-    Provide the answer in the following format:
-    Let's think step by step
-    {{concise explanation (< 20 words)}}
 
     {format_instructions}
     """
@@ -158,7 +155,7 @@ def run_router_chain(
         system_prompt,
         history,
         output_parser,
-        model="gpt-3.5-turbo-0613",
+        # model="gpt-3.5-turbo-0613",
         verbose=True,
     )
 
@@ -171,23 +168,60 @@ def run_router_chain(
 def run_evaluator_chain(
     user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
 ):
+    actual_solution_system_prompt_template_message = """You are a helpful and encouraging interviewer.
+    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question.
+    You need to work out your own solution to the problem.
+    
+    Use the following format:
+    Actual solution:
+    {{concise steps to work out the solution and your solution}}
+    """
+    actual_solution_user_prompt_template_message = """{input}"""
+
+    actual_solution_system_prompt_template = SystemMessagePromptTemplate.from_template(
+        actual_solution_system_prompt_template_message
+    )
+    actual_solution_user_prompt_template = HumanMessagePromptTemplate.from_template(
+        actual_solution_user_prompt_template_message
+    )
+    actual_solution_chat_prompt_template = ChatPromptTemplate.from_messages(
+        [actual_solution_system_prompt_template, actual_solution_user_prompt_template]
+    )
+
+    # first message should contain the details required
+    actual_solution_messages = actual_solution_chat_prompt_template.format_prompt(
+        input=history[0].content,
+    ).to_messages()
+
+    actual_solution_response = call_openai_chat_model(
+        actual_solution_messages, model="gpt-4-0613", max_tokens=1024, cache=True
+    )
+
+    # add the actual solution to the history
+    history.append(
+        ChatMarkupLanguage(
+            role=OpenAIChatRole.ASSISTANT,
+            content=actual_solution_response,
+            type=ChatMessageType.SOLUTION,
+        )
+    )
+
+    # import ipdb
+
+    # ipdb.set_trace()
+
     system_prompt_template = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on as well as the student's response to the question. 
+    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on, the student's response to the question and the your actual solution. 
     You need to provide an evaluation based on the student's response. 
     The student's response will be delimited with #### characters.
 
     To solve the problem, do the following
-    - First, work out your own solution to the problem
-    - Then, compare your solution to the student's solution.
+    - Compare your solution to the student's solution.
     - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
     - At the end, give some actionable feedback too.
     
     Important:
     - Don’t reveal the answer or give any hints as part of your feedback. 
-
-    Use the following format:
-    Actual solution:
-    {{concise steps to work out the solution and your solution}}
 
     {format_instructions}"""
 
@@ -216,28 +250,36 @@ def run_evaluator_chain(
 
     user_prompt_template_message = "####{input}####"
 
-    response = run_openai_chat_chain(
+    # response = run_openai_chat_chain(
+    #     user_prompt_template_message,
+    #     user_response.content,
+    #     system_prompt,
+    #     history,
+    #     output_parser,
+    #     ignore_types=[
+    #         QUERY_TYPE_CLARIFICATION_KEY,
+    #         QUERY_TYPE_IRRELEVANT_KEY,
+    #     ],  # during evaluation, don't need to consider past clarifications or irrelevant messages
+    #     verbose=True,
+    #     parse_llm_output_for_key=answer_schema.name,
+    # )
+
+    # return {
+    #     "feedback": response["feedback"],
+    #     "answer": response[answer_schema.name],
+    # }
+    return stream_openai_chat_chain(
         user_prompt_template_message,
         user_response.content,
         system_prompt,
         history,
-        output_parser,
+        stream_start_tokens=[QUERY_TYPE_ANSWER_KEY],
         ignore_types=[
             QUERY_TYPE_CLARIFICATION_KEY,
             QUERY_TYPE_IRRELEVANT_KEY,
         ],  # during evaluation, don't need to consider past clarifications or irrelevant messages
         verbose=True,
-        parse_llm_output_for_key=answer_schema.name,
     )
-
-    if answer_schema.name in response and "feedback" in response:
-        return {
-            "success": True,
-            "feedback": response["feedback"],
-            "answer": response[answer_schema.name],
-        }
-
-    return {"success": False}
 
 
 def run_clarifier_chain(
@@ -308,13 +350,29 @@ def training_chat(training_chat_request: TrainingChatRequest):
     print(f"Query type: {query_type}")
 
     if query_type == QUERY_TYPE_ANSWER_KEY:
-        evaluator_response = run_evaluator_chain(user_response=query, history=history)
-        if evaluator_response["success"]:
-            evaluator_response.pop("success")
-            return {"type": query_type, "response": evaluator_response}
+        # evaluator_response = run_evaluator_chain(user_response=query, history=history)
 
-        raise HTTPException(
-            status_code=500, detail="Something went wrong with Evaluator"
+        def stream_answer_response():
+            import json
+
+            # evaluator_response = run_evaluator_chain(
+            #     user_response=query, history=history
+            # )
+            # for value in [QUERY_TYPE_ANSWER_KEY, json.dumps(evaluator_response)]:
+            #     yield value
+
+            generator = run_evaluator_chain(user_response=query, history=history)
+            for value in generator:
+                yield value
+
+            # return {"type": query_type, "response": evaluator_response}
+
+        # raise HTTPException(
+        #     status_code=500, detail="Something went wrong with Evaluator"
+        # )
+        return StreamingResponse(
+            stream_answer_response(),
+            media_type="text/event-stream",
         )
 
     if query_type == QUERY_TYPE_CLARIFICATION_KEY:

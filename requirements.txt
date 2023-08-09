@@ -1,4 +1,4 @@
-langchain==0.0.202
+langchain==0.0.259
 fastapi
 openai
 backoff
@@ -9,3 +9,4 @@ wandb
 uvicorn[standard]
 streamlit
 ipdb
+tiktoken==0.4.0

@@ -27,6 +27,7 @@ class TrainingChatUserResponseType(str, Enum):
 class ChatMessageType(str, Enum):
     QUESTION = "question"  # ai-generated question
     RESPONSE = "response"  # ai-response
+    SOLUTION = "solution"  # ai-solution
     ANSWER = "answer"  # irrelevant response by user
     CLARIFICATION = "clarification"  # clarification requested by user
     IRRELEVANT = "irrelevant"  # answer given by user to the question asked

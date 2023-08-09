@@ -249,6 +249,8 @@ if is_training_started:
             not st.session_state.ai_response_in_progress
         )
 
+    # toggle_ai_response_state()
+
     user_answer = st.chat_input(
         "Your answer",
         on_submit=toggle_ai_response_state,
@@ -281,6 +283,11 @@ if is_training_started:
             ai_response = ""
             user_answer_type = None
 
+            chunk_history = ""
+            user_answer_score = None
+            user_answer_feedback = None
+            special_character_count = defaultdict(int)
+
             ai_response_placeholder.write("▌")
             for line in training_chat_response.iter_content(chunk_size=20):
                 # first chunk is the user answer type
@@ -288,10 +295,55 @@ if is_training_started:
                     user_answer_type = line.decode()
                     continue
 
-                ai_response += line.decode()
-                ai_response_placeholder.write(ai_response + "▌")
+                chunk = line.decode()
+                chunk_history += chunk
 
-            ai_response_placeholder.write(ai_response)
+                print(chunk)
+
+                if user_answer_type == "clarification":
+                    ai_response += chunk
+                    ai_response_placeholder.write(ai_response + "▌")
+
+                elif user_answer_type == "answer":
+                    if "```" in chunk and not special_character_count["{"]:
+                        continue
+
+                    if "{" in chunk:
+                        special_character_count["{"] += 1
+
+                    if "}" in chunk:
+                        special_character_count["{"] -= 1
+                        if not special_character_count["{"]:
+                            continue
+
+                    if "answer_evaluation" not in chunk_history:
+                        continue
+
+                    if 'feedback": "' not in chunk_history:
+                        print("entered")
+                        if user_answer_score is not None:
+                            print("score already done skip")
+                            continue
+                        try:
+                            user_answer_score = int(chunk)
+                            print("showing result")
+                            if user_answer_score == 2:
+                                result = "Proficient :rocket:"
+                            elif user_answer_score == 1:
+                                result = "Almost there :runner:"
+                            elif user_answer_score == 0:
+                                result = "You can do better :hugging_face:"
+                            ai_response += f"Result - {result} \nFeedback - "
+                            ai_response_placeholder.write(ai_response + "▌")
+                        except:
+                            continue
+                    else:
+                        print("showing feedbacks")
+                        ai_response += chunk
+                        ai_response_placeholder.write(ai_response + "▌")
+
+            # if user_answer_type == "clarification":
+            #     ai_response_placeholder.write(ai_response)
 
             # if training_chat_response.status_code != 200:
             #     st.error("Something went wrong. Please try again!")
@@ -301,27 +353,29 @@ if is_training_started:
             #     st.stop()
 
             toggle_ai_response_state()
-            # training_chat_response = training_chat_response.json()
+            # if user_answer_type == "answer":
+            #     training_chat_response = training_chat_response.json()
 
             # user_answer_type = training_chat_response["type"]
             if user_answer_type == "irrelevant":
-                ai_response = "Irrelevant question"
+                ai_response = "Irrelevant response"
             # elif user_answer_type == "clarification":
             #     # string clarification
             #     ai_response = training_chat_response["response"]
-            # else:
-            #     # the response given is actually the answer to the question
-            #     score = training_chat_response["response"]["answer"]
-            #     if score == 2:
-            #         result = "Proficient :rocket:"
-            #     elif score == 1:
-            #         result = "Almost there :runner:"
-            #     elif score == 0:
-            #         result = "You can do better :hugging_face:"
+            # elif user_answer_type == "answer":
+            # the response given is actually the answer to the question
+            # training_chat_response = json.loads(ai_response)
+            # score = training_chat_response["answer"]
+            # if score == 2:
+            #     result = "Proficient :rocket:"
+            # elif score == 1:
+            #     result = "Almost there :runner:"
+            # elif score == 0:
+            #     result = "You can do better :hugging_face:"
 
-            #     ai_response = f"Result - {result}  \nFeedback - {training_chat_response['response']['feedback']}"
+            # ai_response = f"Result - {result}  \nFeedback - {training_chat_response['feedback']}"
 
-            # st.write(ai_response)
+            ai_response_placeholder.write(ai_response)
 
         # save last user message only if there is a assistant response as well
         st.session_state.chat_history += [
