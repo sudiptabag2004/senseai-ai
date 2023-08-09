@@ -106,32 +106,28 @@ class ChainStreamHandler(StreamingStdOutCallbackHandler):
         self.gen.send(token)
 
 
-def llm_thread(
-    threaded_generator,
+def chat_model_thread(
+    chat_model: ChatOpenAI,
     messages: List,
-    chat_model_init_kwargs: Dict,
+    threaded_generator,
     callbacks: List = [],
 ):
     try:
-        chat = ChatOpenAI(
-            callback_manager=BaseCallbackManager(
-                [ChainStreamHandler(threaded_generator)]
-            ),
-            **chat_model_init_kwargs,
-        )
-        chat(messages, callbacks=callbacks)
+        chat_model(messages, callbacks=callbacks)
 
     finally:
         threaded_generator.close()
 
 
 def stream_chat_model_response(
-    messages: List, chat_model_init_kwargs: Dict, callbacks: List = []
+    chat_model: ChatOpenAI,
+    messages: List,
+    threaded_generator: ThreadedGenerator,
+    callbacks: List = [],
 ):
-    threaded_generator = ThreadedGenerator()
     threading.Thread(
-        target=llm_thread,
-        args=(threaded_generator, messages, chat_model_init_kwargs, callbacks),
+        target=chat_model_thread,
+        args=(chat_model, messages, threaded_generator, callbacks),
     ).start()
     return threaded_generator
 
@@ -157,21 +153,20 @@ def call_openai_chat_model(
     }
 
     if streaming:
-        return stream_chat_model_response(
-            messages, chat_model_init_kwargs, callbacks=callbacks
+        threaded_generator = ThreadedGenerator()
+        chat_model_init_kwargs["callback_manager"] = BaseCallbackManager(
+            [ChainStreamHandler(threaded_generator)]
         )
 
     chat_model = ChatOpenAI(
-        model_name=model,
-        temperature=0,
-        max_tokens=max_tokens,
-        model_kwargs={
-            "top_p": 1,
-            "frequency_penalty": 0,
-            "presence_penalty": 0,
-        },
-        streaming=streaming,
+        **chat_model_init_kwargs,
     )
+
+    if streaming:
+        return stream_chat_model_response(
+            chat_model, messages, threaded_generator, callbacks=callbacks
+        )
+
     response = chat_model(messages, callbacks=callbacks)
 
     logging.info(
@@ -180,20 +175,59 @@ def call_openai_chat_model(
     return response.content
 
 
-# @backoff.on_exception(backoff.expo, Exception, max_tries=3)
-def run_openai_chat_chain(
-    user_prompt_template: str,
+def chat_chain_thread(
+    chat_chain: ConversationChain,
     user_message: str,
+    threaded_generator,
+):
+    try:
+        chat_chain.run(user_message)
+
+    finally:
+        threaded_generator.close()
+
+
+def stream_chat_chain_response(
+    chat_chain: ConversationChain,
+    user_message: str,
+    threaded_generator: ThreadedGenerator,
+):
+    threading.Thread(
+        target=chat_chain_thread,
+        args=(chat_chain, user_message, threaded_generator),
+    ).start()
+    return threaded_generator
+
+
+def prepare_chat_chain(
+    user_prompt_template: str,
     system_prompt: str,
     messages: List[ChatMarkupLanguage],
-    output_parser: BaseOutputParser = None,
-    ignore_types: List[str] = ["irrelevant"],
     model: str = "gpt-4-0613",
+    ignore_types: List[str] = ["irrelevant"],
+    max_tokens: int = 1024,
+    streaming: bool = False,
     verbose: bool = False,
     callbacks: List = [],
-    parse_llm_output_for_key: str = None,
+    callback_manager: BaseCallbackManager = None,
 ):
-    chat_model = ChatOpenAI(temperature=0, model=model)
+    chat_model_init_kwargs = {
+        "model_name": model,
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "model_kwargs": {
+            "top_p": 1,
+            "frequency_penalty": 0,
+            "presence_penalty": 0,
+        },
+        "streaming": streaming,
+    }
+
+    if streaming:
+        chat_model_init_kwargs["callback_manager"] = callback_manager
+
+    chat_model = ChatOpenAI(**chat_model_init_kwargs)
+
     # langchain_messages = [SystemMessage(content=system_prompt)]
     langchain_messages = []
     if messages:
@@ -224,6 +258,31 @@ def run_openai_chat_chain(
         callbacks=callbacks,
     )
 
+    return chat_chain, memory
+
+
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
+def run_openai_chat_chain(
+    user_prompt_template: str,
+    user_message: str,
+    system_prompt: str,
+    messages: List[ChatMarkupLanguage],
+    output_parser: BaseOutputParser = None,
+    ignore_types: List[str] = ["irrelevant"],
+    model: str = "gpt-4-0613",
+    verbose: bool = False,
+    callbacks: List = [],
+    parse_llm_output_for_key: str = None,
+):
+    chat_chain, memory = prepare_chat_chain(
+        user_prompt_template,
+        system_prompt,
+        messages,
+        model,
+        ignore_types,
+        verbose=verbose,
+        callbacks=callbacks,
+    )
     response = chat_chain.run(user_message)
 
     logging.info(
@@ -239,3 +298,39 @@ def run_openai_chat_chain(
             response = parse_llm_output(output_parser, response, model=model)
 
     return response
+
+
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
+def stream_openai_chat_chain(
+    user_prompt_template: str,
+    user_message: str,
+    system_prompt: str,
+    messages: List[ChatMarkupLanguage],
+    stream_start_tokens: List[str] = [],
+    ignore_types: List[str] = ["irrelevant"],
+    model: str = "gpt-4-0613",
+    verbose: bool = False,
+    callbacks: List = [],
+):
+    threaded_generator = ThreadedGenerator()
+
+    for token in stream_start_tokens:
+        threaded_generator.send(token)
+
+    callback_manager = BaseCallbackManager([ChainStreamHandler(threaded_generator)])
+
+    chat_chain, _ = prepare_chat_chain(
+        user_prompt_template,
+        system_prompt,
+        messages,
+        model,
+        ignore_types,
+        streaming=True,
+        verbose=verbose,
+        callbacks=callbacks,
+        callback_manager=callback_manager,
+    )
+
+    # response = chat_chain.run(user_message)
+
+    return stream_chat_chain_response(chat_chain, user_message, threaded_generator)

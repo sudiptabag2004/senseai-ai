@@ -219,7 +219,7 @@ if is_training_started:
             st.session_state.ai_chat_history.append(
                 {
                     "role": "assistant",
-                    "content": f"Topic - {topic['name']}\Sub-Topic - {sub_topic}\nConcept - {concept['name']}\nBlooms level - {blooms_level}\nLearning outcome - {learning_outcome}\nQuestion - {generated_question}",
+                    "content": f"Topic - {topic['name']}\nSub-Topic - {sub_topic}\nConcept - {concept['name']}\nBlooms level - {blooms_level}\nLearning outcome - {learning_outcome}\nQuestion - {generated_question}",
                     "type": "question",
                 }
             )
@@ -274,37 +274,54 @@ if is_training_started:
                 training_chat_response = requests.post(
                     "http://127.0.0.1:8001/training/chat",
                     data=json.dumps({"messages": ai_chat_history}),
+                    stream=True,
                 )
 
-            if training_chat_response.status_code != 200:
-                st.error("Something went wrong. Please try again!")
-                # remove the last user input from ai_chat_history
-                ai_chat_history.pop()
-                st.session_state.ai_response_in_progress = False
-                st.stop()
+            ai_response_placeholder = st.empty()
+            ai_response = ""
+            user_answer_type = None
+
+            ai_response_placeholder.write("▌")
+            for line in training_chat_response.iter_content(chunk_size=20):
+                # first chunk is the user answer type
+                if user_answer_type is None:
+                    user_answer_type = line.decode()
+                    continue
+
+                ai_response += line.decode()
+                ai_response_placeholder.write(ai_response + "▌")
+
+            ai_response_placeholder.write(ai_response)
+
+            # if training_chat_response.status_code != 200:
+            #     st.error("Something went wrong. Please try again!")
+            #     # remove the last user input from ai_chat_history
+            #     ai_chat_history.pop()
+            #     st.session_state.ai_response_in_progress = False
+            #     st.stop()
 
             toggle_ai_response_state()
-            training_chat_response = training_chat_response.json()
+            # training_chat_response = training_chat_response.json()
 
-            user_answer_type = training_chat_response["type"]
+            # user_answer_type = training_chat_response["type"]
             if user_answer_type == "irrelevant":
                 ai_response = "Irrelevant question"
-            elif user_answer_type == "clarification":
-                # string clarification
-                ai_response = training_chat_response["response"]
-            else:
-                # the response given is actually the answer to the question
-                score = training_chat_response["response"]["answer"]
-                if score == 2:
-                    result = "Proficient :rocket:"
-                elif score == 1:
-                    result = "Almost there :runner:"
-                elif score == 0:
-                    result = "You can do better :hugging_face:"
+            # elif user_answer_type == "clarification":
+            #     # string clarification
+            #     ai_response = training_chat_response["response"]
+            # else:
+            #     # the response given is actually the answer to the question
+            #     score = training_chat_response["response"]["answer"]
+            #     if score == 2:
+            #         result = "Proficient :rocket:"
+            #     elif score == 1:
+            #         result = "Almost there :runner:"
+            #     elif score == 0:
+            #         result = "You can do better :hugging_face:"
 
-                ai_response = f"Result - {result}  \nFeedback - {training_chat_response['response']['feedback']}"
+            #     ai_response = f"Result - {result}  \nFeedback - {training_chat_response['response']['feedback']}"
 
-            st.write(ai_response)
+            # st.write(ai_response)
 
         # save last user message only if there is a assistant response as well
         st.session_state.chat_history += [
