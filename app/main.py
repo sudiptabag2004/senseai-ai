@@ -34,6 +34,7 @@ openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 
 if not os.getenv("ENV"):
+    # only run W&B for local
     os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 app = FastAPI()
@@ -186,7 +187,7 @@ def run_evaluator_chain(
     {format_instructions}"""
 
     answer_schema = ResponseSchema(
-        name="answer",
+        name="answer_evaluation",
         description="the final evaluation",
         type="0 | 1 | 2",
     )
@@ -221,11 +222,15 @@ def run_evaluator_chain(
             "irrelevant",
         ],  # during evaluation, don't need to consider past clarifications or irrelevant messages
         verbose=True,
-        parse_llm_output_for_key="answer",
+        parse_llm_output_for_key=answer_schema.name,
     )
 
-    if "answer" in response and "feedback" in response:
-        return {"success": True, **response}
+    if answer_schema.name in response and "feedback" in response:
+        return {
+            "success": True,
+            "feedback": response["feedback"],
+            "answer": response[answer_schema.name],
+        }
 
     return {"success": False}
 
