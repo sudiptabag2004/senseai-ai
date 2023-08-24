@@ -10,3 +10,6 @@ uvicorn[standard]
 streamlit
 ipdb
 tiktoken==0.4.0
+openapi-schema-pydantic==1.2.4
+pydantic==1.10.10
+gptcache==0.1.38
