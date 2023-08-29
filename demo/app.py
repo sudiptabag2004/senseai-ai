@@ -48,7 +48,7 @@ def fetch_learning_outcomes(concept: Node):
     import urllib
 
     fetch_learning_outcome_response = requests.get(
-        f"{os.environ['BACKEND_URL']}/api/roadmaps/lo/",
+        f"{os.environ['BACKEND_URL']}/api/learning_outcome/lo/",
         params={"nodeId": concept["id"]},
     )
     if fetch_learning_outcome_response.status_code != 200:
