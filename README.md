@@ -24,8 +24,8 @@
 cd app; uvicorn main:app --reload --port 8001
 ```
 
-The app will be hosted on http://localhost:3000.
-The docs will be available on http://localhost:3000/docs
+The app will be hosted on http://localhost:8001.
+The docs will be available on http://localhost:8001/docs
 
 ## Running the demo app locally
 
