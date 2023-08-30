@@ -1,5 +1,9 @@
 # SensAI AI
 
+## Overview
+
+- `app`: this folder contains the main AI logic for assessments and the FastAPI server
+- `demo`: this folder contains the `streamlit` demo for assessments. 
 
 ## Setup
 
