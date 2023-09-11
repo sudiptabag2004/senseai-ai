@@ -21,6 +21,11 @@
   pip install -r app/requirements.txt
   ```
 - Update environment variables inside `app/.env`.
+- Update certain langchain files to accommodate fixes:
+  ```
+  bash update_langchain.sh
+  ```
+  The changes made are shown in the images inside the `langchain` dir.
 
 ## Running the API locally
 

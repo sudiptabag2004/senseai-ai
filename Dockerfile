@@ -4,16 +4,21 @@ FROM python:3.8.17-slim-bookworm
 RUN apt-get update && apt-get install -y gcc python3-dev
 
 # Copy requirements.txt to the container
-COPY requirements.txt ./
+COPY requirements.txt /workspace
+
+WORKDIR /workspace
 
 # Install app dependencies
 RUN pip install -r requirements.txt
 
-# Copy the rest of the app source code to the container
-COPY app /app
+# Copy the rest of the source code to the container
+COPY . /workspace/
 
-# Copy the demo source code to the container
-COPY demo /demo
+# update langchain library files to fix issues with caching + streaming
+# for chat models
+WORKDIR /workspace
+
+RUN bash update_langchain.sh
 
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001

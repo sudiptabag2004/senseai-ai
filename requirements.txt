@@ -1,4 +1,4 @@
-langchain==0.0.259
+langchain==0.0.285
 fastapi
 openai
 backoff
@@ -12,4 +12,6 @@ ipdb
 tiktoken==0.4.0
 openapi-schema-pydantic==1.2.4
 pydantic==1.10.10
-gptcache==0.1.38
+gptcache==0.1.40
+redis
+redis_om

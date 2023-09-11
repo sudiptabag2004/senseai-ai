@@ -1,14 +1,17 @@
 import logging
 import pathlib
 import json
+import traceback
+import asyncio
 import os
 from os.path import dirname
-from typing import List, Dict
+from typing import List, Dict, AsyncIterable
 import queue
 import threading
 
 import backoff
 import langchain
+from pydantic import BaseModel
 from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import OutputFixingParser
 from langchain.memory import ConversationBufferMemory
@@ -21,6 +24,7 @@ from langchain.prompts import (
     ChatPromptTemplate,
 )
 from langchain.callbacks.base import BaseCallbackManager
+from langchain.callbacks import AsyncIteratorCallbackHandler
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 from settings import settings
@@ -40,42 +44,60 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-from gptcache import Cache, cache
+from gptcache import Cache
 from gptcache.manager.factory import manager_factory
 from gptcache.processor.pre import get_prompt
-from gptcache.embedding import LangChain
-from gptcache.adapter.langchain_models import LangChainChat
-from langchain.embeddings.openai import OpenAIEmbeddings
-from gptcache.similarity_evaluation.distance import SearchDistanceEvaluation
-from gptcache.manager import CacheBase, VectorBase, get_data_manager
+
+# from gptcache.embedding import LangChain
+# from gptcache.adapter.langchain_models import LangChainChat
+
+# from langchain.embeddings.openai import OpenAIEmbeddings
+# from gptcache.similarity_evaluation.distance import SearchDistanceEvaluation
+# from gptcache.manager import CacheBase, VectorBase, get_data_manager
 from langchain.cache import GPTCache
 import hashlib
 
 
 # get the content(only question) form the prompt to cache
-def get_msg_func(data, **_):
-    return data.get("messages")[-1].content
+# def get_msg_func(data, **_):
+#     return data.get("messages")[-1].content
+
+
+# def get_hashed_name(name):
+#     return hashlib.sha256(name.encode()).hexdigest()
 
 
 def get_hashed_name(name):
     return hashlib.sha256(name.encode()).hexdigest()
 
 
-embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key)
-encoder = LangChain(embeddings=embeddings)
-cache_base = CacheBase("sqlite")
-vector_base = VectorBase("faiss", dimension=1536, top_k=3)
-data_manager = get_data_manager(cache_base, vector_base)
+def init_gptcache(cache_obj: Cache, llm: str):
+    hashed_llm = get_hashed_name(llm)
+    cache_obj.init(
+        pre_embedding_func=get_prompt,
+        data_manager=manager_factory(manager="map", data_dir=f"map_cache_{hashed_llm}"),
+    )
+
+
+langchain.llm_cache = GPTCache(init_gptcache)
+
+
+# embeddings = OpenAIEmbeddings(openai_api_key=settings.openai_api_key)
+# encoder = LangChain(embeddings=embeddings)
+# cache_base = CacheBase("sqlite")
+# vector_base = VectorBase("faiss", dimension=1536, top_k=3)
+# data_manager = get_data_manager(cache_base, vector_base)
+
+# # cache.init(pre_embedding_func=get_msg_func)
+# cache.init(
+#     pre_embedding_func=get_msg_func,
+#     embedding_func=encoder.to_embeddings,
+#     data_manager=data_manager,
+#     similarity_evaluation=SearchDistanceEvaluation(),
+# )
 
 # cache.init(pre_embedding_func=get_msg_func)
-cache.init(
-    pre_embedding_func=get_msg_func,
-    embedding_func=encoder.to_embeddings,
-    data_manager=data_manager,
-    similarity_evaluation=SearchDistanceEvaluation(),
-)
-
-cache.set_openai_key()
+# cache.set_openai_key()
 
 
 def parse_llm_output(output_parser, response, model, default={}):
@@ -116,59 +138,65 @@ def parse_llm_output_with_key(output_parser, response: str, key: str, default={}
             return default
 
 
-class ThreadedGenerator:
-    def __init__(self):
-        self.queue = queue.Queue()
+# class ThreadedGenerator:
+#     def __init__(self):
+#         self.queue = queue.Queue()
 
-    def __iter__(self):
-        return self
+#     def __iter__(self):
+#         return self
 
-    def __next__(self):
-        item = self.queue.get()
-        if item is StopIteration:
-            raise item
-        return item
+#     def __next__(self):
+#         item = self.queue.get()
+#         if item is StopIteration:
+#             raise item
+#         return item
 
-    def send(self, data):
-        self.queue.put(data)
+#     def send(self, data):
+#         self.queue.put(data)
 
-    def close(self):
-        self.queue.put(StopIteration)
-
-
-class ChainStreamHandler(StreamingStdOutCallbackHandler):
-    def __init__(self, gen):
-        super().__init__()
-        self.gen = gen
-
-    def on_llm_new_token(self, token: str, **kwargs):
-        self.gen.send(token)
+#     def close(self):
+#         self.queue.put(StopIteration)
 
 
-def chat_model_thread(
-    chat_model: ChatOpenAI,
-    messages: List,
-    threaded_generator,
-    callbacks: List = [],
-):
+# class ChainStreamHandler(StreamingStdOutCallbackHandler):
+#     def __init__(self, gen):
+#         super().__init__()
+#         self.gen = gen
+
+#     def on_llm_new_token(self, token: str, **kwargs):
+#         print(token)
+#         self.gen.send(token)
+
+
+# def chat_model_thread(
+#     chat_model: ChatOpenAI,
+#     messages: List,
+#     threaded_generator,
+#     callbacks: List = [],
+# ):
+#     try:
+#         chat_model(messages, callbacks=callbacks)
+
+#     finally:
+#         threaded_generator.close()
+
+
+async def stream_chat_model_response(
+    chat_model: ChatOpenAI, messages: List, async_callback: AsyncIteratorCallbackHandler
+) -> AsyncIterable[str]:
+    # ref: https://www.youtube.com/watch?v=Gn54EbU9mRg
+
+    task = asyncio.create_task(chat_model.agenerate(messages=[messages]))
+
     try:
-        chat_model(messages, callbacks=callbacks)
-
+        async for token in async_callback.aiter():
+            yield token
+    except:
+        traceback.print_exc()
     finally:
-        threaded_generator.close()
+        async_callback.done.set()
 
-
-def stream_chat_model_response(
-    chat_model: ChatOpenAI,
-    messages: List,
-    threaded_generator: ThreadedGenerator,
-    callbacks: List = [],
-):
-    threading.Thread(
-        target=chat_model_thread,
-        args=(chat_model, messages, threaded_generator, callbacks),
-    ).start()
-    return threaded_generator
+    await task
 
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
@@ -176,7 +204,6 @@ def call_openai_chat_model(
     messages: List,
     model: str,
     max_tokens: int,
-    callbacks: List = [],
     streaming: bool = False,
     cache: bool = False,
 ):
@@ -194,24 +221,27 @@ def call_openai_chat_model(
     }
 
     if streaming:
-        threaded_generator = ThreadedGenerator()
-        chat_model_init_kwargs["callback_manager"] = BaseCallbackManager(
-            [ChainStreamHandler(threaded_generator)]
-        )
+        # threaded_generator = ThreadedGenerator()
+        # chat_model_init_kwargs["callback_manager"] = BaseCallbackManager(
+        #     [ChainStreamHandler(threaded_generator)]
+        # )
+        callback = AsyncIteratorCallbackHandler()
+        chat_model_init_kwargs["callbacks"] = [callback]
 
     chat_model = ChatOpenAI(
         **chat_model_init_kwargs,
     )
 
+    # if cache:
+    #     chat_model = LangChainChat(chat=chat_model)
+
     if streaming:
-        return stream_chat_model_response(
-            chat_model, messages, threaded_generator, callbacks=callbacks
-        )
+        # return stream_chat_model_response(
+        #     chat_model, messages, threaded_generator, callbacks=callbacks
+        # )
+        return stream_chat_model_response(chat_model, messages, async_callback=callback)
 
-    if cache:
-        chat_model = LangChainChat(chat=chat_model)
-
-    response = chat_model(messages, callbacks=callbacks)
+    response = chat_model(messages)
 
     logging.info(
         f"model: {model} prompt: {messages} response: {response.content} max tokens: {max_tokens}"
@@ -231,16 +261,29 @@ def chat_chain_thread(
         threaded_generator.close()
 
 
-def stream_chat_chain_response(
+async def stream_chat_chain_response(
     chat_chain: ConversationChain,
     user_message: str,
-    threaded_generator: ThreadedGenerator,
-):
-    threading.Thread(
-        target=chat_chain_thread,
-        args=(chat_chain, user_message, threaded_generator),
-    ).start()
-    return threaded_generator
+    # threaded_generator: ThreadedGenerator,
+    async_callback: AsyncIteratorCallbackHandler,
+) -> AsyncIterable[str]:
+    # threading.Thread(
+    #     target=chat_chain_thread,
+    #     args=(chat_chain, user_message, threaded_generator),
+    # ).start()
+    # return threaded_generator
+    task = asyncio.create_task(chat_chain.arun(user_message))
+
+    try:
+        async for token in async_callback.aiter():
+            # print(token)
+            yield token
+    except:
+        traceback.print_exc()
+    finally:
+        async_callback.done.set()
+
+    await task
 
 
 def prepare_chat_chain(
@@ -253,7 +296,6 @@ def prepare_chat_chain(
     streaming: bool = False,
     verbose: bool = False,
     callbacks: List = [],
-    callback_manager: BaseCallbackManager = None,
     cache: bool = False,
 ):
     chat_model_init_kwargs = {
@@ -267,10 +309,8 @@ def prepare_chat_chain(
         },
         "streaming": streaming,
         "cache": cache,
+        "callbacks": callbacks,
     }
-
-    if streaming:
-        chat_model_init_kwargs["callback_manager"] = callback_manager
 
     chat_model = ChatOpenAI(**chat_model_init_kwargs)
 
@@ -297,11 +337,7 @@ def prepare_chat_chain(
     # ipdb.set_trace()
 
     chat_chain = ConversationChain(
-        llm=chat_model,
-        memory=memory,
-        prompt=chat_prompt_template,
-        verbose=verbose,
-        callbacks=callbacks,
+        llm=chat_model, memory=memory, prompt=chat_prompt_template, verbose=verbose
     )
 
     return chat_chain, memory
@@ -317,7 +353,6 @@ def run_openai_chat_chain(
     ignore_types: List[str] = ["irrelevant"],
     model: str = "gpt-4-0613",
     verbose: bool = False,
-    callbacks: List = [],
     parse_llm_output_for_key: str = None,
     cache: bool = False,
 ):
@@ -328,7 +363,6 @@ def run_openai_chat_chain(
         model,
         ignore_types,
         verbose=verbose,
-        callbacks=callbacks,
         cache=cache,
     )
     response = chat_chain.run(user_message)
@@ -358,15 +392,17 @@ def stream_openai_chat_chain(
     ignore_types: List[str] = ["irrelevant"],
     model: str = "gpt-4-0613",
     verbose: bool = False,
-    callbacks: List = [],
     cache: bool = False,
 ):
-    threaded_generator = ThreadedGenerator()
+    # threaded_generator = ThreadedGenerator()
 
-    for token in stream_start_tokens:
-        threaded_generator.send(token)
+    # for token in stream_start_tokens:
+    #     threaded_generator.send(token)
 
-    callback_manager = BaseCallbackManager([ChainStreamHandler(threaded_generator)])
+    callback = AsyncIteratorCallbackHandler()
+    # chat_model_init_kwargs["callbacks"] = [callback]
+
+    # callback_manager = BaseCallbackManager([ChainStreamHandler(threaded_generator)])
 
     chat_chain, _ = prepare_chat_chain(
         user_prompt_template,
@@ -376,11 +412,10 @@ def stream_openai_chat_chain(
         ignore_types,
         streaming=True,
         verbose=verbose,
-        callbacks=callbacks,
-        callback_manager=callback_manager,
+        callbacks=[callback],
         cache=cache,
     )
 
     # response = chat_chain.run(user_message)
 
-    return stream_chat_chain_response(chat_chain, user_message, threaded_generator)
+    return stream_chat_chain_response(chat_chain, user_message, callback)

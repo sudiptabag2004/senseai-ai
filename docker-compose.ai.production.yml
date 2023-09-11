@@ -9,7 +9,7 @@ services:
       - '8001:8001'
     environment:
       - ENV=production
-    working_dir: /app
+    working_dir: /workdir/app
     command: uvicorn main:app --host 0.0.0.0 --port 8001
 
   demo:
@@ -19,5 +19,5 @@ services:
       dockerfile: Dockerfile
     ports:
       - '8501:8501'
-    working_dir: /demo
+    working_dir: /workdir/demo
     command: streamlit run app.py

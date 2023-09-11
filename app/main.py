@@ -1,5 +1,5 @@
 import os
-
+from itertools import chain
 from typing import List
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -35,9 +35,9 @@ openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
 os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 
-if not os.getenv("ENV"):
-    # only run W&B for local
-    os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
+# if not os.getenv("ENV"):
+#     # only run W&B for local
+#     os.environ["LANGCHAIN_WANDB_TRACING"] = "true"
 
 QUERY_TYPE_ANSWER_KEY = "answer"
 QUERY_TYPE_CLARIFICATION_KEY = "clarification"
@@ -110,7 +110,9 @@ async def generate_training_question(
     ).to_messages()
 
     return StreamingResponse(
-        call_openai_chat_model(messages, model=model, max_tokens=1024, streaming=True),
+        call_openai_chat_model(
+            messages, model=model, max_tokens=1024, streaming=True, cache=True
+        ),
         media_type="text/event-stream",
     )
 
@@ -193,9 +195,15 @@ def run_evaluator_chain(
         input=history[0].content,
     ).to_messages()
 
+    import time
+
+    start_time = time.time()
+
     actual_solution_response = call_openai_chat_model(
         actual_solution_messages, model="gpt-4-0613", max_tokens=1024, cache=True
     )
+
+    print(f"Time taken: {time.time() - start_time}")
 
     # add the actual solution to the history
     history.append(
@@ -293,7 +301,7 @@ def run_clarifier_chain(
     Important:
     - Make sure to not give hints or answer the question.
     - If the student asks for the answer, refrain from answering.
-    
+
     The final output should be just a string with the clarification asked for and nothing else.
     """
 
@@ -332,7 +340,7 @@ def init_wandb_for_training_chat():
     response_model=TrainingChatResponse,
     # dependencies=[Depends(init_wandb_for_training_chat)],
 )
-def training_chat(training_chat_request: TrainingChatRequest):
+async def training_chat(training_chat_request: TrainingChatRequest):
     # TODO: handle memory
 
     if not training_chat_request.messages:
@@ -352,43 +360,32 @@ def training_chat(training_chat_request: TrainingChatRequest):
     if query_type == QUERY_TYPE_ANSWER_KEY:
         # evaluator_response = run_evaluator_chain(user_response=query, history=history)
 
-        def stream_answer_response():
-            import json
+        async def get_answer_response():
+            yield QUERY_TYPE_ANSWER_KEY
 
-            # evaluator_response = run_evaluator_chain(
-            #     user_response=query, history=history
-            # )
-            # for value in [QUERY_TYPE_ANSWER_KEY, json.dumps(evaluator_response)]:
-            #     yield value
+            async for item in run_evaluator_chain(user_response=query, history=history):
+                yield item
 
-            generator = run_evaluator_chain(user_response=query, history=history)
-            for value in generator:
-                yield value
+        async def stream_answer_response():
+            async for item in get_answer_response():
+                yield item
 
-            # return {"type": query_type, "response": evaluator_response}
-
-        # raise HTTPException(
-        #     status_code=500, detail="Something went wrong with Evaluator"
-        # )
         return StreamingResponse(
             stream_answer_response(),
             media_type="text/event-stream",
         )
 
     if query_type == QUERY_TYPE_CLARIFICATION_KEY:
-        # clarifier_response = run_clarifier_chain(user_response=query, history=history)
-        # if clarifier_response["success"]:
-        #     clarifier_response.pop("success")
-        #     return {"type": query_type, **clarifier_response}
 
-        # raise HTTPException(
-        #     status_code=500, detail="Something went wrong with Clarifier"
-        # )
+        async def get_clarification_response():
+            yield QUERY_TYPE_CLARIFICATION_KEY
 
-        def stream_clarification_response():
-            generator = run_clarifier_chain(user_response=query, history=history)
-            for value in generator:
-                yield value
+            async for item in run_clarifier_chain(user_response=query, history=history):
+                yield item
+
+        async def stream_clarification_response():
+            async for item in get_clarification_response():
+                yield item
 
         return StreamingResponse(
             stream_clarification_response(),
