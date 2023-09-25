@@ -293,14 +293,13 @@ if is_training_started:
                 # first chunk is the user answer type
                 if user_answer_type is None:
                     user_answer_type = line.decode()
+                    print(user_answer_type)
                     continue
 
                 chunk = line.decode()
                 chunk_history += chunk
 
-                print(chunk)
-
-                if user_answer_type == "clarification":
+                if user_answer_type in ["clarification", "miscellaneous"]:
                     ai_response += chunk
                     ai_response_placeholder.write(ai_response + "▌")
 
@@ -320,13 +319,10 @@ if is_training_started:
                         continue
 
                     if 'feedback": "' not in chunk_history:
-                        print("entered")
                         if user_answer_score is not None:
-                            print("score already done skip")
                             continue
                         try:
                             user_answer_score = int(chunk)
-                            print("showing result")
                             if user_answer_score == 2:
                                 result = "Proficient :rocket:"
                             elif user_answer_score == 1:
@@ -338,7 +334,6 @@ if is_training_started:
                         except:
                             continue
                     else:
-                        print("showing feedbacks")
                         ai_response += chunk
                         ai_response_placeholder.write(ai_response + "▌")
 

@@ -388,7 +388,6 @@ def stream_openai_chat_chain(
     user_message: str,
     system_prompt: str,
     messages: List[ChatMarkupLanguage],
-    stream_start_tokens: List[str] = [],
     ignore_types: List[str] = ["irrelevant"],
     model: str = "gpt-4-0613",
     verbose: bool = False,

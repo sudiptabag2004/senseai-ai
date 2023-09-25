@@ -22,6 +22,7 @@ class TrainingChatUserResponseType(str, Enum):
     ANSWER = "answer"  # irrelevant response by user
     CLARIFICATION = "clarification"  # clarification requested by user
     IRRELEVANT = "irrelevant"  # answer given by user to the question asked
+    MISCELLANEOUS = "miscellaneous"  # user response which is neither answer nor clarification (e.g. acknowledge - "okay", "no")
 
 
 class ChatMessageType(str, Enum):
@@ -31,6 +32,7 @@ class ChatMessageType(str, Enum):
     ANSWER = "answer"  # irrelevant response by user
     CLARIFICATION = "clarification"  # clarification requested by user
     IRRELEVANT = "irrelevant"  # answer given by user to the question asked
+    MISCELLANEOUS = "miscellaneous"  # user response which is neither answer nor clarification (e.g. acknowledge - "okay", "no")
 
 
 class ChatMarkupLanguage(BaseModel):

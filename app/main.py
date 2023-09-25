@@ -42,6 +42,7 @@ os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 QUERY_TYPE_ANSWER_KEY = "answer"
 QUERY_TYPE_CLARIFICATION_KEY = "clarification"
 QUERY_TYPE_IRRELEVANT_KEY = "irrelevant"
+QUERY_TYPE_MISC_KEY = "miscellaneous"
 
 app = FastAPI()
 
@@ -126,20 +127,22 @@ def run_router_chain(
  
     Classify each query into one of the categories below:
     - Answer to the question
-    - Clarifying question
+    - Clarification
     - Irrelevant to the question
+    - Miscellanous response
     
     Important:
     - If the query does not clearly provide a valid answer to the question asked before, it is not an answer.
     - If the query does not clearly seek clarification based on the conversation before, it is not a clarifying question.
-    - If the query is neither an answer nor a clarifying question, it is irrelevant.
+    - If the query does not provide an answer or seek clarification but is a response to the question, it is a miscellaneous response. Example: 'not interested', 'okay'.
+    - If the query is not related to the question in any way, it is irrelevant.
 
     {format_instructions}
     """
     output_schema = ResponseSchema(
         name="type",
-        description=f"either of '{QUERY_TYPE_ANSWER_KEY}', '{QUERY_TYPE_CLARIFICATION_KEY}', '{QUERY_TYPE_IRRELEVANT_KEY}'",
-        type=f"{QUERY_TYPE_ANSWER_KEY} | {QUERY_TYPE_CLARIFICATION_KEY} | {QUERY_TYPE_IRRELEVANT_KEY}",
+        description="type of the query",
+        type=f"{QUERY_TYPE_ANSWER_KEY} | {QUERY_TYPE_CLARIFICATION_KEY} | {QUERY_TYPE_IRRELEVANT_KEY} | {QUERY_TYPE_MISC_KEY}",
     )
     output_parser = StructuredOutputParser.from_response_schemas([output_schema])
     format_instructions = output_parser.get_format_instructions()
@@ -227,6 +230,7 @@ def run_evaluator_chain(
     - Compare your solution to the student's solution.
     - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
     - At the end, give some actionable feedback too.
+    - End the feedback by nudging the student to try again now.
     
     Important:
     - Don’t reveal the answer or give any hints as part of your feedback. 
@@ -281,7 +285,6 @@ def run_evaluator_chain(
         user_response.content,
         system_prompt,
         history,
-        stream_start_tokens=[QUERY_TYPE_ANSWER_KEY],
         ignore_types=[
             QUERY_TYPE_CLARIFICATION_KEY,
             QUERY_TYPE_IRRELEVANT_KEY,
@@ -321,7 +324,31 @@ def run_clarifier_chain(
         user_response.content,
         system_prompt,
         history,
-        stream_start_tokens=[QUERY_TYPE_CLARIFICATION_KEY],
+        verbose=True,
+    )
+
+
+def run_miscellaneous_chain(
+    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+):
+    system_prompt = """You are a helpful and encouraging interviewer.
+    You will be given a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that a student needs to be tested on along with a series of interactions between a student and you.
+    
+    The student has responded to feedback that you have provided. The student's response will be delimited with #### characters.
+    
+    Important:
+    - Make sure to not give hints or answer the question.
+    - If the student asks for the answer, refrain from answering.
+    
+    The final output should be a reply to the student's response ending on a short encouraging message to try again and nothing else.
+    """
+    user_prompt_template = "####{input}####"
+
+    return stream_openai_chat_chain(
+        user_prompt_template,
+        user_response.content,
+        system_prompt,
+        history,
         verbose=True,
     )
 
@@ -389,6 +416,25 @@ async def training_chat(training_chat_request: TrainingChatRequest):
 
         return StreamingResponse(
             stream_clarification_response(),
+            media_type="text/event-stream",
+        )
+
+    if query_type == QUERY_TYPE_MISC_KEY:
+
+        async def get_miscellaneous_response():
+            yield QUERY_TYPE_MISC_KEY
+
+            async for item in run_miscellaneous_chain(
+                user_response=query, history=history
+            ):
+                yield item
+
+        async def stream_miscellaneous_response():
+            async for item in get_miscellaneous_response():
+                yield item
+
+        return StreamingResponse(
+            stream_miscellaneous_response(),
             media_type="text/event-stream",
         )
 
