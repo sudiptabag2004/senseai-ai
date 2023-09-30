@@ -171,58 +171,67 @@ def run_router_chain(
 
 
 def run_evaluator_chain(
-    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+    user_response: ChatMarkupLanguage,
+    history: List[ChatMarkupLanguage],
+    setup: str = None,
+    is_solution_provided: bool = False,
 ):
-    actual_solution_system_prompt_template_message = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question.
-    You need to work out your own solution to the problem.
-    
-    Use the following format:
-    Actual solution:
-    {{concise steps to work out the solution and your solution}}
-    """
-    actual_solution_user_prompt_template_message = """{input}"""
+    if not is_solution_provided:
+        actual_solution_system_prompt_template_message = """You are a helpful and encouraging interviewer.
+        You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question.
+        You need to work out your own solution to the problem.
+        
+        Use the following format:
+        Actual solution:
+        {{concise steps to work out the solution and your solution}}
+        """
+        actual_solution_user_prompt_template_message = """{input}"""
 
-    actual_solution_system_prompt_template = SystemMessagePromptTemplate.from_template(
-        actual_solution_system_prompt_template_message
-    )
-    actual_solution_user_prompt_template = HumanMessagePromptTemplate.from_template(
-        actual_solution_user_prompt_template_message
-    )
-    actual_solution_chat_prompt_template = ChatPromptTemplate.from_messages(
-        [actual_solution_system_prompt_template, actual_solution_user_prompt_template]
-    )
-
-    # first message should contain the details required
-    actual_solution_messages = actual_solution_chat_prompt_template.format_prompt(
-        input=history[0].content,
-    ).to_messages()
-
-    import time
-
-    start_time = time.time()
-
-    actual_solution_response = call_openai_chat_model(
-        actual_solution_messages, model="gpt-4-0613", max_tokens=1024, cache=True
-    )
-
-    print(f"Time taken: {time.time() - start_time}")
-
-    # add the actual solution to the history
-    history.append(
-        ChatMarkupLanguage(
-            role=OpenAIChatRole.ASSISTANT,
-            content=actual_solution_response,
-            type=ChatMessageType.SOLUTION,
+        actual_solution_system_prompt_template = (
+            SystemMessagePromptTemplate.from_template(
+                actual_solution_system_prompt_template_message
+            )
         )
-    )
+        actual_solution_user_prompt_template = HumanMessagePromptTemplate.from_template(
+            actual_solution_user_prompt_template_message
+        )
+        actual_solution_chat_prompt_template = ChatPromptTemplate.from_messages(
+            [
+                actual_solution_system_prompt_template,
+                actual_solution_user_prompt_template,
+            ]
+        )
+
+        # first message should contain the details required
+        actual_solution_messages = actual_solution_chat_prompt_template.format_prompt(
+            input=history[0].content,
+        ).to_messages()
+
+        import time
+
+        start_time = time.time()
+
+        actual_solution_response = call_openai_chat_model(
+            actual_solution_messages, model="gpt-4-0613", max_tokens=1024, cache=True
+        )
+
+        print(f"Time taken: {time.time() - start_time}")
+
+        # add the actual solution to the history
+        history.append(
+            ChatMarkupLanguage(
+                role=OpenAIChatRole.ASSISTANT,
+                content=actual_solution_response,
+                type=ChatMessageType.SOLUTION,
+            )
+        )
 
     # import ipdb
 
     # ipdb.set_trace()
 
     system_prompt_template = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on, the student's response to the question and the your actual solution. 
+    {setup}
     You need to provide an evaluation based on the student's response. 
     The student's response will be delimited with #### characters.
 
@@ -232,9 +241,10 @@ def run_evaluator_chain(
     - At the end, give some actionable feedback without giving away the answer to the question.
     - End the feedback by nudging the student to try again now.
     
-    Important Instructions:
-    - The feedback should enable the student to think on their own.
-
+    Important:
+    - Refrain from answering the question or giving any hints.
+    - Giving away the answer to the question would be a sin.
+    
     {format_instructions}"""
 
     answer_schema = ResponseSchema(
@@ -251,8 +261,12 @@ def run_evaluator_chain(
         [answer_schema, feedback_schema]
     )
     format_instructions = output_parser.get_format_instructions()
+
+    if not setup:
+        setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on, the student's response to the question and the your actual solution."""
+
     system_prompt = system_prompt_template.format(
-        format_instructions=format_instructions
+        format_instructions=format_instructions, setup=setup
     )
     # since this will be interpreted as a format string, we need to escape the curly braces
     # first convert any existing double curly braces to single curly braces
@@ -294,19 +308,25 @@ def run_evaluator_chain(
 
 
 def run_clarifier_chain(
-    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+    user_response: ChatMarkupLanguage,
+    history: List[ChatMarkupLanguage],
+    setup: str = None,
 ):
-    system_prompt = """You are a helpful and encouraging interviewer.
-    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.
-
+    system_prompt_template = """You are a helpful and encouraging interviewer.
+    {setup}
+    
     The student has asked a clarifying question that you need to answer. The student's response will be delimited with #### characters
 
     Important:
-    - Make sure to not give hints or answer the question.
-    - If the student asks for the answer, refrain from answering.
+    - Refrain from answering the question or giving any hints.
+    - Giving away the answer to the question would be a sin.
 
     The final output should be just a string with the clarification asked for, without giving away the answer to the question, and nothing else.
     """
+    if not setup:
+        setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you."""
+
+    system_prompt = system_prompt_template.format(setup=setup)
 
     user_prompt_template = "####{input}####"
 
@@ -329,20 +349,27 @@ def run_clarifier_chain(
 
 
 def run_miscellaneous_chain(
-    user_response: ChatMarkupLanguage, history: List[ChatMarkupLanguage]
+    user_response: ChatMarkupLanguage,
+    history: List[ChatMarkupLanguage],
+    setup: str = None,
 ):
-    system_prompt = """You are a helpful and encouraging interviewer.
-    You will be given a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that a student needs to be tested on along with a series of interactions between a student and you.
+    system_prompt_template = """You are a helpful and encouraging interviewer.
+    {setup}
     
     The student has responded to feedback that you have provided. The student's response will be delimited with #### characters.
     
     Important:
-    - Make sure to not give hints or answer the question.
-    - If the student asks for the answer, refrain from answering.
+    - Refrain from answering the question or giving any hints.
+    - Giving away the answer to the question would be a sin.
     
     The final output should be a reply to the student's response, without giving away the answer to the question, ending on a short encouraging message to try again and nothing else.
     """
     user_prompt_template = "####{input}####"
+
+    if not setup:
+        setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you."""
+
+    system_prompt = system_prompt_template.format(setup=setup)
 
     return stream_openai_chat_chain(
         user_prompt_template,
@@ -390,7 +417,12 @@ async def training_chat(training_chat_request: TrainingChatRequest):
         async def get_answer_response():
             yield QUERY_TYPE_ANSWER_KEY
 
-            async for item in run_evaluator_chain(user_response=query, history=history):
+            async for item in run_evaluator_chain(
+                user_response=query,
+                history=history,
+                setup=training_chat_request.evaluator_setup,
+                is_solution_provided=training_chat_request.is_solution_provided,
+            ):
                 yield item
 
         async def stream_answer_response():
@@ -407,7 +439,11 @@ async def training_chat(training_chat_request: TrainingChatRequest):
         async def get_clarification_response():
             yield QUERY_TYPE_CLARIFICATION_KEY
 
-            async for item in run_clarifier_chain(user_response=query, history=history):
+            async for item in run_clarifier_chain(
+                user_response=query,
+                history=history,
+                setup=training_chat_request.general_setup,
+            ):
                 yield item
 
         async def stream_clarification_response():
@@ -425,7 +461,9 @@ async def training_chat(training_chat_request: TrainingChatRequest):
             yield QUERY_TYPE_MISC_KEY
 
             async for item in run_miscellaneous_chain(
-                user_response=query, history=history
+                user_response=query,
+                history=history,
+                setup=training_chat_request.general_setup,
             ):
                 yield item
 

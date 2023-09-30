@@ -45,6 +45,9 @@ class ChatMarkupLanguage(BaseModel):
 
 class TrainingChatRequest(BaseModel):
     messages: List[ChatMarkupLanguage]
+    general_setup: Optional[str] = None
+    evaluator_setup: Optional[str] = None
+    is_solution_provided: Optional[bool] = False
 
 
 class TrainingEvaluatorResponse(BaseModel):

@@ -337,38 +337,10 @@ if is_training_started:
                         ai_response += chunk
                         ai_response_placeholder.write(ai_response + "▌")
 
-            # if user_answer_type == "clarification":
-            #     ai_response_placeholder.write(ai_response)
-
-            # if training_chat_response.status_code != 200:
-            #     st.error("Something went wrong. Please try again!")
-            #     # remove the last user input from ai_chat_history
-            #     ai_chat_history.pop()
-            #     st.session_state.ai_response_in_progress = False
-            #     st.stop()
-
             toggle_ai_response_state()
-            # if user_answer_type == "answer":
-            #     training_chat_response = training_chat_response.json()
 
-            # user_answer_type = training_chat_response["type"]
             if user_answer_type == "irrelevant":
                 ai_response = "Irrelevant response"
-            # elif user_answer_type == "clarification":
-            #     # string clarification
-            #     ai_response = training_chat_response["response"]
-            # elif user_answer_type == "answer":
-            # the response given is actually the answer to the question
-            # training_chat_response = json.loads(ai_response)
-            # score = training_chat_response["answer"]
-            # if score == 2:
-            #     result = "Proficient :rocket:"
-            # elif score == 1:
-            #     result = "Almost there :runner:"
-            # elif score == 0:
-            #     result = "You can do better :hugging_face:"
-
-            # ai_response = f"Result - {result}  \nFeedback - {training_chat_response['feedback']}"
 
             ai_response_placeholder.write(ai_response)
 
