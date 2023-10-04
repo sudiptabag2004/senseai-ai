@@ -126,10 +126,10 @@ def run_router_chain(
     The student query will be delimited with #### characters.
  
     Classify each query into one of the categories below:
-    - Answer to the question
-    - Clarification
-    - Irrelevant to the question
-    - Miscellanous response
+    - answer
+    - clarification
+    - irrelevant
+    - miscellanous
     
     Important:
     - If the query does not clearly provide a valid answer to the question asked before, it is not an answer.
@@ -229,11 +229,11 @@ def run_evaluator_chain(
     To solve the problem, do the following
     - Compare your solution to the student's solution.
     - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
-    - At the end, give some actionable feedback too.
+    - At the end, give some actionable feedback without giving away the answer to the question.
     - End the feedback by nudging the student to try again now.
     
-    Important:
-    - Don’t reveal the answer or give any hints as part of your feedback. 
+    Important Instructions:
+    - The feedback should enable the student to think on their own.
 
     {format_instructions}"""
 
@@ -305,7 +305,7 @@ def run_clarifier_chain(
     - Make sure to not give hints or answer the question.
     - If the student asks for the answer, refrain from answering.
 
-    The final output should be just a string with the clarification asked for and nothing else.
+    The final output should be just a string with the clarification asked for, without giving away the answer to the question, and nothing else.
     """
 
     user_prompt_template = "####{input}####"
@@ -340,7 +340,7 @@ def run_miscellaneous_chain(
     - Make sure to not give hints or answer the question.
     - If the student asks for the answer, refrain from answering.
     
-    The final output should be a reply to the student's response ending on a short encouraging message to try again and nothing else.
+    The final output should be a reply to the student's response, without giving away the answer to the question, ending on a short encouraging message to try again and nothing else.
     """
     user_prompt_template = "####{input}####"
 
