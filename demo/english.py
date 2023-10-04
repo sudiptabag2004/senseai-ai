@@ -168,6 +168,37 @@ ai_chat_history = st.session_state.ai_chat_history
 question = row["Question"]
 answer_key = row["Key"]
 
+
+def escape_markdown(text):
+    # Define a dictionary of characters that need to be escaped in Markdown
+    markdown_special_chars = {
+        "\\": "\\\\",
+        "`": "\\`",
+        "*": "\\*",
+        "_": "\\_",
+        "{": "\\{",
+        "}": "\\}",
+        "[": "\\[",
+        "]": "\\]",
+        "(": "\\(",
+        ")": "\\)",
+        ">": "\\>",
+        "#": "\\#",
+        "+": "\\+",
+        "-": "\\-",
+        ".": "\\.",
+        "!": "\\!",
+    }
+
+    # Create a regular expression pattern to match any of the special characters
+    pattern = "|".join(re.escape(char) for char in markdown_special_chars.keys())
+
+    # Use re.sub to replace special characters with their escaped counterparts
+    escaped_text = re.sub(pattern, lambda x: markdown_special_chars[x.group()], text)
+
+    return escaped_text
+
+
 if row["Question Type"] == "Matching":
     raw_groups = row["Groups"].split("\n")
     raw_groups = [
@@ -177,19 +208,7 @@ if row["Question Type"] == "Matching":
     groups = "\n".join(raw_groups)
     question += f"\n\nGroups:\n\n{groups}\n"
 
-    raw_options = row["Values"].split("\n")
-    # remove empty values
-    raw_options = [option for option in raw_options if option]
-
-    options = [
-        f"{index + 1}) {re.escape(option)}" for index, option in enumerate(raw_options)
-    ]
-    num_options = len(options)
-    options = "\n".join(options)
-
-    question += f"\nOptions:\n\n{options}"
-    question += "\n\nSelect the correct group for each option from the dropdowns below (i.e. a, b, etc.)"
-
+    # update answer key
     true_matches = answer_key.split("\n")
     # remove empty values
     true_matches = [match for match in true_matches if match]
@@ -200,17 +219,23 @@ if row["Question Type"] == "Matching":
             formatted_matches.append(f"{group_match}: {chr(97 + group_index)}")
 
     answer_key = ", ".join(formatted_matches)
-elif row["Question Type"] in ["Ordering", "MCQ", "Checkbox"]:
+
+if row["Question Type"] in ["Ordering", "MCQ", "Checkbox", "Matching"]:
     raw_options = row["Values"].split("\n")
     # remove empty values
     raw_options = [option for option in raw_options if option]
 
-    options = [f"{index + 1}) {option}" for index, option in enumerate(raw_options)]
+    options = [
+        f"{index + 1}) {escape_markdown(option)}"
+        for index, option in enumerate(raw_options)
+    ]
     num_options = len(options)
-
     options = "\n".join(options)
 
-    question += f"\n\nOptions:\n\n{options}"
+    question += f"\nOptions:\n\n{options}"
+
+if row["Question Type"] == "Matching":
+    question += "\n\nSelect the correct group for each option from the dropdowns below (i.e. a, b, etc.)"
 
 
 def delete_user_chat_message(index_to_delete: int):
@@ -226,7 +251,7 @@ def delete_user_chat_message(index_to_delete: int):
 
     st.session_state.chat_history = updated_chat_history
     st.session_state.ai_chat_history = updated_ai_chat_history
-    st.session_state.is_question_answered = False 
+    st.session_state.is_question_answered = False
 
 
 if not chat_history:

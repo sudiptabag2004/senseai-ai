@@ -238,11 +238,13 @@ def run_evaluator_chain(
     To solve the problem, do the following
     - Compare your solution to the student's solution.
     - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
-    - At the end, give some actionable feedback without giving away the answer to the question.
+    - At the end, give some actionable feedback without giving away any part of the answer to the question.
     - End the feedback by nudging the student to try again now.
     
     Important Instructions:
     - The feedback should enable the student to think on their own.
+    - You are not required to fix the student's answer. You only need to nudge them in the right direction of thinking.
+    - No part of the feedback should contain any part of the answer.
     
     {format_instructions}"""
 
