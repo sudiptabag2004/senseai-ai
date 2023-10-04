@@ -241,9 +241,8 @@ def run_evaluator_chain(
     - At the end, give some actionable feedback without giving away the answer to the question.
     - End the feedback by nudging the student to try again now.
     
-    Important:
-    - Refrain from answering the question or giving any hints.
-    - Giving away the answer to the question would be a sin.
+    Important Instructions:
+    - The feedback should enable the student to think on their own.
     
     {format_instructions}"""
 

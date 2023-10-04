@@ -58,10 +58,14 @@ if "chat_history" not in st.session_state:
 if "ai_chat_history" not in st.session_state:
     st.session_state.ai_chat_history = []
 
+if "is_question_answered" not in st.session_state:
+    st.session_state.is_question_answered = False
+
 
 def reset_chat_history():
     st.session_state.chat_history = []
     st.session_state.ai_chat_history = []
+    st.session_state.is_question_answered = False
 
 
 def on_start_training_click():
@@ -165,19 +169,20 @@ question = row["Question"]
 answer_key = row["Key"]
 
 if row["Question Type"] == "Matching":
-    groups_list = row["Groups"].split("\n")
-    groups_list = [
-        f"{chr(97 + index)}) {group}" for index, group in enumerate(groups_list)
+    raw_groups = row["Groups"].split("\n")
+    raw_groups = [
+        f"{chr(97 + index)}) {group}" for index, group in enumerate(raw_groups)
     ]
 
-    groups = "\n".join(groups_list)
+    groups = "\n".join(raw_groups)
     question += f"\n\nGroups:\n\n{groups}\n"
 
-    options = row["Values"].split("\n")
+    raw_options = row["Values"].split("\n")
     # remove empty values
-    options = [option for option in options if option]
+    raw_options = [option for option in raw_options if option]
+
     options = [
-        f"{index + 1}) {re.escape(option)}" for index, option in enumerate(options)
+        f"{index + 1}) {re.escape(option)}" for index, option in enumerate(raw_options)
     ]
     num_options = len(options)
     options = "\n".join(options)
@@ -221,6 +226,7 @@ def delete_user_chat_message(index_to_delete: int):
 
     st.session_state.chat_history = updated_chat_history
     st.session_state.ai_chat_history = updated_ai_chat_history
+    st.session_state.is_question_answered = False 
 
 
 if not chat_history:
@@ -288,101 +294,134 @@ def submit_user_response(
     toggle_ai_response_state()
 
 
-user_answer = ""
+user_answer_ai = ""
+user_answer_chat = ""
 
-response_container = st.empty()
+if not st.session_state.is_question_answered:
+    response_container = st.empty()
 
-if not st.session_state.ai_response_in_progress:
-    key_to_update = None
-    value_to_update = None
+    if not st.session_state.ai_response_in_progress:
+        key_to_update = None
+        value_to_update = None
 
-    if row["Question Type"] == "Matching":
-        response_cols = response_container.columns(num_options)
+        if row["Question Type"] == "Matching":
+            response_cols = response_container.columns(num_options)
 
-        for answer_col_index, answer_col in enumerate(response_cols):
-            answer_col.selectbox(
-                f"Option: {answer_col_index + 1}",
-                [f"{chr(97 + index)}" for index in range(len(groups_list))],
-                key=f"user_response_matching_{answer_col_index}",
+            for answer_col_index, answer_col in enumerate(response_cols):
+                answer_col.selectbox(
+                    f"Option: {answer_col_index + 1}",
+                    [f"{chr(97 + index)}" for index in range(len(raw_groups))],
+                    key=f"user_response_matching_{answer_col_index}",
+                )
+
+        elif row["Question Type"] == "MCQ":
+            st.selectbox(
+                f"Select the correct option",
+                [f"{index + 1}" for index in range(num_options)],
+                key=f"user_response_mcq",
             )
 
-    elif row["Question Type"] == "MCQ":
-        st.selectbox(
-            f"Select the correct option",
-            [f"{index + 1}" for index in range(num_options)],
-            key=f"user_response_mcq",
-        )
-
-    elif row["Question Type"] == "Checkbox":
-        options_to_choose_from = [
-            {"index": index, "value": option}
-            for index, option in enumerate(raw_options)
-        ]
-
-        st.multiselect(
-            "Select all the correct options below",
-            options_to_choose_from,
-            format_func=lambda row: row["value"],
-            key=f"user_response_checkbox",
-        )
-
-    elif row["Question Type"] == "Ordering":
-        options_to_choose_from = [
-            {"index": index, "value": option}
-            for index, option in enumerate(raw_options)
-        ]
-
-        ordering_response_key = "user_response_ordering"
-
-        if ordering_response_key and ordering_response_key in st.session_state:
-            st.session_state.pop(ordering_response_key)
-
-        value_to_update = sort_items(
-            raw_options,
-            "Select the options in the correct order",
-            key=ordering_response_key,
-        )
-
-        key_to_update = ordering_response_key
-
-    is_user_response_submit = st.button(
-        "Submit",
-        type="primary",
-        on_click=submit_user_response,
-        args=(key_to_update, value_to_update),
-        key="user_responses_submit",
-    )
-
-if (
-    "user_responses_submit" in st.session_state
-    and st.session_state.user_responses_submit
-):
-    response_container.empty()
-
-    if row["Question Type"] == "Matching":
-        user_answer = ",".join(
-            [
-                f"{index + 1}: {st.session_state[f'user_response_matching_{index}']}"
-                for index in range(num_options)
+        elif row["Question Type"] == "Checkbox":
+            options_to_choose_from = [
+                {"index": index, "value": option}
+                for index, option in enumerate(raw_options)
             ]
-        )
-    elif row["Question Type"] == "MCQ":
-        user_answer = st.session_state[f"user_response_mcq"]
-    elif row["Question Type"] == "Checkbox":
-        options_selected = st.session_state[f"user_response_checkbox"]
-        user_answer = ",".join(
-            [str(option["index"] + 1) for option in options_selected]
-        )
-    elif row["Question Type"] == "Ordering":
-        options_selected = st.session_state[f"user_response_ordering"]
-        user_answer = ",".join(
-            [str(raw_options.index(option) + 1) for option in options_selected]
+
+            st.multiselect(
+                "Select all the correct options below",
+                options_to_choose_from,
+                format_func=lambda row: row["value"],
+                key=f"user_response_checkbox",
+            )
+
+        elif row["Question Type"] == "Ordering":
+            options_to_choose_from = [
+                {"index": index, "value": option}
+                for index, option in enumerate(raw_options)
+            ]
+
+            ordering_response_key = "user_response_ordering"
+
+            if ordering_response_key and ordering_response_key in st.session_state:
+                st.session_state.pop(ordering_response_key)
+
+            value_to_update = sort_items(
+                raw_options,
+                "Select the options in the correct order",
+                key=ordering_response_key,
+            )
+
+            key_to_update = ordering_response_key
+
+        is_user_response_submit = st.button(
+            "Submit",
+            type="primary",
+            on_click=submit_user_response,
+            args=(key_to_update, value_to_update),
+            key="user_responses_submit",
         )
 
-if user_answer:
+    if (
+        "user_responses_submit" in st.session_state
+        and st.session_state.user_responses_submit
+    ):
+        response_container.empty()
+
+        if row["Question Type"] == "Matching":
+            user_answer_chat = ""
+
+            group_response_dict = defaultdict(list)
+            for index in range(num_options):
+                group_index = (
+                    ord(st.session_state[f"user_response_matching_{index}"]) - 97
+                )
+                group_response_dict[raw_groups[group_index]].append(raw_options[index])
+
+            for group in raw_groups:
+                group_options = group_response_dict[group]
+                user_answer_chat += f"{group}:\n"
+                user_answer_chat += ",".join(group_options)
+                user_answer_chat += "\n\n"
+
+            user_answer_chat = user_answer_chat.strip()
+
+            user_answer_ai = ",".join(
+                [
+                    f"{index + 1}: {st.session_state[f'user_response_matching_{index}']}"
+                    for index in range(num_options)
+                ]
+            )
+        elif row["Question Type"] == "MCQ":
+            user_answer_ai = st.session_state[f"user_response_mcq"]
+            user_answer_chat = raw_options[int(user_answer_ai) - 1]
+        elif row["Question Type"] == "Checkbox":
+            options_selected = st.session_state[f"user_response_checkbox"]
+
+            user_answer_chat = ",".join(
+                [option["value"] for option in options_selected]
+            )
+            user_answer_ai = ",".join(
+                [str(option["index"] + 1) for option in options_selected]
+            )
+
+        elif row["Question Type"] == "Ordering":
+            options_selected = st.session_state[f"user_response_ordering"]
+
+            user_answer_chat = "\n".join(
+                [
+                    f"{index + 1}. {option}"
+                    for index, option in enumerate(options_selected)
+                ]
+            )
+
+            user_answer_ai = ",".join(
+                [str(raw_options.index(option) + 1) for option in options_selected]
+            )
+
+if user_answer_ai:
     with st.chat_message("user"):
         user_response_display_cols = st.columns([7, 1])
-        user_response_display_cols[0].write(user_answer)
+        user_response_display_cols[0].write(user_answer_chat)
         user_response_display_cols[1].button(
             "Delete",
             on_click=partial(
@@ -392,7 +431,7 @@ if user_answer:
         )
 
     with st.chat_message("assistant"):
-        ai_chat_history.append({"role": "user", "content": user_answer})
+        ai_chat_history.append({"role": "user", "content": user_answer_ai})
 
         with st.spinner("Fetching AI response..."):
             training_chat_response = requests.post(
@@ -475,7 +514,7 @@ if user_answer:
 
     # save last user message only if there is a assistant response as well
     st.session_state.chat_history += [
-        {"role": "user", "content": user_answer},
+        {"role": "user", "content": user_answer_chat},
         {"role": "assistant", "content": ai_response},
     ]
 
@@ -491,6 +530,7 @@ if user_answer:
     )
     st.session_state.ai_chat_history = ai_chat_history
 
-    st.session_state
+    if user_answer_score is not None and user_answer_score == 2:
+        st.session_state.is_question_answered = True
 
     st.experimental_rerun()
