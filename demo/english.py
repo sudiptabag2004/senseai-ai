@@ -74,6 +74,13 @@ def on_start_training_click():
 
 def on_reset_training_click():
     st.session_state.is_training_started = False
+
+    if "question_element_type" in st.session_state:
+        st.session_state.pop("question_element_type")
+
+    if "selected_question" in st.session_state:
+        st.session_state.pop("selected_question")
+
     reset_chat_history()
 
 
@@ -109,8 +116,29 @@ task_categories = [
 
 question_element_options = ["Preparation"] + np.unique(task_categories).tolist()
 
+if "question_element_type" not in st.session_state:
+    st.session_state.question_element_type = question_element_options[0]
+
+question_element_type_index = question_element_options.index(
+    st.session_state.question_element_type
+)
+
+
+def reset_question():
+    # reset the question index marked as selected
+    st.session_state.pop("selected_question")
+
+
+def toggle_question_element_type():
+    reset_question()
+    reset_chat_history()
+
+
 question_element_type = st.selectbox(
-    "Choose your poison", question_element_options, on_change=reset_chat_history
+    "Choose your poison",
+    question_element_options,
+    on_change=toggle_question_element_type,
+    key="question_element_type",
 )
 
 if activity_type == "Writing" or question_element_type == "Preparation":
@@ -126,12 +154,19 @@ question_element_df = activity_questions_df[
 
 questions = json.loads(question_element_df.to_json(orient="records"))
 
+if "selected_question" not in st.session_state:
+    st.session_state.selected_question = (0, questions[0])
+
+print(type(st.session_state.selected_question))
+selected_question_index = st.session_state.selected_question[0]
+
 if len(questions) > 1:
     _, row = st.selectbox(
         "Select Question",
         enumerate(questions),
         format_func=lambda val: f"Question {val[0] + 1}",
         on_change=reset_chat_history,
+        key="selected_question",
     )
 else:
     row = questions[0]
@@ -312,13 +347,6 @@ def toggle_ai_response_state():
 # else:
 
 
-def submit_user_response(
-    key_to_update: Optional[str] = None, value_to_update: Optional[any] = None
-):
-    st.session_state[key_to_update] = value_to_update
-    toggle_ai_response_state()
-
-
 user_answer_ai = ""
 user_answer_chat = ""
 
@@ -326,9 +354,6 @@ if not st.session_state.is_question_answered:
     response_container = st.empty()
 
     if not st.session_state.ai_response_in_progress:
-        key_to_update = None
-        value_to_update = None
-
         if row["Question Type"] == "Matching":
             response_cols = response_container.columns(num_options)
 
@@ -365,24 +390,19 @@ if not st.session_state.is_question_answered:
                 for index, option in enumerate(raw_options)
             ]
 
-            ordering_response_key = "user_response_ordering"
+            # if ordering_response_key and ordering_response_key in st.session_state:
+            #     st.session_state.pop(ordering_response_key)
 
-            if ordering_response_key and ordering_response_key in st.session_state:
-                st.session_state.pop(ordering_response_key)
-
-            value_to_update = sort_items(
+            sort_items(
                 raw_options,
                 "Select the options in the correct order",
-                key=ordering_response_key,
+                key="user_response_ordering",
             )
-
-            key_to_update = ordering_response_key
 
         is_user_response_submit = st.button(
             "Submit",
             type="primary",
-            on_click=submit_user_response,
-            args=(key_to_update, value_to_update),
+            on_click=toggle_ai_response_state,
             key="user_responses_submit",
         )
 
@@ -430,7 +450,7 @@ if not st.session_state.is_question_answered:
             )
 
         elif row["Question Type"] == "Ordering":
-            options_selected = st.session_state[f"user_response_ordering"]
+            options_selected = st.session_state[f"user_response_ordering"][0]["items"]
 
             user_answer_chat = "\n".join(
                 [
@@ -442,6 +462,43 @@ if not st.session_state.is_question_answered:
             user_answer_ai = ",".join(
                 [str(raw_options.index(option) + 1) for option in options_selected]
             )
+else:
+
+    def move_to_next_question():
+        if selected_question_index == len(questions) - 1:
+            # all questions done within the same question element type
+
+            if question_element_type_index == len(question_element_options) - 1:
+                # all questions done within the module
+                return
+            else:
+                # move to the next element type within the module
+                st.session_state.question_element_type = question_element_options[
+                    question_element_type_index + 1
+                ]
+                # reset the question index being marked as selected
+                reset_question()
+        else:
+            # within the same question element type, move to the next questions
+            st.session_state.selected_question = (
+                selected_question_index + 1,
+                questions[selected_question_index + 1],
+            )
+
+        reset_chat_history()
+
+    if question_element_type_index == len(question_element_options) - 1:
+        # all questions done within the module
+        st.success(
+            "No more questions remaining in this module. Please select the next module from the sidebar."
+        )
+
+    is_user_response_submit = st.button(
+        "Move to Next Question",
+        type="primary",
+        on_click=move_to_next_question,
+        key="move_to_next_question",
+    )
 
 if user_answer_ai:
     with st.chat_message("user"):
