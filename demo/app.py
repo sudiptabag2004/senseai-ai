@@ -211,6 +211,10 @@ if is_training_started:
                 generated_question += line.decode()
                 question_placeholder.write(generated_question + "▌")
 
+        # with st.chat_message("assistant"):
+        #     question_placeholder = st.empty()
+        #     generated_question = """Imagine you are designing a webpage and you want to position a specific element, say a navigation bar, at a fixed position on the top of the webpage. How would you apply the CSS positioning properties to achieve this? Please write the CSS code snippet for the same.\n\nRemember, your answer should include the CSS selector for the navigation bar and the appropriate positioning properties."""
+
             question_placeholder.write(generated_question)
 
             st.session_state.chat_history.append(
@@ -281,6 +285,7 @@ if is_training_started:
 
             ai_response_placeholder = st.empty()
             ai_response = ""
+            ai_feedback = ""
             user_answer_type = None
 
             chunk_history = ""
@@ -335,6 +340,7 @@ if is_training_started:
                             continue
                     else:
                         ai_response += chunk
+                        ai_feedback += chunk
                         ai_response_placeholder.write(ai_response + "▌")
 
             toggle_ai_response_state()
@@ -356,7 +362,7 @@ if is_training_started:
         ai_chat_history.append(
             {
                 "role": "assistant",
-                "content": ai_response,
+                "content": ai_feedback if user_answer_type == "answer" else ai_response,
                 "type": "response",
             },
         )

@@ -218,24 +218,18 @@ def run_evaluator_chain(
         print(f"Time taken: {time.time() - start_time}")
 
         # add the actual solution to the history
-        history.append(
-            ChatMarkupLanguage(
-                role=OpenAIChatRole.ASSISTANT,
-                content=actual_solution_response,
-                type=ChatMessageType.SOLUTION,
-            )
-        )
+        history[0].content += f"\n{actual_solution_response}"
 
     # import ipdb
 
     # ipdb.set_trace()
 
-    system_prompt_template = """You are a helpful and encouraging interviewer.
+    system_prompt_template = """You are a very helpful, accurate, detail-oriented and encouraging interviewer who follows the steps it has been given.
     {setup}
     You need to provide an evaluation based on the student's response. 
-    The student's response will be delimited with #### characters.
+    The student's response that you need to evaluate will be delimited with #### characters.
 
-    To solve the problem, do the following
+    To solve the problem, follow the steps below:
     - Compare your solution to the student's solution.
     - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
     - At the end, give some actionable feedback without giving away any part of the answer to the question.
@@ -245,9 +239,19 @@ def run_evaluator_chain(
     - The feedback should enable the student to think on their own.
     - You are not required to fix the student's answer. You only need to nudge them in the right direction of thinking.
     - No part of the feedback should contain any part of the answer.
+    - If the student made a mistake in the past but corrected it in their latest response, consider the mistake fixed.
+    
+    Provide the answer in the following format:
+    Let's think step by step
+    {{concise explanation}}
     
     {format_instructions}"""
 
+    reflection_schema = ResponseSchema(
+        name="reflection",
+        description="a brief reflection on the student's response in broken englishq to keep it short",
+        type="string",
+    )
     answer_schema = ResponseSchema(
         name="answer_evaluation",
         description="the final evaluation",
@@ -259,12 +263,12 @@ def run_evaluator_chain(
         type="string",
     )
     output_parser = StructuredOutputParser.from_response_schemas(
-        [answer_schema, feedback_schema]
+        [reflection_schema, answer_schema, feedback_schema]
     )
     format_instructions = output_parser.get_format_instructions()
 
     if not setup:
-        setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on, the student's response to the question and the your actual solution."""
+        setup = """You will be given a topic, sub-topic, concept, a blooms level, learning outcome, a question that the student needs to be tested on, your actual solution and a series of interactions between the student and you."""
 
     system_prompt = system_prompt_template.format(
         format_instructions=format_instructions, setup=setup
