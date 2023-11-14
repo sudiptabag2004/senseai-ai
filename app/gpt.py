@@ -297,6 +297,7 @@ def prepare_chat_chain(
     verbose: bool = False,
     callbacks: List = [],
     cache: bool = False,
+    system_prompt_kwargs: Dict = {},
 ):
     chat_model_init_kwargs = {
         "model_name": model,
@@ -315,6 +316,10 @@ def prepare_chat_chain(
     chat_model = ChatOpenAI(**chat_model_init_kwargs)
 
     # langchain_messages = [SystemMessage(content=system_prompt)]
+    # import ipdb
+
+    # ipdb.set_trace()
+
     langchain_messages = []
     if messages:
         langchain_messages.extend(
@@ -324,9 +329,21 @@ def prepare_chat_chain(
     memory = ConversationBufferMemory(return_messages=True)
     memory.chat_memory.messages = langchain_messages
 
+    if system_prompt_kwargs:
+        system_prompt_template = SystemMessagePromptTemplate.from_template(
+            system_prompt, template_format="jinja2"
+        )
+        system_prompt_template.prompt.template = (
+            system_prompt_template.prompt.template.format(**system_prompt_kwargs)
+        )
+    else:
+        system_prompt_template = SystemMessagePromptTemplate.from_template(
+            system_prompt
+        )
+
     chat_prompt_template = ChatPromptTemplate.from_messages(
         [
-            SystemMessagePromptTemplate.from_template(system_prompt),
+            system_prompt_template,
             MessagesPlaceholder(variable_name="history"),
             HumanMessagePromptTemplate.from_template(user_prompt_template),
         ]
@@ -355,6 +372,7 @@ def run_openai_chat_chain(
     verbose: bool = False,
     parse_llm_output_for_key: str = None,
     cache: bool = False,
+    system_prompt_kwargs: Dict = {},
 ):
     chat_chain, memory = prepare_chat_chain(
         user_prompt_template,
@@ -364,6 +382,7 @@ def run_openai_chat_chain(
         ignore_types,
         verbose=verbose,
         cache=cache,
+        system_prompt_kwargs=system_prompt_kwargs,
     )
     response = chat_chain.run(user_message)
 
@@ -392,6 +411,7 @@ def stream_openai_chat_chain(
     model: str = "gpt-4-0613",
     verbose: bool = False,
     cache: bool = False,
+    system_prompt_kwargs: Dict = {},
 ):
     # threaded_generator = ThreadedGenerator()
 
@@ -413,6 +433,7 @@ def stream_openai_chat_chain(
         verbose=verbose,
         callbacks=[callback],
         cache=cache,
+        system_prompt_kwargs=system_prompt_kwargs,
     )
 
     # response = chat_chain.run(user_message)

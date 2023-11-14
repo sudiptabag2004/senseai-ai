@@ -24,6 +24,8 @@ from models import (
     ChatMarkupLanguage,
     TrainingChatRequest,
     TrainingChatResponse,
+    GenerateEnglishPassageRequest,
+    GenerateEnglishQuestionRequest,
     OpenAIChatRole,
     ChatMessageType,
 )
@@ -486,5 +488,184 @@ async def training_chat(training_chat_request: TrainingChatRequest):
 
     return StreamingResponse(
         return_query_type(),
+        media_type="text/event-stream",
+    )
+
+
+@app.post(
+    "/english/passage",
+    # dependencies=[Depends(init_wandb_for_generate_question)],
+)
+async def generate_english_passage(
+    passage_params: GenerateEnglishPassageRequest,
+):
+    # model = "gpt-4-0613"
+    system_prompt_template = """
+    You are a helpful and encouraging English language trainer.
+
+    You are interacting with a student for whom English is not the first language, helping them assess their competence in English and nudging them in the right direction. The aim is to help students feel comfortable with the English language. 
+
+    You will be given a difficulty level, a theme and an activity type delimited by ``` characters.
+    Your aim is to understand the student better and generate a personalized and engaging passage based on the input. 
+
+    Here the steps you need to follow:
+    - Ask the student a maximum of 2-3 questions around the theme to identify a specific interest that they might have
+    - Based on the theme and their interest that you've identified, generate a generalized passage
+    - Let the passage generated only have a maximum of 2 paragraphs
+
+    Important Instructions:
+    - You must contextualize the passage to India
+    - Do not reveal the answer to the question or include any hints
+    - Maintain a similar format across all the themes
+    - Avoid describing the steps that you are going to follow to the students
+    - You need to use simple words for the passage
+    - Maintain the Foundational level found in the Indian education system throughout the passage
+    - Either ask a question to elicit their interest or generate a passage. No explanations needed
+    - Avoid asking all the questions simultaneously. Ask one by one
+    
+    {format_instructions}
+    """
+    type_schema = ResponseSchema(
+        name="type",
+        description="whether the response by AI is a question to elicit interest or the generated passage",
+        type="passage | interest",
+    )
+    value_schema = ResponseSchema(
+        name="value",
+        description="question or the generated passage",
+        type="string",
+    )
+    output_parser = StructuredOutputParser.from_response_schemas(
+        [type_schema, value_schema]
+    )
+    format_instructions = output_parser.get_format_instructions()
+
+    # system_prompt = system_prompt_template.format(
+    #     format_instructions=format_instructions
+    # )
+
+    user_prompt_template = """{input}"""
+
+    passage_settings = f"""```Difficulty Level - {passage_params.difficulty_level}\nTheme - {passage_params.theme}\nActivity Type - {passage_params.activity_type}```"""
+
+    if not passage_params.messages:
+        user_message = passage_settings
+        history = []
+    else:
+        user_message = passage_params.messages[-1].content
+        history = [
+            ChatMarkupLanguage(role="user", content=passage_settings)
+        ] + passage_params.messages[:-1]
+
+    # system_prompt_template = SystemMessagePromptTemplate.from_template(
+    #     system_prompt_template
+    # )
+    # user_prompt_template = HumanMessagePromptTemplate.from_template(
+    #     user_prompt_template
+    # )
+    # chat_prompt_template = ChatPromptTemplate.from_messages(
+    #     [system_prompt_template, user_prompt_template]
+    # )
+
+    # messages = chat_prompt_template.format_prompt(
+    #     theme=passage_params.theme,
+    #     difficulty_level=passage_params.difficulty_level,
+    #     activity_type=passage_params.activity_type,
+    # ).to_messages()
+
+    # return StreamingResponse(
+    #     call_openai_chat_model(
+    #         messages, model=model, max_tokens=1024, streaming=True, cache=True
+    #     ),
+    #     media_type="text/event-stream",
+    # )
+    # user_prompt_template = "####{input}####"
+    # user_message = "what format do you need it then?"
+    # system_prompt_template = "You are a helpful and encouraging interviewer.\n    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.\n    \n    The student has asked a clarifying question that you need to answer. The student's response will be delimited with #### characters\n\n    Important:\n    - Refrain from answering the question or giving any hints.\n    - Giving away the answer to the question would be a sin.\n\n    The final output should be just a string with the clarification asked for, without giving away the answer to the question, and nothing else.\n    "
+    # return
+
+    async def stream_response():
+        async for item in stream_openai_chat_chain(
+            user_prompt_template,
+            user_message,
+            system_prompt_template,
+            history,
+            ignore_types=[],
+            verbose=True,
+            system_prompt_kwargs={"format_instructions": format_instructions},
+        ):
+            yield item
+
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+    )
+
+
+@app.post(
+    "/english/question",
+    # dependencies=[Depends(init_wandb_for_generate_question)],
+)
+async def generate_training_question(
+    english_question_params: GenerateEnglishQuestionRequest,
+) -> str:
+    model = "gpt-4-0613"
+
+    system_prompt_template = """
+    You are a helpful and encouraging English language trainer.
+
+    You are interacting with a student for whom English is not the first language, helping them assess their competence in English and nudging them in the right direction. The aim is to help students feel comfortable with the English language.
+
+    You will be given a theme, a difficulty level and a passage. 
+
+    You need to generate questions on the passage to check the student's comprehension. 
+
+    For difficulty level “Beginner”, generate questions of the following types:
+    1) Meaning of a difficult word in the passage.
+    2) Use a vocabulary word from the passage in a sentence of their own. 
+    3) A question where there are multiple options with one correct answer. 
+
+    For difficulty level “Intermediate”, generate questions of the following types:
+    1) A question which they can answer in 2-3 sentences.
+    2) A question which can connect the passage to them.  
+
+    Important Instructions:
+    - Include the answer format you expect from user in the question itself. 
+    - Do not reveal the answer to the question or include any hints
+    - Maintain the Foundational level found in the Indian education system for the question.
+    
+    {format_instructions}
+    """
+
+    questions_schema = ResponseSchema(
+        name="questions",
+        description="generates questions",
+        type="list[str]",
+    )
+    output_parser = StructuredOutputParser.from_response_schemas([questions_schema])
+    format_instructions = output_parser.get_format_instructions()
+
+    user_prompt_template = """```Difficulty Level - {difficulty_level}\nTheme - {theme}\nActivity Type - {activity_type}\nPassage - {passage}```"""
+
+    system_prompt_template = SystemMessagePromptTemplate.from_template(
+        system_prompt_template
+    )
+    user_prompt_template = HumanMessagePromptTemplate.from_template(
+        user_prompt_template
+    )
+    chat_prompt_template = ChatPromptTemplate.from_messages(
+        [system_prompt_template, user_prompt_template]
+    )
+
+    messages = chat_prompt_template.format_prompt(
+        difficulty_level=english_question_params.difficulty_level,
+        theme=english_question_params.theme,
+        activity_type=english_question_params.activity_type,
+        passage=english_question_params.passage,
+        format_instructions=format_instructions,
+    ).to_messages()
+
+    return StreamingResponse(
+        call_openai_chat_model(messages, model=model, max_tokens=1024, streaming=True),
         media_type="text/event-stream",
     )

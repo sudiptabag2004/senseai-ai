@@ -211,9 +211,9 @@ if is_training_started:
                 generated_question += line.decode()
                 question_placeholder.write(generated_question + "▌")
 
-        # with st.chat_message("assistant"):
-        #     question_placeholder = st.empty()
-        #     generated_question = """Imagine you are designing a webpage and you want to position a specific element, say a navigation bar, at a fixed position on the top of the webpage. How would you apply the CSS positioning properties to achieve this? Please write the CSS code snippet for the same.\n\nRemember, your answer should include the CSS selector for the navigation bar and the appropriate positioning properties."""
+            # with st.chat_message("assistant"):
+            #     question_placeholder = st.empty()
+            #     generated_question = """Imagine you are designing a webpage and you want to position a specific element, say a navigation bar, at a fixed position on the top of the webpage. How would you apply the CSS positioning properties to achieve this? Please write the CSS code snippet for the same.\n\nRemember, your answer should include the CSS selector for the navigation bar and the appropriate positioning properties."""
 
             question_placeholder.write(generated_question)
 

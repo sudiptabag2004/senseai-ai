@@ -31,7 +31,7 @@ def convert_cml_messages_to_langchain_format(
     relevant_messages = []
     index = 0
     while index < len(messages):
-        if messages[index].type in ignore_types:
+        if ignore_types and messages[index].type in ignore_types:
             # ignore both the current user response message and the corresponding AI response message
             index += 2
             continue
