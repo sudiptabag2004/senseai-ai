@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import io
 from functools import partial
 import json
 from collections import defaultdict
@@ -193,6 +194,7 @@ def get_english_passage():
     chunk_history = ""
     special_character_count = defaultdict(int)
     ai_response_type = ""
+
     ai_response_placeholder.write("▌")
 
     for line in passage_response.iter_content(chunk_size=20):
@@ -240,10 +242,42 @@ def get_english_passage():
 
     ai_response_type = ai_response_type.strip()
 
-    # save last user message only if there is a assistant response as well
-    st.session_state.chat_history += [
-        {"role": "assistant", "content": ai_response},
-    ]
+    if ai_response_type == "passage" and activity_type == "Listening":
+        with st.spinner("Preparing audio..."):
+            print('here')
+            response = requests.post(
+                "http://127.0.0.1:8001/audio/tts",
+                data=json.dumps(
+                    {
+                        "text": ai_response.replace("Transcript:\n\n", ""),
+                    }
+                ),
+                stream=True,
+            )
+
+            # Create an in-memory bytes buffer
+            audio_buffer = io.BytesIO()
+            for chunk in response.iter_content(chunk_size=4096):
+                audio_buffer.write(chunk)
+            audio_buffer.seek(0)
+
+            # response.stream_to_file("output.mp3")
+            st.audio(audio_buffer)
+
+        st.session_state.chat_history += [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "value": ai_response},
+                    {"type": "audio", "value": audio_buffer},
+                ],
+            },
+        ]
+
+    else:
+        st.session_state.chat_history += [
+            {"role": "assistant", "content": ai_response},
+        ]
 
     st.session_state.ai_chat_history.append(
         {
@@ -464,7 +498,14 @@ if is_training_started:
         for index, message in enumerate(chat_history):
             with st.chat_message(message["role"]):
                 if message["role"] == "assistant":
-                    st.write(message["content"])
+                    if isinstance(message["content"], list):
+                        for _content in message["content"]:
+                            if _content["type"] == "text":
+                                st.write(_content["value"])
+                            elif _content["type"] == "audio":
+                                st.audio(_content["value"])
+                    else:
+                        st.write(message["content"])
                 else:
                     user_answer_cols = st.columns([7, 1])
                     user_answer_cols[0].write(message["content"])

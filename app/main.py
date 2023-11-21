@@ -18,7 +18,12 @@ from langchain.schema import SystemMessage
 from dotenv import load_dotenv
 import wandb
 
-from gpt import call_openai_chat_model, run_openai_chat_chain, stream_openai_chat_chain
+from gpt import (
+    call_openai_chat_model,
+    run_openai_chat_chain,
+    stream_openai_chat_chain,
+    call_openai_tts_model,
+)
 from models import (
     GenerateTrainingQuestionRequest,
     ChatMarkupLanguage,
@@ -28,6 +33,9 @@ from models import (
     GenerateEnglishQuestionRequest,
     EnglishEvaluationRequest,
     EnglishDifficultyLevel,
+    TTSRequestParams,
+    TTSModel,
+    TTSVoice,
 )
 from settings import settings, get_env_file_path
 
@@ -545,7 +553,8 @@ async def generate_english_passage(
     - Let the passage generated only have a maximum of 2 paragraphs
 
     Important Instructions:
-    - You must contextualize the passage to India
+    - You must contextualize the passage to India. 
+    - Use a diversity of Indian names for any character in the passage.
     - Do not reveal the answer to the question or include any hints
     - Maintain a similar format across all the themes
     - Avoid describing the steps that you are going to follow to the students
@@ -553,6 +562,8 @@ async def generate_english_passage(
     - Maintain the Foundational level found in the Indian education system throughout the passage
     - Either ask a question to elicit their interest or generate a passage. No explanations needed
     - Avoid asking all the questions simultaneously. Ask one by one
+    - Make sure to not end the passage with a question.
+    - When generating the passage, include a acknowledgement of the student's response in an excited tone before the actual passage so that the transition to the passage seems natural.
     
     {format_instructions}
     """
@@ -590,7 +601,8 @@ async def generate_english_passage(
         ] + passage_params.messages[:-1]
 
     async def stream_response():
-        temperature = passage_params.temperature if passage_params.temperature else 0.3
+        temperature = passage_params.temperature if passage_params.temperature else 0.7
+        print(temperature)
         async for item in stream_openai_chat_chain(
             user_prompt_template,
             user_message,
@@ -599,7 +611,7 @@ async def generate_english_passage(
             ignore_types=[],
             verbose=True,
             system_prompt_kwargs={"format_instructions": format_instructions},
-            temperature=temperature
+            temperature=temperature,
         ):
             yield item
 
@@ -792,3 +804,18 @@ async def evaluate_english_response(
         return_query_type(),
         media_type="text/event-stream",
     )
+
+
+@app.post(
+    "/audio/tts",
+    # dependencies=[Depends(init_wandb_for_generate_question)],
+)
+async def tts(
+    params: TTSRequestParams,
+):
+    def stream_audio():
+        response = call_openai_tts_model(params.text, params.voice, params.model)
+        for chunk in response.iter_bytes(chunk_size=4096):
+            yield chunk
+
+    return StreamingResponse(stream_audio())

@@ -1,7 +1,7 @@
 from typing import List, Union, Optional
 from typing_extensions import TypedDict
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OpenAIChatRole(str, Enum):
@@ -78,6 +78,26 @@ class EnglishFeedbackLanguage(str, Enum):
 class EnglishEvaluationRequest(BaseModel):
     difficulty_level: EnglishDifficultyLevel
     messages: List[ChatMarkupLanguage]
+
+
+class TTSVoice(str, Enum):
+    ALLOY = "alloy"
+    ECHO = "echo"
+    FABLE = "fable"
+    ONYX = "onyx"
+    NOVA = "nova"
+    SHIMMER = "shimmer"
+
+
+class TTSModel(str, Enum):
+    TTS1 = "tts-1"
+    TTS1HD = "tts-1-hd"
+
+
+class TTSRequestParams(BaseModel):
+    voice: Optional[TTSVoice] = Field(default=TTSVoice.ECHO)
+    text: str
+    model: Optional[TTSModel] = Field(default=TTSModel.TTS1)
 
 
 class TrainingChatUserResponseType(str, Enum):
