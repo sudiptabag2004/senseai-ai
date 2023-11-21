@@ -26,8 +26,8 @@ from models import (
     TrainingChatResponse,
     GenerateEnglishPassageRequest,
     GenerateEnglishQuestionRequest,
-    OpenAIChatRole,
-    ChatMessageType,
+    EnglishEvaluationRequest,
+    EnglishDifficultyLevel,
 )
 from settings import settings, get_env_file_path
 
@@ -177,8 +177,13 @@ def run_evaluator_chain(
     history: List[ChatMarkupLanguage],
     setup: str = None,
     is_solution_provided: bool = False,
+    is_solution_needed: bool = True,
+    role: str = None,
+    steps: str = None,
+    task: str = None,
+    instructions: str = None,
 ):
-    if not is_solution_provided:
+    if is_solution_needed and not is_solution_provided:
         actual_solution_system_prompt_template_message = """You are a helpful and encouraging interviewer.
         You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question.
         You need to work out your own solution to the problem.
@@ -226,22 +231,16 @@ def run_evaluator_chain(
 
     # ipdb.set_trace()
 
-    system_prompt_template = """You are a very helpful, accurate, detail-oriented and encouraging interviewer who follows the steps it has been given.
+    system_prompt_template = """{role}
     {setup}
-    You need to provide an evaluation based on the student's response. 
+    {task} 
     The student's response that you need to evaluate will be delimited with #### characters.
 
     To solve the problem, follow the steps below:
-    - Compare your solution to the student's solution.
-    - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
-    - At the end, give some actionable feedback without giving away any part of the answer to the question.
-    - End the feedback by nudging the student to try again now.
+    {steps}
     
     Important Instructions:
-    - The feedback should enable the student to think on their own.
-    - You are not required to fix the student's answer. You only need to nudge them in the right direction of thinking.
-    - No part of the feedback should contain any part of the answer.
-    - If the student made a mistake in the past but corrected it in their latest response, consider the mistake fixed.
+    {instructions}
     
     Provide the answer in the following format:
     Let's think step by step
@@ -269,11 +268,35 @@ def run_evaluator_chain(
     )
     format_instructions = output_parser.get_format_instructions()
 
+    if not role:
+        role = "You are a very helpful, accurate, detail-oriented and encouraging interviewer who follows the steps it has been given"
+
     if not setup:
         setup = """You will be given a topic, sub-topic, concept, a blooms level, learning outcome, a question that the student needs to be tested on, your actual solution and a series of interactions between the student and you."""
 
+    if not task:
+        task = "You need to provide an evaluation based on the student's response."
+
+    if not steps:
+        steps = """- Compare your solution to the student's solution.
+    - Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient).
+    - At the end, give some actionable feedback without giving away any part of the answer to the question.
+    - End the feedback by nudging the student to try again now."""
+
+    if not instructions:
+        instructions = """- The feedback should enable the student to think on their own.
+    - You are not required to fix the student's answer. You only need to nudge them in the right direction of thinking.
+    - No part of the feedback should contain any part of the answer.
+    - If the student made a mistake in the past but corrected it in their latest response, consider the mistake fixed.
+    """
+
     system_prompt = system_prompt_template.format(
-        format_instructions=format_instructions, setup=setup
+        format_instructions=format_instructions,
+        setup=setup,
+        role=role,
+        task=task,
+        steps=steps,
+        instructions=instructions,
     )
     # since this will be interpreted as a format string, we need to escape the curly braces
     # first convert any existing double curly braces to single curly braces
@@ -318,8 +341,9 @@ def run_clarifier_chain(
     user_response: ChatMarkupLanguage,
     history: List[ChatMarkupLanguage],
     setup: str = None,
+    role: str = None,
 ):
-    system_prompt_template = """You are a helpful and encouraging interviewer.
+    system_prompt_template = """{role}
     {setup}
     
     The student has asked a clarifying question that you need to answer. The student's response will be delimited with #### characters
@@ -330,10 +354,13 @@ def run_clarifier_chain(
 
     The final output should be just a string with the clarification asked for, without giving away the answer to the question, and nothing else.
     """
+    if not role:
+        role = "You are a helpful and encouraging interviewer."
+
     if not setup:
         setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you."""
 
-    system_prompt = system_prompt_template.format(setup=setup)
+    system_prompt = system_prompt_template.format(setup=setup, role=role)
 
     user_prompt_template = "####{input}####"
 
@@ -359,8 +386,9 @@ def run_miscellaneous_chain(
     user_response: ChatMarkupLanguage,
     history: List[ChatMarkupLanguage],
     setup: str = None,
+    role: str = None,
 ):
-    system_prompt_template = """You are a helpful and encouraging interviewer.
+    system_prompt_template = """{role}
     {setup}
     
     The student has responded to feedback that you have provided. The student's response will be delimited with #### characters.
@@ -373,10 +401,13 @@ def run_miscellaneous_chain(
     """
     user_prompt_template = "####{input}####"
 
+    if not role:
+        role = "You are a helpful and encouraging interviewer."
+
     if not setup:
         setup = """You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you."""
 
-    system_prompt = system_prompt_template.format(setup=setup)
+    system_prompt = system_prompt_template.format(setup=setup, role=role)
 
     return stream_openai_chat_chain(
         user_prompt_template,
@@ -505,8 +536,8 @@ async def generate_english_passage(
 
     You are interacting with a student for whom English is not the first language, helping them assess their competence in English and nudging them in the right direction. The aim is to help students feel comfortable with the English language. 
 
-    You will be given a difficulty level, a theme and an activity type delimited by ``` characters.
-    Your aim is to understand the student better and generate a personalized and engaging passage based on the input. 
+    You will be given a difficulty level, grade level, a theme, an activity type and a few learning outcomes delimited by ``` characters.
+    Your aim is to understand the student better and generate a personalized and engaging passage based on the input.
 
     Here the steps you need to follow:
     - Ask the student a maximum of 2-3 questions around the theme to identify a specific interest that they might have
@@ -546,7 +577,8 @@ async def generate_english_passage(
 
     user_prompt_template = """{input}"""
 
-    passage_settings = f"""```Difficulty Level - {passage_params.difficulty_level}\nTheme - {passage_params.theme}\nActivity Type - {passage_params.activity_type}```"""
+    learning_outcomes = "\n- ".join(passage_params.learning_outcomes)
+    passage_settings = f"""```Difficulty Level - {passage_params.difficulty_level}\nGrade Level - {passage_params.grade_level}\nTheme - {passage_params.theme}\nActivity Type - {passage_params.activity_type}\nLearning Outcomes\n- {learning_outcomes}```"""
 
     if not passage_params.messages:
         user_message = passage_settings
@@ -557,34 +589,8 @@ async def generate_english_passage(
             ChatMarkupLanguage(role="user", content=passage_settings)
         ] + passage_params.messages[:-1]
 
-    # system_prompt_template = SystemMessagePromptTemplate.from_template(
-    #     system_prompt_template
-    # )
-    # user_prompt_template = HumanMessagePromptTemplate.from_template(
-    #     user_prompt_template
-    # )
-    # chat_prompt_template = ChatPromptTemplate.from_messages(
-    #     [system_prompt_template, user_prompt_template]
-    # )
-
-    # messages = chat_prompt_template.format_prompt(
-    #     theme=passage_params.theme,
-    #     difficulty_level=passage_params.difficulty_level,
-    #     activity_type=passage_params.activity_type,
-    # ).to_messages()
-
-    # return StreamingResponse(
-    #     call_openai_chat_model(
-    #         messages, model=model, max_tokens=1024, streaming=True, cache=True
-    #     ),
-    #     media_type="text/event-stream",
-    # )
-    # user_prompt_template = "####{input}####"
-    # user_message = "what format do you need it then?"
-    # system_prompt_template = "You are a helpful and encouraging interviewer.\n    You will be specified with a topic, sub-topic, concept, a blooms level, and learning outcome along with a question that the student needs to be tested on along with a series of interactions between a student and you.\n    \n    The student has asked a clarifying question that you need to answer. The student's response will be delimited with #### characters\n\n    Important:\n    - Refrain from answering the question or giving any hints.\n    - Giving away the answer to the question would be a sin.\n\n    The final output should be just a string with the clarification asked for, without giving away the answer to the question, and nothing else.\n    "
-    # return
-
     async def stream_response():
+        temperature = passage_params.temperature if passage_params.temperature else 0.3
         async for item in stream_openai_chat_chain(
             user_prompt_template,
             user_message,
@@ -593,6 +599,7 @@ async def generate_english_passage(
             ignore_types=[],
             verbose=True,
             system_prompt_kwargs={"format_instructions": format_instructions},
+            temperature=temperature
         ):
             yield item
 
@@ -616,36 +623,18 @@ async def generate_training_question(
 
     You are interacting with a student for whom English is not the first language, helping them assess their competence in English and nudging them in the right direction. The aim is to help students feel comfortable with the English language.
 
-    You will be given a theme, a difficulty level and a passage. 
+    You will be given a theme, difficulty level, grade level, learning outcome and passage. 
 
-    You need to generate questions on the passage to check the student's comprehension. 
-
-    For difficulty level “Beginner”, generate questions of the following types:
-    1) Meaning of a difficult word in the passage.
-    2) Use a vocabulary word from the passage in a sentence of their own. 
-    3) A question where there are multiple options with one correct answer. 
-
-    For difficulty level “Intermediate”, generate questions of the following types:
-    1) A question which they can answer in 2-3 sentences.
-    2) A question which can connect the passage to them.  
+    You need to generate a question based on the passage for the given learning outcome. 
 
     Important Instructions:
     - Include the answer format you expect from user in the question itself. 
     - Do not reveal the answer to the question or include any hints
     - Maintain the Foundational level found in the Indian education system for the question.
-    
-    {format_instructions}
+    - Just give the question without adding any question prefix before it.
     """
 
-    questions_schema = ResponseSchema(
-        name="questions",
-        description="generates questions",
-        type="list[str]",
-    )
-    output_parser = StructuredOutputParser.from_response_schemas([questions_schema])
-    format_instructions = output_parser.get_format_instructions()
-
-    user_prompt_template = """```Difficulty Level - {difficulty_level}\nTheme - {theme}\nActivity Type - {activity_type}\nPassage - {passage}```"""
+    user_prompt_template = """```Difficulty Level - {difficulty_level}\nGrade Level - {grade_level}\nTheme - {theme}\nLearning Outcome - {learning_outcome}\nPassage - {passage}```"""
 
     system_prompt_template = SystemMessagePromptTemplate.from_template(
         system_prompt_template
@@ -659,13 +648,147 @@ async def generate_training_question(
 
     messages = chat_prompt_template.format_prompt(
         difficulty_level=english_question_params.difficulty_level,
+        grade_level=english_question_params.grade_level,
         theme=english_question_params.theme,
-        activity_type=english_question_params.activity_type,
+        learning_outcome=english_question_params.learning_outcome,
         passage=english_question_params.passage,
-        format_instructions=format_instructions,
     ).to_messages()
+
+    print(messages)
 
     return StreamingResponse(
         call_openai_chat_model(messages, model=model, max_tokens=1024, streaming=True),
+        media_type="text/event-stream",
+    )
+
+
+@app.post(
+    "/english/evaluation",
+    # dependencies=[Depends(init_wandb_for_generate_question)],
+)
+async def evaluate_english_response(
+    english_evaluation_request: EnglishEvaluationRequest,
+):
+    if not english_evaluation_request.messages:
+        raise HTTPException(status_code=400, detail="messages cannot be empty")
+
+    history = english_evaluation_request.messages[:-1]
+    query = english_evaluation_request.messages[-1]
+
+    router_response = run_router_chain(user_response=query, history=history)
+    if not router_response["success"]:
+        raise HTTPException(status_code=500, detail="Something went wrong with router")
+
+    query_type = router_response["type"]
+
+    print(f"Query type: {query_type}")
+
+    role = """You are a helpful and encouraging English language trainer. 
+
+    You are interacting with a student for whom English is not the first language, helping them assess their competence in English and nudging them in the right direction. The aim is to help students feel comfortable with the English language."""
+
+    if query_type == QUERY_TYPE_ANSWER_KEY:
+        # evaluator_response = run_evaluator_chain(user_response=query, history=history)
+
+        async def get_answer_response():
+            yield QUERY_TYPE_ANSWER_KEY
+
+            setup = """You will be given a passage, question, difficulty level, grade level, language, a set of evaluation criteria along with a series of interactions between a student and you."""
+
+            task = """You need to evaluate the student based on the given evaluation criteria, nudging them in the right direction. Your evaluation should be given in the language provided."""
+
+            steps = """- Assess the student using a rating of 0 (Unsatisfactory), 1 (Satisfactory) or 2 (Proficient)."""
+
+            num_attempts = len(english_evaluation_request.messages) // 2
+
+            if (
+                english_evaluation_request.difficulty_level
+                == EnglishDifficultyLevel.BEGINNER
+                and num_attempts > 2
+            ) or (
+                english_evaluation_request.difficulty_level
+                != EnglishDifficultyLevel.BEGINNER
+                and num_attempts > 4
+            ):
+                steps += "\n    - Give some actionable feedback with the right answer"
+            else:
+                steps += "\n    - Give some actionable feedback without giving away the answer or any example"
+
+            steps += "\n    - If your evaluation is not proficient, end the feedback by nudging the student to try again now."
+
+            instructions = """- The feedback should enable the student to think on their own.
+    - You are not required to fix the student's answer. You only need to nudge them in the right direction of thinking.
+    - If the student made a mistake in the past but corrected it in their latest response, consider the mistake fixed.
+    - Use primary school level English found in the Indian curriculum for your feedback.
+        """
+
+            async for item in run_evaluator_chain(
+                user_response=query,
+                history=history,
+                setup=setup,
+                role=role,
+                task=task,
+                steps=steps,
+                instructions=instructions,
+                is_solution_needed=False,
+            ):
+                yield item
+
+        async def stream_answer_response():
+            async for item in get_answer_response():
+                yield item
+
+        return StreamingResponse(
+            stream_answer_response(),
+            media_type="text/event-stream",
+        )
+
+    if query_type == QUERY_TYPE_CLARIFICATION_KEY:
+
+        async def get_clarification_response():
+            yield QUERY_TYPE_CLARIFICATION_KEY
+
+            setup = """You will be given a passage, question, difficulty level, grade level, a set of evaluation criteria along with a series of interactions between a student and you."""
+
+            async for item in run_clarifier_chain(
+                user_response=query, history=history, setup=setup, role=role
+            ):
+                yield item
+
+        async def stream_clarification_response():
+            async for item in get_clarification_response():
+                yield item
+
+        return StreamingResponse(
+            stream_clarification_response(),
+            media_type="text/event-stream",
+        )
+
+    if query_type == QUERY_TYPE_MISC_KEY:
+
+        async def get_miscellaneous_response():
+            yield QUERY_TYPE_MISC_KEY
+
+            setup = """You will be given a passage, question, difficulty level, grade level, a set of evaluation criteria along with a series of interactions between a student and you."""
+
+            async for item in run_miscellaneous_chain(
+                user_response=query, history=history, setup=setup, role=role
+            ):
+                yield item
+
+        async def stream_miscellaneous_response():
+            async for item in get_miscellaneous_response():
+                yield item
+
+        return StreamingResponse(
+            stream_miscellaneous_response(),
+            media_type="text/event-stream",
+        )
+
+    def return_query_type():
+        yield query_type
+
+    return StreamingResponse(
+        return_query_type(),
         media_type="text/event-stream",
     )

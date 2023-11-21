@@ -298,10 +298,11 @@ def prepare_chat_chain(
     callbacks: List = [],
     cache: bool = False,
     system_prompt_kwargs: Dict = {},
+    temperature: float = 0.0,
 ):
     chat_model_init_kwargs = {
         "model_name": model,
-        "temperature": 0,
+        "temperature": temperature,
         "max_tokens": max_tokens,
         "model_kwargs": {
             "top_p": 1,
@@ -412,6 +413,7 @@ def stream_openai_chat_chain(
     verbose: bool = False,
     cache: bool = False,
     system_prompt_kwargs: Dict = {},
+    temperature: float = 0.0,
 ):
     # threaded_generator = ThreadedGenerator()
 
@@ -434,6 +436,7 @@ def stream_openai_chat_chain(
         callbacks=[callback],
         cache=cache,
         system_prompt_kwargs=system_prompt_kwargs,
+        temperature=temperature,
     )
 
     # response = chat_chain.run(user_message)

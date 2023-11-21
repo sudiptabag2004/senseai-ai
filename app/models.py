@@ -15,6 +15,7 @@ class ChatMessageType(str, Enum):
     RESPONSE = "response"  # ai-response
     SOLUTION = "solution"  # ai-solution
     INTEREST = "interest"  # ai-question for eliciting user interest
+    INTEREST_RESPONSE = "interest_response"  # user response to interest question
     ANSWER = "answer"  # irrelevant response by user
     CLARIFICATION = "clarification"  # clarification requested by user
     IRRELEVANT = "irrelevant"  # answer given by user to the question asked
@@ -51,15 +52,32 @@ class EnglishActivityType(str, Enum):
 class GenerateEnglishRequestBase(BaseModel):
     theme: str
     difficulty_level: EnglishDifficultyLevel
-    activity_type: EnglishActivityType
+    grade_level: str
 
 
 class GenerateEnglishPassageRequest(GenerateEnglishRequestBase):
+    learning_outcomes: list[str]
+    activity_type: EnglishActivityType
     messages: List[ChatMarkupLanguage]
+    temperature: Optional[float]
 
 
 class GenerateEnglishQuestionRequest(GenerateEnglishRequestBase):
+    learning_outcome: str
     passage: str
+
+
+class EnglishFeedbackLanguage(str, Enum):
+    ENGLISH = "English"
+    TAMIL = "Tamil"
+    HINDI = "Hindi"
+    KANNADA = "Kannada"
+    TELUGU = "Telugu"
+
+
+class EnglishEvaluationRequest(BaseModel):
+    difficulty_level: EnglishDifficultyLevel
+    messages: List[ChatMarkupLanguage]
 
 
 class TrainingChatUserResponseType(str, Enum):
