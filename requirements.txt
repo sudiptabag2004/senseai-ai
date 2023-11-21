@@ -1,9 +1,8 @@
 langchain==0.0.285
 fastapi
-openai
 backoff
 pathlib
-openai
+openai==0.0.28
 python-dotenv
 wandb
 uvicorn[standard]
