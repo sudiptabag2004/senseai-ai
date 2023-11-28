@@ -184,9 +184,9 @@ def get_english_passage():
 
     if passage_response.status_code != 200:
         st.error("Something went wrong")
-        import ipdb
+        # import ipdb
 
-        ipdb.set_trace()
+        # ipdb.set_trace()
         return
 
     ai_response_placeholder = st.empty()
@@ -244,7 +244,7 @@ def get_english_passage():
 
     if ai_response_type == "passage" and activity_type == "Listening":
         with st.spinner("Preparing audio..."):
-            print('here')
+            print("here")
             response = requests.post(
                 "http://127.0.0.1:8001/audio/tts",
                 data=json.dumps(
@@ -304,9 +304,9 @@ def get_english_evaluation():
 
     if english_evaluation_response.status_code != 200:
         st.error("Something went wrong")
-        import ipdb
+        # import ipdb
 
-        ipdb.set_trace()
+        # ipdb.set_trace()
         return
 
     ai_response_placeholder = st.empty()
@@ -412,9 +412,9 @@ def get_english_question():
 
     if question_response.status_code != 200:
         st.error("Something went wrong")
-        import ipdb
+        # import ipdb
 
-        ipdb.set_trace()
+        # ipdb.set_trace()
         return
 
     ai_response_placeholder = st.empty()
@@ -451,6 +451,10 @@ def get_english_question():
 
 is_training_started = st.session_state.is_training_started
 
+# reset AI response state
+if "ai_response_in_progress" not in st.session_state:
+    st.session_state.ai_response_in_progress = False
+
 if is_training_started:
     chat_history = st.session_state.chat_history
     ai_chat_history = st.session_state.ai_chat_history
@@ -480,10 +484,6 @@ if is_training_started:
         st.session_state.chat_history = updated_chat_history
         st.session_state.ai_chat_history = updated_ai_chat_history
         reset_question_answered_state()
-
-    # reset AI response state
-    if "ai_response_in_progress" not in st.session_state:
-        st.session_state.ai_response_in_progress = False
 
     def toggle_ai_response_state():
         st.session_state.ai_response_in_progress = (

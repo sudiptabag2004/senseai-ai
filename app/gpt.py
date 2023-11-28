@@ -68,6 +68,44 @@ def init_gptcache(cache_obj: Cache, llm: str):
 langchain.llm_cache = GPTCache(init_gptcache)
 
 
+def parse_llm_output(output_parser, response, model, default={}):
+    try:
+        return output_parser.parse(response)
+    except:
+        output_fixing_parser = OutputFixingParser.from_llm(
+            parser=output_parser,
+            llm=ChatOpenAI(model_name=model, temperature=0),
+            prompt=EXTRACT_ANSWER_PROMPT,
+        )
+        try:
+            return output_fixing_parser.parse(response)
+        except:
+            return default
+
+
+def parse_llm_output_with_key(output_parser, response: str, key: str, default={}):
+    try:
+        return output_parser.parse(response)
+    except:
+        # search for key in the response
+        key_search_index = response.find(key)
+
+        if key_search_index == -1:
+            return default
+
+        # find the { bracket the appears right before the key
+        json_start_index = response[:key_search_index].rfind("{")
+        json_end_index = response[json_start_index:].rfind("}")
+        valid_json_string = response[
+            json_start_index : json_start_index + json_end_index + 1
+        ]
+
+        try:
+            return json.loads(valid_json_string)
+        except:
+            return default
+
+
 async def stream_chat_model_response(
     chat_model: ChatOpenAI, messages: List, async_callback: AsyncIteratorCallbackHandler
 ) -> AsyncIterable[str]:
