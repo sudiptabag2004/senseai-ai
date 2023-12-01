@@ -1,0 +1,27 @@
+version: '3'
+services:
+  app:
+    image: dalmiamanhv/sensai-ai:demos
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - ENV=staging
+    ports:
+      - '8001:8001'
+    environment:
+      - ENV=staging
+    working_dir: /app
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+
+  demo:
+    image: dalmiamanhv/sensai-ai:demos
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - ENV=staging
+    ports:
+      - '8501:8501'
+    working_dir: /demo
+    command: streamlit run app.py
