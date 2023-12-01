@@ -76,5 +76,6 @@ deploy-demo:
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml pull'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml up -d'
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "demos" '
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "demos"'
     - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "demos"'

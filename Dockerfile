@@ -14,11 +14,11 @@ COPY app /app
 # Copy the demo source code to the container
 COPY demo /demo
 
-COPY langchain /langchain
+# COPY langchain /langchain
 
-COPY update_langchain.sh ./
+# COPY update_langchain.sh ./
 
-RUN bash update_langchain.sh
+# RUN bash update_langchain.sh
 
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001

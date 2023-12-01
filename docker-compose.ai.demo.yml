@@ -36,4 +36,4 @@ services:
     ports:
       - '8502:8502'
     working_dir: /demo
-    command: streamlit run english_new.py --port 8502
+    command: streamlit run english_new.py --server.port 8502
