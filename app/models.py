@@ -57,7 +57,7 @@ class GenerateEnglishRequestBase(BaseModel):
 
 
 class GenerateEnglishPassageRequest(GenerateEnglishRequestBase):
-    learning_outcomes: list[str]
+    learning_outcomes: List[str]
     activity_type: EnglishActivityType
     messages: List[ChatMarkupLanguage]
     temperature: Optional[float]
