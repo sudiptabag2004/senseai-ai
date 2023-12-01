@@ -25,3 +25,15 @@ services:
       - '8501:8501'
     working_dir: /demo
     command: streamlit run app.py
+  
+  english_demo:
+    image: dalmiamanhv/sensai-ai:demos
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - ENV=staging
+    ports:
+      - '8502:8502'
+    working_dir: /demo
+    command: streamlit run english_new.py --port 8502

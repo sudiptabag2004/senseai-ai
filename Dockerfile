@@ -23,5 +23,7 @@ RUN bash update_langchain.sh
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001
 
-# Expose the port on which your Streamlit app listens
+# Expose the ports on which your Streamlit app listens
 EXPOSE 8501
+
+EXPOSE 8502
