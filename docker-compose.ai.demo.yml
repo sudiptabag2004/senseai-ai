@@ -1,7 +1,7 @@
 version: '3'
 services:
   app:
-    image: dalmiamanhv/sensai-ai:demo
+    image: dalmiamanhv/sensai-ai:demos
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,7 +15,7 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8001
 
   demo:
-    image: dalmiamanhv/sensai-ai:demo
+    image: dalmiamanhv/sensai-ai:demos
     build:
       context: .
       dockerfile: Dockerfile
