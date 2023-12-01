@@ -60,7 +60,7 @@ deploy-production:
 
 deploy-demo:
   stage: deploy-demo
-   image: ubuntu:latest
+  image: ubuntu:latest
   before_script:
     - apt-get update
     - apt-get install -y openssh-client
