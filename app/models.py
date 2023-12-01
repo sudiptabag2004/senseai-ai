@@ -47,6 +47,7 @@ class EnglishDifficultyLevel(str, Enum):
 class EnglishActivityType(str, Enum):
     READING = "reading"
     LISTENING = "listening"
+    WRITING = "writing"
 
 
 class GenerateEnglishRequestBase(BaseModel):

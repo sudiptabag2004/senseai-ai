@@ -563,6 +563,8 @@ async def generate_english_passage(
     - Either ask a question to elicit their interest or generate a passage. No explanations needed
     - Avoid asking all the questions simultaneously. Ask one by one
     - Make sure to not end the passage with a question.
+    - If the learning outcomes contain a specific number of sentences to be included, make sure you adhere to that very strictly.
+    - Avoid mentioning paragraph numbers in the generated passage.
     - When generating the passage, include a acknowledgement of the student's response in an excited tone before the actual passage so that the transition to the passage seems natural.
     
     {format_instructions}
@@ -589,7 +591,7 @@ async def generate_english_passage(
     user_prompt_template = """{input}"""
 
     learning_outcomes = "\n- ".join(passage_params.learning_outcomes)
-    passage_settings = f"""```Difficulty Level - {passage_params.difficulty_level}\nGrade Level - {passage_params.grade_level}\nTheme - {passage_params.theme}\nActivity Type - {passage_params.activity_type}\nLearning Outcomes\n- {learning_outcomes}```"""
+    passage_settings = f"""```\nDifficulty Level - {passage_params.difficulty_level}\nGrade Level - {passage_params.grade_level}\nTheme - {passage_params.theme}\nActivity Type - {passage_params.activity_type}\nPassage Description\n- {learning_outcomes}\n```"""
 
     if not passage_params.messages:
         user_message = passage_settings

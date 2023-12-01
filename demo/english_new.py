@@ -5,8 +5,6 @@ from functools import partial
 import json
 from collections import defaultdict
 
-difficulty_col, themes_col, activity_col = st.columns(3)
-
 difficulty_to_grade_map = {
     "Beginner": "1-2",
     "Intermediate": "3-5",
@@ -16,58 +14,165 @@ difficulty_to_grade_map = {
 # st.session_state
 
 passage_difficulty_to_learning_outcomes = {
-    "Beginner": [
-        "Length and Simplicity: The passage should be short, ideally one paragraph with 5-6 sentences, with simple sentence structures",
-        "Basic Vocabulary: Use basic, grade level-appropriate vocabulary to ensure understanding"
-        "Clear Narrative or Concept: The content should have a clear and straightforward narrative or concept, such as a simple story or a description of an everyday event",
-    ],
-    "Intermediate": [
-        "Moderate Length: The passage should be longer, consisting of 2-3 paragraphs with 5-6 sentences each, to provide a reading challenge",
-        "Expanded Vocabulary: Incorporate a wider range of vocabulary, including some challenging words, to aid vocabulary development",
-        "Varied Sentence Structures: Use a mix of simple and compound sentences to introduce moderate complexity",
-        "Introduction of Themes: Start to introduce themes or morals in the stories or concepts, encouraging students to think more deeply about the content",
-    ],
-    "Advanced": [
-        "Increased Length and Complexity: The passage should be significantly longer, about 4-5 paragraphs, with complex sentence structures",
-        "Advanced Vocabulary: Employ a rich and challenging vocabulary, including less common words and phrases",
-        "Complex Themes and Ideas: The content should contain complex themes, morals, or advanced concepts, requiring deeper comprehension and critical thinking",
-    ],
+    "Reading": {
+        "Beginner": [
+            "Length and Simplicity: The passage should be short, ideally one paragraph with 5-6 sentences, with simple sentence structures",
+            "Basic Vocabulary: Use basic, grade level-appropriate vocabulary to ensure understanding",
+            "Clear Narrative or Concept: The content should have a clear and straightforward narrative or concept, such as a simple story or a description of an everyday event",
+        ],
+        "Intermediate": [
+            "Moderate Length: The passage should be longer, consisting of 2-3 paragraphs with 5-6 sentences each, to provide a reading challenge",
+            "Expanded Vocabulary: Incorporate a wider range of vocabulary, including some challenging words, to aid vocabulary development",
+            "Varied Sentence Structures: Use a mix of simple and compound sentences to introduce moderate complexity",
+            "Introduction of Themes: Start to introduce themes or morals in the stories or concepts, encouraging students to think more deeply about the content",
+        ],
+        "Advanced": [
+            "Increased Length and Complexity: The passage should be significantly longer, about 4-5 paragraphs, with complex sentence structures",
+            "Advanced Vocabulary: Employ a rich and challenging vocabulary, including less common words and phrases",
+            "Complex Themes and Ideas: The content should contain complex themes, morals, or advanced concepts, requiring deeper comprehension and critical thinking",
+            "Inclusion of Subtleties: Introduce subtleties such as metaphor, irony, or rhetorical questions to enhance analytical thinking",
+        ],
+    },
+    "Listening": {
+        "Beginner": [
+            "Length and Simplicity: The passage should be short, ideally one paragraph with 5-6 sentences, with simple sentence structures",
+            "Basic Vocabulary: Use basic, grade level-appropriate vocabulary to ensure understanding",
+            "Clear Narrative or Concept: The content should have a clear and straightforward narrative or concept, such as a simple story or a description of an everyday event",
+        ],
+        "Intermediate": [
+            "Moderate Length: The passage should be longer, consisting of 2-3 paragraphs with 5-6 sentences each, to provide a reading challenge",
+            "Expanded Vocabulary: Incorporate a wider range of vocabulary, including some challenging words, to aid vocabulary development",
+            "Varied Sentence Structures: Use a mix of simple and compound sentences to introduce moderate complexity",
+            "Introduction of Themes: Start to introduce themes or morals in the stories or concepts, encouraging students to think more deeply about the content",
+        ],
+        "Advanced": [
+            "Increased Length and Complexity: The passage should be significantly longer, about 4-5 paragraphs, with complex sentence structures",
+            "Advanced Vocabulary: Employ a rich and challenging vocabulary, including less common words and phrases",
+            "Complex Themes and Ideas: The content should contain complex themes, morals, or advanced concepts, requiring deeper comprehension and critical thinking",
+            "Inclusion of Subtleties: Introduce subtleties such as metaphor, irony, or rhetorical questions to enhance analytical thinking",
+        ],
+    },
+    "Writing": {
+        "Beginner": [
+            "Length and Simplicity: The passage should be short, ideally one paragraph with 5-6 sentences, with simple sentence structures",
+            "Basic Vocabulary: Use basic, grade level-appropriate vocabulary to ensure understanding",
+            "Clear Narrative or Concept: The content should have a clear and straightforward narrative or concept, such as a simple story or a description of an everyday event",
+            "Paragraph Length: There must be 3 paragraphs of 3-4 sentences each containing a story of a main character. Paragraphs should be clearly separated",
+        ],
+        "Intermediate": [
+            "Expanded Vocabulary: Incorporate a wider range of vocabulary, including some challenging words, to aid vocabulary development",
+            "Varied Sentence Structures: Use a mix of simple and compound sentences to introduce moderate complexity",
+            "Introduction of Themes: Start to introduce themes or morals in the stories or concepts, encouraging students to think more deeply about the content",
+            "Paragraph Length: There must be 3 paragraphs of 4-5 sentences each containing a story of a main character. Paragraphs should be clearly separated",
+        ],
+    },
 }
 
 question_difficulty_to_learning_outcomes = {
-    "Beginner": [
-        "Use Words in Sentences: Able to use a difficult word from the passage in a sentence of their own",
-        "Basic Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 1 sentence",
-        "Basic Comprehension: Able to answer a simple MCQ question about the passage that tests their understanding of the content",
-        "Comprehensive Interpretation: Able to interpret the author's message or the moral of the story",
-    ],
-    "Intermediate": [
-        "Summarization Skills: Able to summarize a paragraph or the entire passage in their own words",
-        "Elaborate Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 2-3 sentences",
-        "Self Assessment: Learners should be able to self-assess their similarities or differences from the main character in the passage",
-        "Vocabulary Enhancement: Able to find synonyms or antonyms for given words from the passage",
-    ],
-    "Advanced": [
-        "Critical Analysis: Able to critically analyze themes, character motivations, and plot developments",
-        "Contextual Vocabulary Usage: Able to use vocabulary from the passage in more complex sentences and different contexts",
-    ],
+    "Reading": {
+        "Beginner": [
+            "Use Words in Sentences: Able to use a difficult word from the passage in a sentence of their own",
+            "Basic Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 1 sentence",
+            "Basic Comprehension: Able to answer a simple MCQ question about the passage that tests their understanding of the content",
+            "Agree and Disagree: Ask questions that check if they agree or disagree with the character motivations",
+            "Comprehensive Interpretation: Able to interpret the author's message or the moral of the story",
+            "Ordering: Given a set of options , the students should be able to identify the right order of events and arrange them in a sequence",
+        ],
+        "Intermediate": [
+            "Summarization Skills: Able to summarize a paragraph or the entire passage in their own words",
+            "Elaborate Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 2-3 sentences",
+            "Self Assessment: Learners should be able to self-assess their similarities or differences from the main character in the passage",
+            "Vocabulary Enhancement: Able to find synonyms or antonyms for given words from the passage",
+        ],
+        "Advanced": [
+            "Critical Analysis: Able to critically analyze themes, character motivations, and plot developments",
+        ],
+    },
+    "Listening": {
+        "Beginner": [
+            "Use Words in Sentences: Able to use a difficult word from the passage in a sentence of their own",
+            "Basic Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 1 sentence",
+            "Basic Comprehension: Able to answer a simple MCQ question about the passage that tests their understanding of the content",
+            "Agree and Disagree: Ask questions that check if they agree or disagree with the character motivations",
+            "Comprehensive Interpretation: Able to interpret the author's message or the moral of the story",
+            "Ordering: Given a set of options , the students should be able to identify the right order of events and arrange them in a sequence",
+        ],
+        "Intermediate": [
+            "Summarization Skills: Able to summarize a paragraph or the entire passage in their own words",
+            "Elaborate Comprehension: Able to answer a simple open ended question about the passage that tests their understanding of the content in 2-3 sentences",
+            "Self Assessment: Learners should be able to self-assess their similarities or differences from the main character in the passage",
+            "Vocabulary Enhancement: Able to find synonyms or antonyms for given words from the passage",
+        ],
+        "Advanced": [
+            "Critical Analysis: Able to critically analyze themes, character motivations, and plot developments",
+        ],
+    },
+    "Writing": {
+        "Beginner": [
+            "Main Character Description: The student should be able to recall the main character of the story and describe their character in 150 words",
+            "Flow of Events: The should must be able to write in their own words (minimum 150 words) about the sequence of events in the paragraph",
+            "Creative Thinking: The student must imagine a scenario where they replace the main character in the passage and write what they would do differently from the main character in 150 words",
+            "Personal Connection: Able to write 150 words on how the passage relates to their own experience or feelings",
+        ],
+        "Intermediate": [
+            "Main Character Motivation: Able to describe the motivation and decision of the main character at the end of the passage and explain it in 250 words",
+            "Comparative Thinking: Compare and contrast themselves from the main character in the passage in 250 words",
+            "Opinion: Write in 250 words whether they liked or disliked the story and give their reasoning for the same",
+            "Creative Extension: Write a short, creative continuation or an alternative ending to the passage",
+        ],
+    },
 }
 
 difficulty_to_eval_criteria = {
-    "Beginner": [
-        "Grammar: Learners should be able to correctly use basic parts of speech (nouns, verbs, adjectives) from the passage",
-        "Sentence Usage: Learners should construct simple sentences using words from the passage, paying attention to correct syntax",
-        "Semantics: Learners should create sentences that are meaningful and contextually relevant to the passage",
-    ],
-    "Intermediate": [
-        "Grammar: Learners should demonstrate understanding of more complex grammatical structures (like past tense, plurals) and sentence types (declarative, interrogative)",
-        "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
-        "Inferential Understanding: Able to make inferences based on the information provided in the passage",
-    ],
-    "Advanced": [
-        "Grammar: Learners should demonstrate understanding of more complex grammatical structures (like past tense, plurals) and sentence types (declarative, interrogative)",
-        "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
-    ],
+    "Reading": {
+        "Beginner": [
+            "Grammar: Learners should be able to correctly use basic parts of speech (nouns, verbs, adjectives) from the passage",
+            "Sentence Usage: Learners should construct simple sentences using words from the passage, paying attention to correct syntax",
+            "Semantics: Learners should create sentences that are meaningful and contextually relevant to the passage",
+        ],
+        "Intermediate": [
+            "Grammar: Learners should demonstrate understanding of more complex grammatical structures (like past tense, plurals) and sentence types (declarative, interrogative)",
+            "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
+            "Inferential Understanding: Able to make inferences based on the information provided in the passage",
+        ],
+        "Advanced": [
+            "Contextual Vocabulary Usage: Able to use vocabulary from the passage in more complex sentences and different contexts",
+            "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
+        ],
+    },
+    "Listening": {
+        "Beginner": [
+            "Grammar: Learners should be able to correctly use basic parts of speech (nouns, verbs, adjectives) from the passage",
+            "Sentence Usage: Learners should construct simple sentences using words from the passage, paying attention to correct syntax",
+            "Semantics: Learners should create sentences that are meaningful and contextually relevant to the passage",
+        ],
+        "Intermediate": [
+            "Grammar: Learners should demonstrate understanding of more complex grammatical structures (like past tense, plurals) and sentence types (declarative, interrogative)",
+            "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
+            "Inferential Understanding: Able to make inferences based on the information provided in the passage",
+        ],
+        "Advanced": [
+            "Contextual Vocabulary Usage: Able to use vocabulary from the passage in more complex sentences and different contexts",
+            "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
+        ],
+    },
+    "Writing": {
+        "Beginner": [
+            "Grammar: Learners should be able to correctly use basic parts of speech (nouns, verbs, adjectives) from the passage",
+            "Sentence Usage: Learners should construct simple sentences using words from the passage, paying attention to correct syntax",
+            "Semantics: Learners should create sentences that are meaningful and contextually relevant to the passage",
+            "Descriptive Writing: Able to use simple adjectives to describe characters or settings in the passage",
+            "Logical Flow: Check for the logical flow of events as seen in the passage",
+            "Paragraph Structure:  Assess if the paragraph has a clear topic sentence, supporting details, and a concluding sentence",
+        ],
+        "Intermediate": [
+            "Grammar: Learners should demonstrate understanding of more complex grammatical structures (like past tense, plurals) and sentence types (declarative, interrogative)",
+            "Sentence Construction: Learners should be able to construct compound sentences using conjunctions from the passage",
+            "Inferential Understanding: Able to make inferences based on the information provided in the passage",
+            "Enhanced Vocabulary and Descriptive Language: Able to use a broader range of vocabulary and descriptive language to convey more detailed images and ideas",
+            "Paragraph Structure:  Assess if the paragraph has a clear topic sentence, supporting details, and a concluding sentence",
+        ],
+    },
 }
 
 eval_difficulty_to_num_incorrect_attempts = {
@@ -80,9 +185,22 @@ eval_difficulty_to_num_incorrect_attempts = {
 if "is_training_started" not in st.session_state:
     st.session_state.is_training_started = False
 
+activity_col, difficulty_col, themes_col = st.columns(3)
+
+activity_type = activity_col.selectbox(
+    "Choose activity type",
+    ["Reading", "Listening", "Writing"],
+    key="activity_type",
+    disabled=st.session_state.is_training_started,
+)
+
+difficulty_level_options = list(
+    question_difficulty_to_learning_outcomes[activity_type].keys()
+)
+
 difficulty_level = difficulty_col.selectbox(
     "Choose difficulty level",
-    ["Beginner", "Intermediate", "Advanced"],
+    difficulty_level_options,
     key="difficulty_level",
     disabled=st.session_state.is_training_started,
 )
@@ -91,13 +209,6 @@ theme = themes_col.selectbox(
     "Choose theme",
     ["Sports", "Movies", "Job readiness", "Social skills"],
     key="theme",
-    disabled=st.session_state.is_training_started,
-)
-
-activity_type = activity_col.selectbox(
-    "Choose activity type",
-    ["Reading", "Listening"],
-    key="activity_type",
     disabled=st.session_state.is_training_started,
 )
 
@@ -164,6 +275,15 @@ else:
     st.button("Reset Training", on_click=on_reset_training_click)
 
 
+def adjust_newlines(s):
+    # Check if the string contains '\n\n'
+    if "\\n\\n" in s:
+        return s.replace("\\n\\n", "\n\n")
+    else:
+        # Return the string as is if it doesn't contain '\n\n'
+        return s
+
+
 def get_english_passage():
     passage_response = requests.post(
         "http://127.0.0.1:8001/english/passage",
@@ -173,8 +293,8 @@ def get_english_passage():
                 "activity_type": activity_type.lower(),
                 "grade_level": difficulty_to_grade_map[difficulty_level],
                 "learning_outcomes": passage_difficulty_to_learning_outcomes[
-                    difficulty_level
-                ],
+                    activity_type
+                ][difficulty_level],
                 "theme": theme.lower(),
                 "messages": st.session_state.ai_chat_history,
             }
@@ -238,6 +358,8 @@ def get_english_passage():
     # cleanup extra quotes and newline characters from the end of the streaming
     ai_response = ai_response.strip()
     ai_response = ai_response.strip('"')
+
+    ai_response = adjust_newlines(ai_response)
     ai_response_placeholder.write(ai_response)
 
     ai_response_type = ai_response_type.strip()
@@ -402,8 +524,8 @@ def get_english_question():
                 "grade_level": difficulty_to_grade_map[difficulty_level],
                 "theme": theme.lower(),
                 "learning_outcome": question_difficulty_to_learning_outcomes[
-                    difficulty_level
-                ][st.session_state.question_learning_outcome_index],
+                    activity_type
+                ][difficulty_level][st.session_state.question_learning_outcome_index],
                 "passage": passage,
             }
         ),
@@ -439,7 +561,9 @@ def get_english_question():
         {"role": "assistant", "content": ai_response},
     ]
 
-    evaluation_criteria = "\n- ".join(difficulty_to_eval_criteria[difficulty_level])
+    evaluation_criteria = "\n- ".join(
+        difficulty_to_eval_criteria[activity_type][difficulty_level]
+    )
     st.session_state.ai_chat_history.append(
         {
             "role": "assistant",
@@ -583,7 +707,12 @@ if is_training_started:
     else:
         if (
             st.session_state.question_learning_outcome_index
-            == len(question_difficulty_to_learning_outcomes[difficulty_level]) - 1
+            == len(
+                question_difficulty_to_learning_outcomes[activity_type][
+                    difficulty_level
+                ]
+            )
+            - 1
         ):
             st.success(
                 "You've answered all questions. To practice more, click on `Reset Training` and select a different activity type or theme or difficulty level"
