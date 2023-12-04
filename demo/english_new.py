@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import requests
 import io
@@ -10,6 +11,12 @@ difficulty_to_grade_map = {
     "Intermediate": "3-5",
     "Advanced": "6-8",
 }
+
+if os.path.exists('/demo'):
+    # instance
+    BASE_API_URL = "http://app:8001"
+else:
+    BASE_API_URL = "http://127.0.0.1:8001"
 
 # st.session_state
 
@@ -286,7 +293,7 @@ def adjust_newlines(s):
 
 def get_english_passage():
     passage_response = requests.post(
-        "http://127.0.0.1:8001/english/passage",
+        f"{BASE_API_URL}/english/passage",
         data=json.dumps(
             {
                 "difficulty_level": difficulty_level.lower(),
@@ -368,7 +375,7 @@ def get_english_passage():
         with st.spinner("Preparing audio..."):
             print("here")
             response = requests.post(
-                "http://127.0.0.1:8001/audio/tts",
+                f"{BASE_API_URL}/audio/tts",
                 data=json.dumps(
                     {
                         "text": ai_response.replace("Transcript:\n\n", ""),
@@ -412,7 +419,7 @@ def get_english_passage():
 
 def get_english_evaluation():
     english_evaluation_response = requests.post(
-        "http://127.0.0.1:8001/english/evaluation",
+        f"{BASE_API_URL}/english/evaluation",
         data=json.dumps(
             {
                 "difficulty_level": difficulty_level.lower(),
@@ -517,7 +524,7 @@ def get_english_evaluation():
 def get_english_question():
     passage = st.session_state.ai_chat_history[-1]["content"]
     question_response = requests.post(
-        "http://127.0.0.1:8001/english/question",
+        f"{BASE_API_URL}/english/question",
         data=json.dumps(
             {
                 "difficulty_level": difficulty_level.lower(),
