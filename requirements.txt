@@ -6,7 +6,8 @@ openai==1.3.7
 python-dotenv
 wandb
 uvicorn[standard]
-streamlit
+streamlit==1.26.0
+streamlit-sortables==0.2.0
 ipdb
 tiktoken==0.4.0
 openapi-schema-pydantic==1.2.4
@@ -14,4 +15,3 @@ pydantic==1.10.10
 gptcache==0.1.40
 redis
 redis_om
-streamlit-sortables
