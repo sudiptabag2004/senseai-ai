@@ -22,7 +22,12 @@ if os.path.exists("/demo"):
 else:
     BASE_API_URL = "http://127.0.0.1:8001"
 
-activity_data_path = "./english_activity.csv"
+if exists("/appdata"):
+    root_dir = "/appdata"
+else:
+    root_dir = "."
+
+activity_data_path = f"{root_dir}/english_activity.csv"
 if not exists(activity_data_path):
     df = pd.DataFrame(
         columns=[

@@ -14,6 +14,8 @@ COPY app /app
 # Copy the demo source code to the container
 COPY demo /demo
 
+RUN mkdir /appdata
+
 # COPY langchain /langchain
 
 # COPY update_langchain.sh ./

@@ -37,6 +37,8 @@ services:
       - '8502:8502'
     working_dir: /demo
     command: streamlit run english_new.py --server.port 8502
+    volumes:
+      - /appdata:/appdata
 
   english_activity:
     image: dalmiamanhv/sensai-ai:demos
@@ -49,3 +51,5 @@ services:
       - '8503:8503'
     working_dir: /demo
     command: streamlit run english_activity.py --server.port 8503
+    volumes:
+      - /appdata:/appdata
