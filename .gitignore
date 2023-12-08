@@ -7,3 +7,4 @@ venv
 data_map.txt
 faiss.index
 sqlite.db
+demo/english_activity.csv

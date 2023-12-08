@@ -1,7 +1,9 @@
 import os
+from os.path import exists
 import streamlit as st
 import requests
 import io
+import pandas as pd
 from functools import partial
 import json
 from collections import defaultdict
@@ -12,11 +14,29 @@ difficulty_to_grade_map = {
     "Advanced": "6-8",
 }
 
-if os.path.exists('/demo'):
+student_name = st.text_input("Enter your name")
+
+if os.path.exists("/demo"):
     # instance
     BASE_API_URL = "http://app:8001"
 else:
     BASE_API_URL = "http://127.0.0.1:8001"
+
+activity_data_path = "./english_activity.csv"
+if not exists(activity_data_path):
+    df = pd.DataFrame(
+        columns=[
+            "student name",
+            "difficulty",
+            "activity_type",
+            "lo",
+            "theme",
+            "role",
+            "message",
+            "message_type",
+        ]
+    )
+    df.to_csv(activity_data_path, index=False)
 
 # st.session_state
 
@@ -276,6 +296,29 @@ def on_reset_training_click():
     reset_question_state()
 
 
+def add_row(message):
+    df = pd.read_csv(activity_data_path)
+    if message["type"] in ["interest", "interest_response", "passage"]:
+        lo = ""
+    else:
+        lo = question_difficulty_to_learning_outcomes[activity_type][difficulty_level][
+            st.session_state.question_learning_outcome_index
+        ]
+
+    row = [
+        student_name,
+        difficulty_level,
+        activity_type,
+        lo,
+        theme,
+        message["role"],
+        message["content"],
+        message["type"],
+    ]
+    df.loc[len(df)] = row
+    df.to_csv(activity_data_path, index=False)
+
+
 if not st.session_state.is_training_started:
     st.button("Start Training", on_click=on_start_training_click)
 else:
@@ -400,21 +443,27 @@ def get_english_passage():
                     {"type": "text", "value": ai_response},
                     {"type": "audio", "value": audio_buffer},
                 ],
+                "type": ai_response_type,
             },
         ]
 
     else:
         st.session_state.chat_history += [
-            {"role": "assistant", "content": ai_response},
+            {"role": "assistant", "content": ai_response, "type": ai_response_type},
         ]
 
-    st.session_state.ai_chat_history.append(
-        {
-            "role": "assistant",
-            "content": ai_response,
-            "type": ai_response_type,
-        },
-    )
+    if st.session_state.ai_chat_history:
+        # add user message
+        add_row(st.session_state.ai_chat_history[-1])
+
+    ai_history_message = {
+        "role": "assistant",
+        "content": ai_response,
+        "type": ai_response_type,
+    }
+    add_row(ai_history_message)
+
+    st.session_state.ai_chat_history.append(ai_history_message)
 
 
 def get_english_evaluation():
@@ -510,13 +559,17 @@ def get_english_evaluation():
     # update type of user message
     st.session_state.ai_chat_history[-1]["type"] = user_answer_type
 
-    st.session_state.ai_chat_history.append(
-        {
-            "role": "assistant",
-            "content": ai_feedback if user_answer_type == "answer" else ai_response,
-            "type": "response",
-        },
-    )
+    add_row(st.session_state.ai_chat_history[-1])
+
+    ai_history_message = {
+        "role": "assistant",
+        "content": ai_feedback if user_answer_type == "answer" else ai_response,
+        "type": "ai_response",
+    }
+
+    add_row(ai_history_message)
+
+    st.session_state.ai_chat_history.append(ai_history_message)
     if user_answer_score == 2:
         st.session_state.is_question_answered = True
 
@@ -564,9 +617,10 @@ def get_english_question():
     st.session_state.question_chat_index = len(st.session_state.chat_history)
 
     # save last user message only if there is a assistant response as well
-    st.session_state.chat_history += [
-        {"role": "assistant", "content": ai_response},
-    ]
+    chat_message = {"role": "assistant", "content": ai_response, "type": "question"}
+    st.session_state.chat_history.append(chat_message)
+
+    add_row(chat_message)
 
     evaluation_criteria = "\n- ".join(
         difficulty_to_eval_criteria[activity_type][difficulty_level]
