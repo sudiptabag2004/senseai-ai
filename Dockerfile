@@ -16,11 +16,11 @@ COPY demo /demo
 
 RUN mkdir /appdata
 
-# COPY langchain /langchain
+COPY langchain /langchain
 
-# COPY update_langchain.sh ./
+COPY update_langchain.sh ./
 
-# RUN bash update_langchain.sh
+RUN bash update_langchain.sh
 
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001

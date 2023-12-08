@@ -7,6 +7,6 @@ fi
 SITE_PACKAGES_DIR=/usr/local/lib/python3.8/
 # echo "$SITE_PACKAGES_DIR/site-packages/langchain/chat_models/base.py"
 
-cp langchain/base.py "$SITE_PACKAGES_DIR/site-packages/langchain/chat_models/base.py"
+cp langchain/chat_generation.py "$SITE_PACKAGES_DIR/site-packages/langchain_core/outputs/chat_generation.py"
 cp langchain/cache.py  "$SITE_PACKAGES_DIR/site-packages/langchain/cache.py"
-cp langchain/output.py  "$SITE_PACKAGES_DIR/site-packages/langchain/schema/output.py"
+cp langchain/chat_models.py  "$SITE_PACKAGES_DIR/site-packages/langchain_core/language_models/chat_models.py"

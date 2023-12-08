@@ -4,8 +4,8 @@ import json
 import traceback
 import asyncio
 import os
-from os.path import dirname
-from typing import List, Dict, AsyncIterable
+from os.path import dirname, exists
+from typing import List, Dict, AsyncIterable, Any
 import queue
 import threading
 
@@ -17,14 +17,15 @@ from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import OutputFixingParser
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
-from langchain.schema import SystemMessage, BaseOutputParser
+from langchain.schema import SystemMessage, BaseOutputParser, BaseMessage
 from langchain.prompts import (
     SystemMessagePromptTemplate,
     MessagesPlaceholder,
     HumanMessagePromptTemplate,
     ChatPromptTemplate,
 )
-from langchain.callbacks.base import BaseCallbackManager
+from langchain_core.outputs import LLMResult
+from langchain.callbacks.base import BaseCallbackHandler
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
@@ -33,9 +34,60 @@ from models import ChatMarkupLanguage
 from prompts import EXTRACT_ANSWER_PROMPT
 from utils.langchain import convert_cml_messages_to_langchain_format
 
-root_dir = pathlib.Path(__file__).parent.resolve()
+if exists("/appdata"):
+    root_dir = "/appdata"
+else:
+    root_dir = pathlib.Path(__file__).parent.resolve()
+
 log_save_path = f"{root_dir}/logs/gpt-logs/1"
 os.makedirs(dirname(log_save_path), exist_ok=True)
+
+
+class ChatModelVerboseHandler(BaseCallbackHandler):
+    def on_chat_model_start(
+        self,
+        serialized: Dict[str, Any],
+        messages: List[List[BaseMessage]],
+        **kwargs: Any,
+    ) -> Any:
+        """Run when Chat Model starts running."""
+        print(serialized)
+        print(messages)
+
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
+        """Run when LLM ends running."""
+        print(response)
+
+
+class LLMChainVerboseHandler(BaseCallbackHandler):
+    def on_chain_start(
+        self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any
+    ) -> Any:
+        """Run when chain starts running."""
+        model_params = serialized["kwargs"]["llm"]["kwargs"]
+        model_params = {
+            key: value
+            for key, value in model_params.items()
+            if key in ["model_name", "temperature", "max_tokens"]
+        }
+
+        message_params = []
+        for message_structure in serialized["kwargs"]["prompt"]["kwargs"]["messages"]:
+            message_params.append(
+                {
+                    "type": message_structure["id"][-1],
+                    "kwargs": message_structure["kwargs"],
+                }
+            )
+
+        logging.info(
+            {"model_params": model_params, "message_params": message_params, **inputs}
+        )
+
+    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> Any:
+        """Run when chain ends running."""
+        logging.info(outputs)
+
 
 logging.basicConfig(
     filename=log_save_path,
@@ -50,11 +102,16 @@ from gptcache.manager.factory import manager_factory
 from gptcache.processor.pre import get_prompt
 
 from langchain.cache import GPTCache
+from langchain.globals import set_llm_cache
 import hashlib
 
 
 def get_hashed_name(name):
     return hashlib.sha256(name.encode()).hexdigest()
+
+
+def get_msg_func(data, **_):
+    return data.get("messages")[-1].content
 
 
 def init_gptcache(cache_obj: Cache, llm: str):
@@ -65,7 +122,7 @@ def init_gptcache(cache_obj: Cache, llm: str):
     )
 
 
-langchain.llm_cache = GPTCache(init_gptcache)
+set_llm_cache(GPTCache(init_gptcache))
 
 
 def parse_llm_output(output_parser, response, model, default={}):
@@ -155,13 +212,15 @@ def call_openai_chat_model(
         "cache": cache,
     }
 
+    chat_model_init_kwargs["callbacks"] = []
+
     if streaming:
         # threaded_generator = ThreadedGenerator()
         # chat_model_init_kwargs["callback_manager"] = BaseCallbackManager(
         #     [ChainStreamHandler(threaded_generator)]
         # )
         callback = AsyncIteratorCallbackHandler()
-        chat_model_init_kwargs["callbacks"] = [callback]
+        chat_model_init_kwargs["callbacks"].append(callback)
 
     chat_model = ChatOpenAI(
         **chat_model_init_kwargs,
@@ -290,7 +349,11 @@ def prepare_chat_chain(
     # ipdb.set_trace()
 
     chat_chain = ConversationChain(
-        llm=chat_model, memory=memory, prompt=chat_prompt_template, verbose=verbose
+        llm=chat_model,
+        memory=memory,
+        prompt=chat_prompt_template,
+        verbose=verbose,
+        callbacks=callbacks,
     )
 
     return chat_chain, memory
@@ -355,7 +418,8 @@ def stream_openai_chat_chain(
     # for token in stream_start_tokens:
     #     threaded_generator.send(token)
 
-    callback = AsyncIteratorCallbackHandler()
+    async_callback = AsyncIteratorCallbackHandler()
+    callbacks = [async_callback, LLMChainVerboseHandler()]
     # chat_model_init_kwargs["callbacks"] = [callback]
 
     # callback_manager = BaseCallbackManager([ChainStreamHandler(threaded_generator)])
@@ -368,7 +432,7 @@ def stream_openai_chat_chain(
         ignore_types,
         streaming=True,
         verbose=verbose,
-        callbacks=[callback],
+        callbacks=callbacks,
         cache=cache,
         system_prompt_kwargs=system_prompt_kwargs,
         temperature=temperature,
@@ -376,4 +440,4 @@ def stream_openai_chat_chain(
 
     # response = chat_chain.run(user_message)
 
-    return stream_chat_chain_response(chat_chain, user_message, callback)
+    return stream_chat_chain_response(chat_chain, user_message, async_callback)
