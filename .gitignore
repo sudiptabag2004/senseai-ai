@@ -9,3 +9,5 @@ faiss.index
 sqlite.db
 experiments
 question_generator
+archive
+app/.env

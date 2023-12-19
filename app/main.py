@@ -16,7 +16,7 @@ from langchain.output_parsers import (
 
 from langchain.schema import SystemMessage
 from dotenv import load_dotenv
-import wandb
+# import wandb
 
 from gpt import (
     call_openai_chat_model,
@@ -43,7 +43,7 @@ load_dotenv(get_env_file_path())
 
 openai.api_key = settings.openai_api_key
 openai.organization = settings.openai_org_id
-os.environ["WANDB_API_KEY"] = settings.wandb_api_key
+# os.environ["WANDB_API_KEY"] = settings.wandb_api_key
 
 # if not os.getenv("ENV"):
 #     # only run W&B for local
@@ -57,20 +57,20 @@ QUERY_TYPE_MISC_KEY = "miscellaneous"
 app = FastAPI()
 
 
-@app.middleware("http")
-async def finish_wandb_process(request: Request, call_next):
-    response = await call_next(request)
-    wandb.finish(quiet=True)
-    return response
+# @app.middleware("http")
+# async def finish_wandb_process(request: Request, call_next):
+#     response = await call_next(request)
+#     wandb.finish(quiet=True)
+#     return response
 
 
-def init_wandb_for_generate_question():
-    wandb.init(
-        project="sensai-ai",
-        entity="sensaihv",
-        group="training",
-        job_type="generate_question",
-    )
+# def init_wandb_for_generate_question():
+#     wandb.init(
+#         project="sensai-ai",
+#         entity="sensaihv",
+#         group="training",
+#         job_type="generate_question",
+#     )
 
 
 @app.post(
@@ -426,13 +426,13 @@ def run_miscellaneous_chain(
     )
 
 
-def init_wandb_for_training_chat():
-    wandb.init(
-        project="sensai-ai",
-        entity="sensaihv",
-        group="training",
-        job_type="chat",
-    )
+# def init_wandb_for_training_chat():
+#     wandb.init(
+#         project="sensai-ai",
+#         entity="sensaihv",
+#         group="training",
+#         job_type="chat",
+#     )
 
 
 @app.post(
