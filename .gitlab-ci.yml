@@ -4,13 +4,17 @@ stages:
   - deploy-production
   - deploy-demo
 
+variables:
+  - OPENAI_API_KEY: $OPENAI_API_KEY
+  - OPENAI_ORG_ID: $OPENAI_ORG_ID
+
 build:
   stage: build
   image: docker:latest
   services:
     - docker:dind
   script:
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
+    - docker build --build-arg OPENAI_API_KEY $OPENAI_API_KEY --build-arg OPENAI_ORG_ID $OPENAI_ORG_ID -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
 
@@ -25,9 +29,6 @@ deploy-staging:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_DEV_SERVER_IP >> ~/.ssh/known_hosts
-  variables:
-    - OPENAI_API_KEY: $OPENAI_API_KEY
-    - OPENAI_ORG_ID: $OPENAI_ORG_ID
   script:
     - scp -o StrictHostKeyChecking=no docker-compose.ai.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.ai.staging.yml
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
@@ -73,9 +74,6 @@ deploy-demo:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_DEMO_SERVER_IP >> ~/.ssh/known_hosts
-  variables:
-    - OPENAI_API_KEY: $OPENAI_API_KEY
-    - OPENAI_ORG_ID: $OPENAI_ORG_ID
   script:
     - scp -o StrictHostKeyChecking=no docker-compose.ai.demo.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP:~/docker-compose.ai.demo.yml
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
