@@ -14,7 +14,6 @@ COPY app /app
 # Copy the demo source code to the container
 COPY demo /demo
 
-<<<<<<< HEAD
 ARG OPENAI_API_KEY
 
 ARG OPENAI_ORG_ID
@@ -24,9 +23,7 @@ RUN echo $OPENAI_API_KEY
 RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID" >> /app/.env
 
 # COPY langchain /langchain
-=======
 RUN mkdir /appdata
->>>>>>> demos
 
 COPY langchain /langchain
 
