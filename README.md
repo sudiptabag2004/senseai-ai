@@ -3,7 +3,7 @@
 ## Overview
 
 - `app`: this folder contains the main AI logic for assessments and the FastAPI server
-- `demo`: this folder contains the `streamlit` demo for assessments. 
+- `demo`: this folder contains various `streamlit` demos - for english, programming assessment and generating chapters + questions from a video (in the branch `content`). 
 
 ## Setup
 

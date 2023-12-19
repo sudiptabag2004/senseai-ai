@@ -25,12 +25,16 @@ deploy-staging:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_DEV_SERVER_IP >> ~/.ssh/known_hosts
+  variables:
+    - OPENAI_API_KEY: $OPENAI_API_KEY
+    - OPENAI_ORG_ID: $OPENAI_ORG_ID
   script:
     - scp -o StrictHostKeyChecking=no docker-compose.ai.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.ai.staging.yml
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml down --rmi "all"'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml pull'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml up -d'
+
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "staging"'
@@ -69,6 +73,9 @@ deploy-demo:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - ssh-keyscan -H $DEPLOY_DEMO_SERVER_IP >> ~/.ssh/known_hosts
+  variables:
+    - OPENAI_API_KEY: $OPENAI_API_KEY
+    - OPENAI_ORG_ID: $OPENAI_ORG_ID
   script:
     - scp -o StrictHostKeyChecking=no docker-compose.ai.demo.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP:~/docker-compose.ai.demo.yml
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
