@@ -14,6 +14,16 @@ COPY app /app
 # Copy the demo source code to the container
 COPY demo /demo
 
+# Expose the port on which your FastAPI app listens
+EXPOSE 8001
+
+# Expose the ports on which your Streamlit app listens
+EXPOSE 8501
+
+EXPOSE 8502
+
+EXPOSE 8503
+
 ARG OPENAI_API_KEY
 
 ARG OPENAI_ORG_ID
@@ -30,13 +40,3 @@ COPY langchain /langchain
 COPY update_langchain.sh ./
 
 RUN bash update_langchain.sh
-
-# Expose the port on which your FastAPI app listens
-EXPOSE 8001
-
-# Expose the ports on which your Streamlit app listens
-EXPOSE 8501
-
-EXPOSE 8502
-
-EXPOSE 8503
