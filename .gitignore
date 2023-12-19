@@ -7,3 +7,5 @@ venv
 data_map.txt
 faiss.index
 sqlite.db
+experiments
+question_generator
