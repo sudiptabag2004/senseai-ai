@@ -20,12 +20,12 @@
   ```
   pip install -r app/requirements.txt
   ```
-- Update environment variables inside `app/.env`.
-- Update certain langchain files to accommodate fixes:
+- Copy `app/.env.example` to `app/.env` and set the OpenAI credentials.
+- Update certain langchain files to fix issues with langchain streaming and cache for chat models:
   ```
   bash update_langchain.sh
   ```
-  The changes made are shown in the images inside the `langchain` dir.
+  Before runnning this, make sure that you set `SITE_PACKAGES_DIR` in `update_langchain.sh` to the directory containing `site-packages` in your local setup. The changes made are shown in the images inside the `langchain` dir.
 
 ## Running the API locally
 
