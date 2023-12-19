@@ -11,3 +11,4 @@ experiments
 question_generator
 archive
 app/.env
+demo/english_activity.csv

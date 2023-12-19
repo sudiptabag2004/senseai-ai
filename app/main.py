@@ -627,7 +627,7 @@ async def generate_english_passage(
     "/english/question",
     # dependencies=[Depends(init_wandb_for_generate_question)],
 )
-async def generate_training_question(
+async def generate_english_training_question(
     english_question_params: GenerateEnglishQuestionRequest,
 ) -> str:
     model = "gpt-4-0613"
@@ -667,8 +667,6 @@ async def generate_training_question(
         learning_outcome=english_question_params.learning_outcome,
         passage=english_question_params.passage,
     ).to_messages()
-
-    print(messages)
 
     return StreamingResponse(
         call_openai_chat_model(messages, model=model, max_tokens=1024, streaming=True),

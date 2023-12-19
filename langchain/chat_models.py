@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import warnings
 from abc import ABC, abstractmethod
 from functools import partial
 from typing import (
+    TYPE_CHECKING,
     Any,
     AsyncIterator,
     Dict,
@@ -14,43 +17,85 @@ from typing import (
     cast,
 )
 
-import langchain
-from langchain.callbacks.base import BaseCallbackManager
-from langchain.callbacks.manager import (
+from langchain_core.callbacks import (
     AsyncCallbackManager,
     AsyncCallbackManagerForLLMRun,
+    BaseCallbackManager,
     CallbackManager,
     CallbackManagerForLLMRun,
     Callbacks,
 )
-from langchain.load.dump import dumpd, dumps
-from langchain.prompts.base import StringPromptValue
-from langchain.prompts.chat import ChatPromptValue
-from langchain.pydantic_v1 import Field, root_validator
-from langchain.schema import (
-    ChatGeneration,
-    ChatResult,
-    LLMResult,
-    PromptValue,
-    RunInfo,
-)
-from langchain.schema.language_model import BaseLanguageModel, LanguageModelInput
-from langchain.schema.messages import (
-    AIMessageChunk,
+from langchain_core.globals import get_llm_cache
+from langchain_core.language_models.base import BaseLanguageModel, LanguageModelInput
+from langchain_core.load import dumpd, dumps
+from langchain_core.messages import (
     AIMessage,
+    AnyMessage,
     BaseMessage,
     BaseMessageChunk,
     HumanMessage,
+    AIMessageChunk,
+    message_chunk_to_message,
 )
-from langchain.schema.output import ChatGenerationChunk
-from langchain.schema.runnable import RunnableConfig
+from langchain_core.outputs import (
+    ChatGeneration,
+    ChatGenerationChunk,
+    ChatResult,
+    LLMResult,
+    RunInfo,
+)
+from langchain_core.prompt_values import ChatPromptValue, PromptValue, StringPromptValue
+from langchain_core.pydantic_v1 import Field, root_validator
+
+if TYPE_CHECKING:
+    from langchain_core.runnables import RunnableConfig
 
 
 def _get_verbosity() -> bool:
-    return langchain.verbose
+    from langchain_core.globals import get_verbose
+
+    return get_verbose()
 
 
-class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
+def generate_from_stream(stream: Iterator[ChatGenerationChunk]) -> ChatResult:
+    generation: Optional[ChatGenerationChunk] = None
+    for chunk in stream:
+        if generation is None:
+            generation = chunk
+        else:
+            generation += chunk
+    assert generation is not None
+    return ChatResult(
+        generations=[
+            ChatGeneration(
+                message=message_chunk_to_message(generation.message),
+                generation_info=generation.generation_info,
+            )
+        ]
+    )
+
+
+async def agenerate_from_stream(
+    stream: AsyncIterator[ChatGenerationChunk],
+) -> ChatResult:
+    generation: Optional[ChatGenerationChunk] = None
+    async for chunk in stream:
+        if generation is None:
+            generation = chunk
+        else:
+            generation += chunk
+    assert generation is not None
+    return ChatResult(
+        generations=[
+            ChatGeneration(
+                message=message_chunk_to_message(generation.message),
+                generation_info=generation.generation_info,
+            )
+        ]
+    )
+
+
+class BaseChatModel(BaseLanguageModel[BaseMessage], ABC):
     """Base class for Chat models."""
 
     cache: Optional[bool] = None
@@ -84,6 +129,11 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
 
     # --- Runnable methods ---
 
+    @property
+    def OutputType(self) -> Any:
+        """Get the output type for this runnable."""
+        return AnyMessage
+
     def _convert_input(self, input: LanguageModelInput) -> PromptValue:
         if isinstance(input, PromptValue):
             return input
@@ -104,22 +154,20 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         *,
         stop: Optional[List[str]] = None,
         **kwargs: Any,
-    ) -> BaseMessageChunk:
+    ) -> BaseMessage:
         config = config or {}
         return cast(
-            BaseMessageChunk,
-            cast(
-                ChatGeneration,
-                self.generate_prompt(
-                    [self._convert_input(input)],
-                    stop=stop,
-                    callbacks=config.get("callbacks"),
-                    tags=config.get("tags"),
-                    metadata=config.get("metadata"),
-                    **kwargs,
-                ).generations[0][0],
-            ).message,
-        )
+            ChatGeneration,
+            self.generate_prompt(
+                [self._convert_input(input)],
+                stop=stop,
+                callbacks=config.get("callbacks"),
+                tags=config.get("tags"),
+                metadata=config.get("metadata"),
+                run_name=config.get("run_name"),
+                **kwargs,
+            ).generations[0][0],
+        ).message
 
     async def ainvoke(
         self,
@@ -128,13 +176,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         *,
         stop: Optional[List[str]] = None,
         **kwargs: Any,
-    ) -> BaseMessageChunk:
-        if type(self)._agenerate == BaseChatModel._agenerate:
-            # model doesn't implement async generation, so use default implementation
-            return await asyncio.get_running_loop().run_in_executor(
-                None, partial(self.invoke, input, config, stop=stop, **kwargs)
-            )
-
+    ) -> BaseMessage:
         config = config or {}
         llm_result = await self.agenerate_prompt(
             [self._convert_input(input)],
@@ -142,11 +184,10 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
             callbacks=config.get("callbacks"),
             tags=config.get("tags"),
             metadata=config.get("metadata"),
+            run_name=config.get("run_name"),
             **kwargs,
         )
-        return cast(
-            BaseMessageChunk, cast(ChatGeneration, llm_result.generations[0][0]).message
-        )
+        return cast(ChatGeneration, llm_result.generations[0][0]).message
 
     def stream(
         self,
@@ -158,7 +199,9 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
     ) -> Iterator[BaseMessageChunk]:
         if type(self)._stream == BaseChatModel._stream:
             # model doesn't implement streaming, so use default implementation
-            yield self.invoke(input, config=config, stop=stop, **kwargs)
+            yield cast(
+                BaseMessageChunk, self.invoke(input, config=config, stop=stop, **kwargs)
+            )
         else:
             config = config or {}
             messages = self._convert_input(input).to_messages()
@@ -174,10 +217,15 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                 self.metadata,
             )
             (run_manager,) = callback_manager.on_chat_model_start(
-                dumpd(self), [messages], invocation_params=params, options=options
+                dumpd(self),
+                [messages],
+                invocation_params=params,
+                options=options,
+                name=config.get("run_name"),
+                batch_size=1,
             )
+            generation: Optional[ChatGenerationChunk] = None
             try:
-                generation: Optional[ChatGenerationChunk] = None
                 for chunk in self._stream(
                     messages, stop=stop, run_manager=run_manager, **kwargs
                 ):
@@ -187,13 +235,16 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                     else:
                         generation += chunk
                 assert generation is not None
-            except (KeyboardInterrupt, Exception) as e:
-                run_manager.on_llm_error(e)
+            except BaseException as e:
+                run_manager.on_llm_error(
+                    e,
+                    response=LLMResult(
+                        generations=[[generation]] if generation else []
+                    ),
+                )
                 raise e
             else:
-                run_manager.on_llm_end(
-                    LLMResult(generations=[[generation]]),
-                )
+                run_manager.on_llm_end(LLMResult(generations=[[generation]]))
 
     async def astream(
         self,
@@ -205,7 +256,9 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
     ) -> AsyncIterator[BaseMessageChunk]:
         if type(self)._astream == BaseChatModel._astream:
             # model doesn't implement streaming, so use default implementation
-            yield self.invoke(input, config=config, stop=stop, **kwargs)
+            yield cast(
+                BaseMessageChunk, self.invoke(input, config=config, stop=stop, **kwargs)
+            )
         else:
             config = config or {}
             messages = self._convert_input(input).to_messages()
@@ -221,10 +274,15 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                 self.metadata,
             )
             (run_manager,) = await callback_manager.on_chat_model_start(
-                dumpd(self), [messages], invocation_params=params, options=options
+                dumpd(self),
+                [messages],
+                invocation_params=params,
+                options=options,
+                name=config.get("run_name"),
+                batch_size=1,
             )
+            generation: Optional[ChatGenerationChunk] = None
             try:
-                generation: Optional[ChatGenerationChunk] = None
                 async for chunk in self._astream(
                     messages, stop=stop, run_manager=run_manager, **kwargs
                 ):
@@ -234,8 +292,13 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                     else:
                         generation += chunk
                 assert generation is not None
-            except (KeyboardInterrupt, Exception) as e:
-                await run_manager.on_llm_error(e)
+            except BaseException as e:
+                await run_manager.on_llm_error(
+                    e,
+                    response=LLMResult(
+                        generations=[[generation]] if generation else []
+                    ),
+                )
                 raise e
             else:
                 await run_manager.on_llm_end(
@@ -257,7 +320,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         return {**params, **kwargs}
 
     def _get_llm_string(self, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
-        if self.lc_serializable:
+        if self.is_lc_serializable():
             params = {**kwargs, **{"stop": stop}}
             param_string = str(sorted([(k, v) for k, v in params.items()]))
             llm_string = dumps(self)
@@ -275,6 +338,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         *,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        run_name: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResult:
         """Top Level call"""
@@ -291,7 +355,12 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
             self.metadata,
         )
         run_managers = callback_manager.on_chat_model_start(
-            dumpd(self), messages, invocation_params=params, options=options
+            dumpd(self),
+            messages,
+            invocation_params=params,
+            options=options,
+            name=run_name,
+            batch_size=len(messages),
         )
         results = []
         for i, m in enumerate(messages):
@@ -304,9 +373,9 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                         **kwargs,
                     )
                 )
-            except (KeyboardInterrupt, Exception) as e:
+            except BaseException as e:
                 if run_managers:
-                    run_managers[i].on_llm_error(e)
+                    run_managers[i].on_llm_error(e, response=LLMResult(generations=[]))
                 raise e
         flattened_outputs = [
             LLMResult(generations=[res.generations], llm_output=res.llm_output)
@@ -331,6 +400,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         *,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        run_name: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResult:
         """Top Level call"""
@@ -348,7 +418,12 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         )
 
         run_managers = await callback_manager.on_chat_model_start(
-            dumpd(self), messages, invocation_params=params, options=options
+            dumpd(self),
+            messages,
+            invocation_params=params,
+            options=options,
+            name=run_name,
+            batch_size=len(messages),
         )
 
         results = await asyncio.gather(
@@ -365,9 +440,11 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         )
         exceptions = []
         for i, res in enumerate(results):
-            if isinstance(res, Exception):
+            if isinstance(res, BaseException):
                 if run_managers:
-                    await run_managers[i].on_llm_error(res)
+                    await run_managers[i].on_llm_error(
+                        res, response=LLMResult(generations=[])
+                    )
                 exceptions.append(res)
         if exceptions:
             if run_managers:
@@ -437,7 +514,8 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
             "run_manager"
         )
         disregard_cache = self.cache is not None and not self.cache
-        if langchain.llm_cache is None or disregard_cache:
+        llm_cache = get_llm_cache()
+        if llm_cache is None or disregard_cache:
             # This happens when langchain.cache is None, but self.cache is True
             if self.cache is not None and self.cache:
                 raise ValueError(
@@ -452,7 +530,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         else:
             llm_string = self._get_llm_string(stop=stop, **kwargs)
             prompt = dumps(messages)
-            cache_val = langchain.llm_cache.lookup(prompt, llm_string)
+            cache_val = llm_cache.lookup(prompt, llm_string)
             if isinstance(cache_val, list):
                 return ChatResult(generations=cache_val)
             else:
@@ -462,7 +540,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                     )
                 else:
                     result = self._generate(messages, stop=stop, **kwargs)
-                langchain.llm_cache.update(prompt, llm_string, result.generations)
+                llm_cache.update(prompt, llm_string, result.generations)
                 return result
 
     async def _agenerate_with_cache(
@@ -476,7 +554,8 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
             "run_manager"
         )
         disregard_cache = self.cache is not None and not self.cache
-        if langchain.llm_cache is None or disregard_cache:
+        llm_cache = get_llm_cache()
+        if llm_cache is None or disregard_cache:
             # This happens when langchain.cache is None, but self.cache is True
             if self.cache is not None and self.cache:
                 raise ValueError(
@@ -491,13 +570,18 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         else:
             llm_string = self._get_llm_string(stop=stop, **kwargs)
             prompt = dumps(messages)
-            cache_val = langchain.llm_cache.lookup(prompt, llm_string)
+            cache_val = llm_cache.lookup(prompt, llm_string)
             if isinstance(cache_val, list):
                 if run_manager:
                     for generation in cache_val:
-                        chunk = AIMessageChunk(content=generation.message.content, additional_kwargs=generation.message.additional_kwargs)
-                        await run_manager.on_llm_new_token(token=chunk.content, chunk=chunk)
-                        
+                        chunk = AIMessageChunk(
+                            content=generation.message.content,
+                            additional_kwargs=generation.message.additional_kwargs,
+                        )
+                        await run_manager.on_llm_new_token(
+                            token=chunk.content, chunk=chunk
+                        )
+
                 return ChatResult(generations=cache_val)
             else:
                 if new_arg_supported:
@@ -506,8 +590,7 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
                     )
                 else:
                     result = await self._agenerate(messages, stop=stop, **kwargs)
-                
-                langchain.llm_cache.update(prompt, llm_string, result.generations)
+                llm_cache.update(prompt, llm_string, result.generations)
                 return result
 
     @abstractmethod
@@ -528,7 +611,9 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         **kwargs: Any,
     ) -> ChatResult:
         """Top Level call"""
-        raise NotImplementedError()
+        return await asyncio.get_running_loop().run_in_executor(
+            None, partial(self._generate, **kwargs), messages, stop, run_manager
+        )
 
     def _stream(
         self,
@@ -592,7 +677,10 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         else:
             _stop = list(stop)
         result = self([HumanMessage(content=text)], stop=_stop, **kwargs)
-        return result.content
+        if isinstance(result.content, str):
+            return result.content
+        else:
+            raise ValueError("Cannot use predict when output is not a string.")
 
     def predict_messages(
         self,
@@ -617,7 +705,10 @@ class BaseChatModel(BaseLanguageModel[BaseMessageChunk], ABC):
         result = await self._call_async(
             [HumanMessage(content=text)], stop=_stop, **kwargs
         )
-        return result.content
+        if isinstance(result.content, str):
+            return result.content
+        else:
+            raise ValueError("Cannot use predict when output is not a string.")
 
     async def apredict_messages(
         self,
