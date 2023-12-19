@@ -4,10 +4,6 @@ stages:
   - deploy-production
   - deploy-demo
 
-variables:
-  - OPENAI_API_KEY: $OPENAI_API_KEY
-  - OPENAI_ORG_ID: $OPENAI_ORG_ID
-
 build:
   stage: build
   image: docker:latest
