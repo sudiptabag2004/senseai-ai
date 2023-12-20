@@ -569,7 +569,7 @@ def get_english_evaluation():
     ai_history_message = {
         "role": "assistant",
         "content": ai_feedback if user_answer_type == "answer" else ai_response,
-        "type": "ai_response",
+        "type": "response",
     }
 
     add_row(ai_history_message)
