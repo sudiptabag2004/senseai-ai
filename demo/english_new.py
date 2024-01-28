@@ -39,6 +39,7 @@ if not exists(activity_data_path):
             "role",
             "message",
             "message_type",
+            "score",
         ]
     )
     df.to_csv(activity_data_path, index=False)
@@ -319,6 +320,7 @@ def add_row(message):
         message["role"],
         message["content"],
         message["type"],
+        message.get("score"),
     ]
     df.loc[len(df)] = row
     df.to_csv(activity_data_path, index=False)
@@ -570,6 +572,7 @@ def get_english_evaluation():
         "role": "assistant",
         "content": ai_feedback if user_answer_type == "answer" else ai_response,
         "type": "response",
+        "score": user_answer_score,
     }
 
     add_row(ai_history_message)
