@@ -4,6 +4,7 @@ import streamlit as st
 import requests
 import io
 import pandas as pd
+from datetime import datetime
 from functools import partial
 import json
 from collections import defaultdict
@@ -40,6 +41,7 @@ if not exists(activity_data_path):
             "message",
             "message_type",
             "score",
+            "time",
         ]
     )
     df.to_csv(activity_data_path, index=False)
@@ -311,6 +313,7 @@ def add_row(message):
             st.session_state.question_learning_outcome_index
         ]
 
+    current_time = datetime.now()
     row = [
         student_name,
         difficulty_level,
@@ -321,6 +324,7 @@ def add_row(message):
         message["content"],
         message["type"],
         message.get("score"),
+        current_time.strftime("%d/%m/%y, %H:%M:%S"),
     ]
     df.loc[len(df)] = row
     df.to_csv(activity_data_path, index=False)
