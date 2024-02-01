@@ -8,6 +8,13 @@ from datetime import datetime
 from functools import partial
 import json
 from collections import defaultdict
+from audio_recorder_streamlit import audio_recorder
+from dotenv import load_dotenv
+import openai
+
+load_dotenv("../app/.env")
+
+client = openai.OpenAI()
 
 difficulty_to_grade_map = {
     "Beginner": "1-2",
@@ -101,6 +108,19 @@ passage_difficulty_to_learning_outcomes = {
             "Paragraph Length: There must be 3 paragraphs of 4-5 sentences each containing a story of a main character. Paragraphs should be clearly separated",
         ],
     },
+    "Speaking": {
+        "Beginner": [
+            "Length and Simplicity: The passage should be short, ideally one paragraph with 5-6 sentences, with simple sentence structures",
+            "Basic Vocabulary: Use basic, grade level-appropriate vocabulary to ensure understanding",
+            "Clear Narrative or Concept: The content should have a clear and straightforward narrative or concept, such as a simple story or a description of an everyday event",
+        ],
+        "Intermediate": [
+            "Moderate Length: The passage should be longer, consisting of 2-3 paragraphs with 5-6 sentences each, to provide a reading challenge",
+            "Expanded Vocabulary: Incorporate a wider range of vocabulary, including some challenging words, to aid vocabulary development",
+            "Varied Sentence Structures: Use a mix of simple and compound sentences to introduce moderate complexity",
+            "Introduction of Themes: Start to introduce themes or morals in the stories or concepts, encouraging students to think more deeply about the content",
+        ],
+    },
 }
 
 question_difficulty_to_learning_outcomes = {
@@ -156,6 +176,17 @@ question_difficulty_to_learning_outcomes = {
             "Creative Extension: Write a short, creative continuation or an alternative ending to the passage",
         ],
     },
+    "Speaking": {
+        "Beginner": [
+            "Identify Main Ideas: Students should be able to identify and talk about the main idea or theme of the passage."
+            "Speaking New Words: Students should learn new words and be able to speak them in sentences.",
+            "Express Personal Connections: Students should be able to relate the passage to their own experiences, such as talking about their favorite movies or books.",
+            'Expressing Likes and Dislikes: Students should be able to express their preferences, likes, and dislikes. For instance, "I like this movie because it is funny."',
+        ],
+        "Intermediate": [
+            "Critical Thinking: Encourage students to orally discuss the changes in the character and what brought about the changes.",
+        ],
+    },
 }
 
 difficulty_to_eval_criteria = {
@@ -208,6 +239,20 @@ difficulty_to_eval_criteria = {
             "Paragraph Structure:  Assess if the paragraph has a clear topic sentence, supporting details, and a concluding sentence",
         ],
     },
+    "Speaking": {
+        "Beginner": [
+            "Clarity and Expression: Students should be able to articulate their thoughts and ideas with minimal errors  at an understandable pace and volume.",
+            "Pronunciation: Basic pronunciation skills, focusing on clarity and attempting to pronounce new words.",
+            "Fluency: Look for the ability to speak fluently with few unnatural pauses and to connect ideas coherently. The student should be able to maintain a logical flow of ideas.",
+            "Confidence and Comfort in Speaking: Assess their level of confidence when speaking. Are they hesitant and shy, or are they able to speak with a certain level of comfort",
+        ],
+        "Intermediate": [
+            "Interactive Communication: Evaluate the student's ability to respond to questions, clarify points, and engage in a dialogue about the topic.",
+            "Clarity and Expression: Students should be able to clearly articulate their thoughts and ideas at an understandable pace and volume.",
+            "Pronunciation and Diction: Assess pronunciation accuracy and the ability to enunciate words clearly, making the speech understandable to a listener.",
+            "Fluency and Coherence: Look for the ability to speak fluently without unnatural pauses and to connect ideas coherently. The student should be able to maintain a logical flow of ideas.",
+        ],
+    },
 }
 
 eval_difficulty_to_num_incorrect_attempts = {
@@ -224,7 +269,7 @@ activity_col, difficulty_col, themes_col = st.columns(3)
 
 activity_type = activity_col.selectbox(
     "Choose activity type",
-    ["Reading", "Listening", "Writing"],
+    question_difficulty_to_learning_outcomes.keys(),
     key="activity_type",
     disabled=st.session_state.is_training_started,
 )
@@ -242,11 +287,13 @@ difficulty_level = difficulty_col.selectbox(
 
 theme = themes_col.selectbox(
     "Choose theme",
-    ["Sports", "Movies", "Job readiness", "Social skills"],
+    ["Sports", "Movies", "Job readiness", "Social skills", "Other"],
     key="theme",
     disabled=st.session_state.is_training_started,
 )
 
+if theme == "Other":
+    theme = themes_col.text_input("Enter the theme of your choice")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -346,20 +393,20 @@ def adjust_newlines(s):
 
 
 def get_english_passage():
+    payload = {
+        "difficulty_level": difficulty_level.lower(),
+        "activity_type": activity_type.lower(),
+        "grade_level": difficulty_to_grade_map[difficulty_level],
+        "learning_outcomes": passage_difficulty_to_learning_outcomes[activity_type][
+            difficulty_level
+        ],
+        "theme": theme.lower(),
+        "messages": st.session_state.ai_chat_history,
+    }
+    print(payload)
     passage_response = requests.post(
         f"{BASE_API_URL}/english/passage",
-        data=json.dumps(
-            {
-                "difficulty_level": difficulty_level.lower(),
-                "activity_type": activity_type.lower(),
-                "grade_level": difficulty_to_grade_map[difficulty_level],
-                "learning_outcomes": passage_difficulty_to_learning_outcomes[
-                    activity_type
-                ][difficulty_level],
-                "theme": theme.lower(),
-                "messages": st.session_state.ai_chat_history,
-            }
-        ),
+        data=json.dumps(payload),
         stream=True,
     )
 
@@ -725,11 +772,47 @@ if is_training_started:
             toggle_ai_response_state()
 
     if not st.session_state.is_question_answered:
-        user_answer = st.chat_input(
-            "Your answer",
-            on_submit=toggle_ai_response_state,
-            disabled=st.session_state.ai_response_in_progress,
-        )
+        if not st.session_state.passage_chat_index or activity_type != "Speaking":
+            user_answer = st.chat_input(
+                "Your answer",
+                on_submit=toggle_ai_response_state,
+                disabled=st.session_state.ai_response_in_progress,
+            )
+        else:
+            audio_help_col, audio_recorder_col = st.columns([5, 1])
+            audio_help_col.write(
+                "Instructions:\n\nClick on `Start Recording` to record your answer. Once you're done, click on `Stop`. Wait for a few seconds and you will see a `Submit` button. Click on it to submit your answer"
+            )
+
+            from st_audiorec import st_audiorec
+
+            # with audio_recorder_col:
+            #     audio_bytes = audio_recorder(
+            #         pause_threshold=10.0,
+            #         text="",
+            #     )
+
+            # if audio_bytes:
+            #
+            #     # st.write(user_answer)
+            # else:
+            audio_bytes = st_audiorec()
+            if audio_bytes is not None:
+                speaking_answer_submit = st.button('Submit', key="speaking_answer_submit")
+                if speaking_answer_submit:
+                    buffer = io.BytesIO(audio_bytes)
+                    buffer.name = "speaking_answer.mp3"
+                    with st.spinner("Submitting answer..."):
+                        transcription = client.audio.translations.create(
+                            model="whisper-1",
+                            file=buffer,
+                            prompt="Umm, let me think like, hmm... Okay, here's what I'm, like, thinking",
+                        )
+                    user_answer = transcription.text
+                else:
+                    st.stop()
+            else:
+                st.stop()
 
         if user_answer:
             with st.chat_message("user"):

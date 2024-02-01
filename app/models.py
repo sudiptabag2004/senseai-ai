@@ -48,6 +48,7 @@ class EnglishActivityType(str, Enum):
     READING = "reading"
     LISTENING = "listening"
     WRITING = "writing"
+    SPEAKING = "speaking"
 
 
 class GenerateEnglishRequestBase(BaseModel):

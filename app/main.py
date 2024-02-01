@@ -16,6 +16,7 @@ from langchain.output_parsers import (
 
 from langchain.schema import SystemMessage
 from dotenv import load_dotenv
+
 # import wandb
 
 from gpt import (
@@ -566,6 +567,7 @@ async def generate_english_passage(
     - If the learning outcomes contain a specific number of sentences to be included, make sure you adhere to that very strictly.
     - Avoid mentioning paragraph numbers in the generated passage.
     - When generating the passage, include a acknowledgement of the student's response in an excited tone before the actual passage so that the transition to the passage seems natural.
+    - Make sure to always return both the `type` and the `value` in the final JSON output.
     
     {format_instructions}
     """
@@ -611,6 +613,7 @@ async def generate_english_passage(
             system_prompt_template,
             history,
             ignore_types=[],
+            model='gpt-4-0125-preview',
             verbose=True,
             system_prompt_kwargs={"format_instructions": format_instructions},
             temperature=temperature,
