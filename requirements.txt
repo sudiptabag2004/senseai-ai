@@ -16,4 +16,4 @@ pydantic==1.10.10
 gptcache==0.1.40
 redis
 redis_om
-streamlit-audiorec
+audio-recorder-streamlit
