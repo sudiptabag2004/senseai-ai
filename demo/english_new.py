@@ -9,6 +9,7 @@ from functools import partial
 import json
 from collections import defaultdict
 from audio_recorder_streamlit import audio_recorder
+from st_audiorec import st_audiorec
 from dotenv import load_dotenv
 import openai
 
@@ -783,8 +784,6 @@ if is_training_started:
             audio_help_col.write(
                 "Instructions:\n\nClick on `Start Recording` to record your answer. Once you're done, click on `Stop`. Wait for a few seconds and you will see a `Submit` button. Click on it to submit your answer"
             )
-
-            from st_audiorec import st_audiorec
 
             # with audio_recorder_col:
             #     audio_bytes = audio_recorder(
