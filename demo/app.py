@@ -10,6 +10,13 @@ from models import Node
 
 load_dotenv()
 
+if os.path.exists("/demo"):
+    # instance
+    BASE_API_URL = "http://app:8001"
+else:
+    BASE_API_URL = "http://127.0.0.1:8001"
+
+
 topic_col, sub_topic_col, concept_col = st.columns(3)
 
 if "is_training_started" not in st.session_state:
@@ -189,7 +196,7 @@ if is_training_started:
     if not chat_history:
         with st.chat_message("assistant"):
             question_generation_response = requests.post(
-                "http://127.0.0.1:8001/training/question",
+                "{BASE_API_URL}/training/question",
                 data=json.dumps(
                     {
                         "topic": topic["name"],
@@ -278,7 +285,7 @@ if is_training_started:
 
             with st.spinner("Fetching AI response..."):
                 training_chat_response = requests.post(
-                    "http://127.0.0.1:8001/training/chat",
+                    "{BASE_API_URL}/training/chat",
                     data=json.dumps({"messages": ai_chat_history}),
                     stream=True,
                 )
