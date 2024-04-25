@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pydantic import BaseSettings
 
 
@@ -7,8 +8,8 @@ def get_env_file_path():
 
 
 class Settings(BaseSettings):
-    openai_api_key: str
-    openai_org_id: str
+    openai_api_key: Optional[str]
+    openai_org_id: Optional[str]
     # wandb_api_key: Optional[str]
 
     class Config:
