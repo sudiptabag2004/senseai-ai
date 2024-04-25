@@ -196,7 +196,7 @@ if is_training_started:
     if not chat_history:
         with st.chat_message("assistant"):
             question_generation_response = requests.post(
-                "{BASE_API_URL}/training/question",
+                f"{BASE_API_URL}/training/question",
                 data=json.dumps(
                     {
                         "topic": topic["name"],
@@ -285,7 +285,7 @@ if is_training_started:
 
             with st.spinner("Fetching AI response..."):
                 training_chat_response = requests.post(
-                    "{BASE_API_URL}/training/chat",
+                    f"{BASE_API_URL}/training/chat",
                     data=json.dumps({"messages": ai_chat_history}),
                     stream=True,
                 )
