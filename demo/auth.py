@@ -80,7 +80,7 @@ def auth(label: str, key_suffix: str, sidebar: bool = False):
     initial_email = "" if not is_authorised() else st.session_state.email
     email = layout_fn.text_input(label=label, value=initial_email, key=email_key)
     email_submit_button = layout_fn.button(
-        f"Submit_{key_suffix}", on_click=validate_and_norm_email
+        "Submit", key=f"submit_{key_suffix}", on_click=validate_and_norm_email
     )
 
 
