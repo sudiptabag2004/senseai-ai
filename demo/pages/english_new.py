@@ -13,6 +13,12 @@ from st_audiorec import st_audiorec
 from dotenv import load_dotenv
 import openai
 
+from menu import menu_with_redirect
+from auth import maintain_auth_state
+
+menu_with_redirect()
+maintain_auth_state()
+
 load_dotenv("../app/.env")
 
 client = openai.OpenAI()
@@ -796,8 +802,11 @@ if is_training_started:
             #     # st.write(user_answer)
             # else:
             audio_bytes = st_audiorec()
+
             if audio_bytes is not None:
-                speaking_answer_submit = st.button('Submit', key="speaking_answer_submit")
+                speaking_answer_submit = st.button(
+                    "Submit", key="speaking_answer_submit"
+                )
                 if speaking_answer_submit:
                     buffer = io.BytesIO(audio_bytes)
                     buffer.name = "speaking_answer.mp3"

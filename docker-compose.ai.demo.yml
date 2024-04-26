@@ -24,21 +24,23 @@ services:
     ports:
       - '8501:8501'
     working_dir: /demo
-    command: streamlit run app.py
-  
-  english_demo:
-    image: dalmiamanhv/sensai-ai:demos
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - ENV=staging
-    ports:
-      - '8502:8502'
-    working_dir: /demo
-    command: streamlit run english_new.py --server.port 8502
+    command: streamlit run home.py
     volumes:
       - /appdata:/appdata
+  
+  # english_demo:
+  #   image: dalmiamanhv/sensai-ai:demos
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - ENV=staging
+  #   ports:
+  #     - '8502:8502'
+  #   working_dir: /demo
+  #   command: streamlit run english_new.py --server.port 8502
+  #   volumes:
+  #     - /appdata:/appdata
 
   english_activity:
     image: dalmiamanhv/sensai-ai:demos

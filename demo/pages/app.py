@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from models import Node
+from menu import menu_with_redirect
+from auth import maintain_auth_state
+
+menu_with_redirect()
+maintain_auth_state()
 
 load_dotenv()
 

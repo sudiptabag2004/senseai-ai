@@ -11,7 +11,7 @@ if reload:
 if exists("/appdata"):
     root_dir = "/appdata"
 else:
-    root_dir = "."
+    root_dir = "./pages/"
 
 df = pd.read_csv(f"{root_dir}/english_activity.csv")
 
