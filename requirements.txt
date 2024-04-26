@@ -19,3 +19,4 @@ redis_om
 audio-recorder-streamlit
 streamlit-audiorec
 email-validator
+streamlit-cookies-manager
