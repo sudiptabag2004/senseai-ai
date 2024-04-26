@@ -1,4 +1,4 @@
-FROM python:3.8.17-slim-bookworm
+FROM python:3.9.19-slim-bookworm
 
 RUN apt-get update && apt-get install -y gcc python3-dev
 
