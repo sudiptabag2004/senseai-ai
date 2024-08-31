@@ -17,7 +17,7 @@ COPY demo /demo
 # Expose the port on which your FastAPI app listens
 # EXPOSE 8001
 
-# Expose the ports on which your Streamlit app listens
+# Only expose one port where everything is hosted
 EXPOSE 8501
 
 # EXPOSE 8502
