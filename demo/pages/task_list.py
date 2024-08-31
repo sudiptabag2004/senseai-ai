@@ -9,7 +9,7 @@ st.write('Select a task by clicking beside the index of the task')
 st.session_state.tasks = load_json(tasks_db_path)
 
 if not st.session_state.tasks:
-    st.error('No tasks added yet')
+    st.error('No tasks added yet. Ask you mentors/teachers to add tasks for you to solve.')
     st.stop()
 
 df = pd.DataFrame(st.session_state.tasks)
