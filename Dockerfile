@@ -30,7 +30,7 @@ ARG OPENAI_ORG_ID
 
 RUN echo $OPENAI_API_KEY
 
-RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID" >> /app/.env
+RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID" >> /demo/lib/.env
 
 # COPY langchain /langchain
 # RUN mkdir /appdata

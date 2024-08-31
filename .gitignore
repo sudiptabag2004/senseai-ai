@@ -10,5 +10,5 @@ sqlite.db
 experiments
 question_generator
 archive
-app/.env
+.env
 demo/english_activity.csv
