@@ -68,7 +68,7 @@ def generate_answer():
 tag_list = ['Functions', 'Javascript']
 
 def update_task_json():
-    save_json(tasks_local_path, st.session_state.tasks)
+    save_json(tasks_db_path, st.session_state.tasks)
 
 def add_task_to_list():
     st.session_state.tasks.append({'name': st.session_state.task_name, 'description': st.session_state.task_description, 'answer': st.session_state.answer, 'tags': st.session_state.tags, 'generation_model': model['version'], 'verified': True})
