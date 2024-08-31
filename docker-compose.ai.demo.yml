@@ -25,8 +25,8 @@ services:
       - '8501:8501'
     working_dir: /demo
     command: streamlit run home.py
-    # volumes:
-    #   - /appdata:/appdata
+    volumes:
+      - /appdata:/appdata
   
   # english_demo:
   #   image: dalmiamanhv/sensai-ai:demos

@@ -13,6 +13,7 @@ from openai import OpenAI
 from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
 from lib.utils import load_json
 from lib.init import init_env_vars
+from lib.config import tasks_db_path
 
 init_env_vars()
 
@@ -20,9 +21,7 @@ client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 st.link_button('Open task list', '/task_list')
 
-tasks_local_path = './db/tasks.json'
-
-tasks = load_json(tasks_local_path)
+tasks = load_json(tasks_db_path)
 
 task_index = st.query_params.get('index')
 

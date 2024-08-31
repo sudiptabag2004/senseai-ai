@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 from lib.utils import load_json
+from lib.config import tasks_db_path
 
 st.write('## Tasks')
 st.write('Select a task by clicking beside the index of the task')
 
-tasks_local_path = './db/tasks.json'
-
-st.session_state.tasks = load_json(tasks_local_path)
+st.session_state.tasks = load_json(tasks_db_path)
 
 if not st.session_state.tasks:
     st.error('No tasks added yet')

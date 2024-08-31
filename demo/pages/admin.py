@@ -15,13 +15,12 @@ from pydantic import BaseModel, Field
 from lib.llm import get_llm_input_messages, call_llm_and_parse_output, COMMON_INSTRUCTIONS
 from lib.utils import load_json, save_json
 from lib.init import init_env_vars
+from lib.config import tasks_db_path
 
 init_env_vars()
 
-tasks_local_path = './db/tasks.json'
-
 if 'tasks' not in st.session_state:
-    st.session_state.tasks = load_json(tasks_local_path)
+    st.session_state.tasks = load_json(tasks_db_path)
 
 model = st.selectbox('Model', [{'label': 'gpt-4o', 'version': 'gpt-4o-2024-08-06'}, {'label': 'gpt-4o-mini', 'version': 'gpt-4o-mini-2024-07-18'}], format_func=lambda val: val['label'])
 
