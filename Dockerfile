@@ -9,20 +9,20 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy the rest of the app source code to the container
-COPY app /app
+# COPY app /app
 
 # Copy the demo source code to the container
 COPY demo /demo
 
 # Expose the port on which your FastAPI app listens
-EXPOSE 8001
+# EXPOSE 8001
 
 # Expose the ports on which your Streamlit app listens
 EXPOSE 8501
 
-EXPOSE 8502
+# EXPOSE 8502
 
-EXPOSE 8503
+# EXPOSE 8503
 
 ARG OPENAI_API_KEY
 
@@ -33,10 +33,10 @@ RUN echo $OPENAI_API_KEY
 RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID" >> /app/.env
 
 # COPY langchain /langchain
-RUN mkdir /appdata
+# RUN mkdir /appdata
 
-COPY langchain /langchain
+# COPY langchain /langchain
 
-COPY update_langchain.sh ./
+# COPY update_langchain.sh ./
 
-RUN bash update_langchain.sh
+# RUN bash update_langchain.sh

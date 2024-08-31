@@ -1,18 +1,18 @@
 version: '3'
 services:
-  app:
-    image: dalmiamanhv/sensai-ai:demos
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - ENV=staging
-    ports:
-      - '8001:8001'
-    environment:
-      - ENV=staging
-    working_dir: /app
-    command: uvicorn main:app --host 0.0.0.0 --port 8001
+  # app:
+  #   image: dalmiamanhv/sensai-ai:demos
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - ENV=staging
+  #   ports:
+  #     - '8001:8001'
+  #   environment:
+  #     - ENV=staging
+  #   working_dir: /app
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8001
 
   demo:
     image: dalmiamanhv/sensai-ai:demos
@@ -25,8 +25,8 @@ services:
       - '8501:8501'
     working_dir: /demo
     command: streamlit run home.py
-    volumes:
-      - /appdata:/appdata
+    # volumes:
+    #   - /appdata:/appdata
   
   # english_demo:
   #   image: dalmiamanhv/sensai-ai:demos
@@ -42,16 +42,16 @@ services:
   #   volumes:
   #     - /appdata:/appdata
 
-  english_activity:
-    image: dalmiamanhv/sensai-ai:demos
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - ENV=staging
-    ports:
-      - '8503:8503'
-    working_dir: /demo
-    command: streamlit run english_activity.py --server.port 8503
-    volumes:
-      - /appdata:/appdata
+  # english_activity:
+  #   image: dalmiamanhv/sensai-ai:demos
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - ENV=staging
+  #   ports:
+  #     - '8503:8503'
+  #   working_dir: /demo
+  #   command: streamlit run english_activity.py --server.port 8503
+  #   volumes:
+  #     - /appdata:/appdata

@@ -11,12 +11,13 @@ def default_menu():
 
 def authenticated_menu():
     st.sidebar.page_link(
-        "pages/app.py",
-        label="👨‍💻👩‍💻 Test your programming skills",
+        "pages/task_list.py",
+        label="👨‍💻👩‍💻 Start solving tasks",
     )
-    st.sidebar.page_link(
-        "pages/english_new.py", label=" 📚👂🖊️ 🗣️ Hone your english skills"
-    )
+    # st.sidebar.page_link(
+    #     "pages/english_new.py", label=" 📚👂🖊️ 🗣️ Hone your english skills"
+    # )
+    pass
 
 
 def menu():
