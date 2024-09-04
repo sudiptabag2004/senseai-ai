@@ -13,10 +13,12 @@ from pydantic import BaseModel, Field
 #     sys.path.append(root_dir)
 
 from lib.llm import get_llm_input_messages, call_llm_and_parse_output, COMMON_INSTRUCTIONS
-from lib.init import init_env_vars
+from lib.init import init_env_vars, init_db
 from lib.db import get_all_tasks, store_task as store_task_to_db, delete_tasks as delete_tasks_from_db
 
 init_env_vars()
+
+init_db()
 
 if 'tasks' not in st.session_state:
     st.session_state.tasks = get_all_tasks()

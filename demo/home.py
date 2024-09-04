@@ -6,8 +6,11 @@ from auth import (
     init_auth_from_cookies,
 )
 from menu import menu
+from lib.init import init_db
 
 init_auth_from_cookies()
+
+init_db()
 
 st.title("SensAI - your personal AI tutor")
 
