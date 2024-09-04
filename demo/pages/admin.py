@@ -1,7 +1,6 @@
 import traceback
 import asyncio
-import sys
-import os
+from functools import partial
 import streamlit as st
 import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
@@ -202,9 +201,18 @@ def show_delete_confirmation(task_ids):
         st.rerun()
 
 
-st.write('## Tasks')
+tasks_heading = '## Tasks'
 
-is_verify_mode = st.checkbox('Verify Mode', value=False, help='Select this to go through the unverified answers and verify them for learners to access them.')
+num_tasks = len(st.session_state.tasks)
+
+if num_tasks > 0:
+    tasks_heading = f'## Tasks ({num_tasks})'
+
+st.write(tasks_heading)
+
+verify_col, save_col, _, _, _ = st.columns([2,3,1,1, 1])
+
+is_verify_mode = verify_col.checkbox('Verify Mode', value=False, help='Select this to go through the unverified answers and verify them for learners to access them.')
 
 if not st.session_state.tasks:
     st.error('No tasks added yet')
@@ -217,6 +225,23 @@ column_config={
 }
 
 column_order = ['verified', 'name', 'description', 'answer', 'tags', 'generation_model', 'timestamp']
+
+
+def save_changes_in_verify_mode(edited_df):
+    # identify the rows that have been changed
+    # and update the db with the new values
+    # import ipdb; ipdb.set_trace()
+    changed_rows = edited_df[(df != edited_df).any(axis=1)]
+    
+    for _, row in changed_rows.iterrows():
+        task_id = row['id']
+        # print(task_id)
+        update_task_in_db(task_id, row['name'], row['description'], row['answer'], row['tags'], row['generation_model'], row['verified'])
+    
+    # Refresh the tasks in the session state
+    st.session_state.tasks = get_all_tasks()
+    st.toast('Changes saved successfully!')
+    # st.rerun()
 
 if not is_verify_mode:
     df_actions = st.container()
@@ -241,20 +266,7 @@ else:
     edited_df = st.data_editor(df, hide_index=True, column_config=column_config, column_order=column_order, use_container_width=True)
 
     if not df.equals(edited_df):
-        if st.button('Save changes'):
-            # identify the rows that have been changed
-            # and update the db with the new values
-            # import ipdb; ipdb.set_trace()
-            changed_rows = edited_df[(df != edited_df).any(axis=1)]
+        save_col.button('Save changes', type='primary', on_click=partial(save_changes_in_verify_mode, edited_df))
             
-            for index, row in changed_rows.iterrows():
-                task_id = row['id']
-                # print(task_id)
-                update_task_in_db(task_id, row['name'], row['description'], row['answer'], row['tags'], row['generation_model'], row['verified'])
-            
-            # Refresh the tasks in the session state
-            st.session_state.tasks = get_all_tasks()
-            st.success('Changes saved successfully!')
-            st.rerun()
 
 

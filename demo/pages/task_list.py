@@ -10,15 +10,16 @@ st.write('Select a task by clicking beside the index of the task')
 
 st.session_state.tasks = get_all_tasks()
 
-if not st.session_state.tasks:
+df = pd.DataFrame(st.session_state.tasks)
+filtered_df = df[df['verified']][['id', 'name', 'description', 'tags']]
+
+if not len(filtered_df):
     st.error('No tasks added yet. Ask you mentors/teachers to add tasks for you to solve.')
     st.stop()
 
-df = pd.DataFrame(st.session_state.tasks)
 
 df_actions = st.container(border=True)
 
-filtered_df = df[df['verified']][['id', 'name', 'description', 'tags']]
 
 
 event = st.dataframe(
