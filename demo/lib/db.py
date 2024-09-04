@@ -58,9 +58,9 @@ def init_db():
         raise exception    
 
 
-@st.cache_resource
+# @st.cache_resource
 def get_db_connection():
-    print(sqlite_db_path)
+    # print(sqlite_db_path)
     return sqlite3.connect(sqlite_db_path)
 
 

@@ -9,7 +9,6 @@ from openai import OpenAI
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
 from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user
 from lib.init import init_env_vars
-from lib.config import tasks_db_path
 from auth import init_auth_from_cookies
 
 init_env_vars()

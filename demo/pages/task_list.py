@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from lib.config import tasks_db_path
 from lib.db import get_all_tasks
 
 st.write('## Tasks')
