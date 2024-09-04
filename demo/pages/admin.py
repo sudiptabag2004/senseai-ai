@@ -13,14 +13,13 @@ from pydantic import BaseModel, Field
 #     sys.path.append(root_dir)
 
 from lib.llm import get_llm_input_messages, call_llm_and_parse_output, COMMON_INSTRUCTIONS
-from lib.utils import load_json, save_json
 from lib.init import init_env_vars
-from lib.config import tasks_db_path
+from lib.db import get_all_tasks, store_task as store_task_to_db, delete_tasks as delete_tasks_from_db
 
 init_env_vars()
 
 if 'tasks' not in st.session_state:
-    st.session_state.tasks = load_json(tasks_db_path)
+    st.session_state.tasks = get_all_tasks()
 
 model = st.selectbox('Model', [{'label': 'gpt-4o', 'version': 'gpt-4o-2024-08-06'}, {'label': 'gpt-4o-mini', 'version': 'gpt-4o-mini-2024-07-18'}], format_func=lambda val: val['label'])
 
@@ -67,15 +66,15 @@ def generate_answer():
 
 tag_list = ['Functions', 'Javascript']
 
-def update_task_json():
-    save_json(tasks_db_path, st.session_state.tasks)
 
-def add_task_to_list():
-    st.session_state.tasks.append({'name': st.session_state.task_name, 'description': st.session_state.task_description, 'answer': st.session_state.answer, 'tags': st.session_state.tags, 'generation_model': model['version'], 'verified': True})
-    update_task_json()
+def add_verified_task_to_list():
+    store_task_to_db(st.session_state.task_name, st.session_state.task_description, st.session_state.answer, st.session_state.tags, model['version'], True)
+    st.session_state.tasks = get_all_tasks()
 
 @st.dialog("Add a new task")
 def show_task_form():
+    # st.session_state.answer = ""
+
     task_name = st.text_input("Name", key='task_name', value='Greet function')
     task_description = st.text_area("Description", key='task_description', value="""Define a function called greet that takes a name as an argument and returns a greeting message. For example, if the name is "Alice", the function should return "Hello, Alice!".
 Call the greet function you defined in the previous task with your name as the argument and log the result to the console.
@@ -92,23 +91,26 @@ Rewrite the greet function as an arrow function.""")
     
     # st.spinner('Generating answer...', visible=st.session_state.is_answer_generation_in_progress)
 
-    if answer and verify_col.button("Verify and Add", on_click=add_task_to_list):
+    if answer and verify_col.button("Verify and Add", on_click=add_verified_task_to_list):
         # st.session_state.vote = {"item": item, "reason": reason}
         st.rerun()
+    
+    # # reset answer
+    # st.session_state.answer = None
 
 
-def delete_tasks_from_list(task_indices):
-    st.session_state.tasks = [st.session_state.tasks[i] for i in range(len(st.session_state.tasks)) if i not in task_indices]
-    update_task_json()
+def delete_tasks_from_list(task_ids):
+    delete_tasks_from_db(task_ids)
+    st.session_state.tasks = get_all_tasks()
     st.rerun()
 
 @st.dialog("Delete tasks")
-def delete_tasks(task_indices):
+def show_delete_confirmation(task_ids):
     st.write('Are you sure you want to delete the selected tasks?')
 
     confirm_col, cancel_col, _, _ = st.columns([1,1,2,2])
     if confirm_col.button('Yes', use_container_width=True):
-        st.session_state.tasks = [st.session_state.tasks[i] for i in range(len(st.session_state.tasks)) if i not in event.selection['rows']]
+        delete_tasks_from_list(task_ids)
         st.rerun()
     
     if cancel_col.button('No', use_container_width=True, type='primary'):
@@ -134,10 +136,14 @@ event = st.dataframe(
     df,
     on_select='rerun',
     selection_mode='multi-row',
-    use_container_width=True
+    hide_index=True,
+    use_container_width=True,
+    column_config={
+        'id': None
+    }
 )
 
 
 if len(event.selection['rows']):
     if df_actions.button('Delete selected tasks'):
-        delete_tasks(event.selection['rows'])
+        show_delete_confirmation(df.iloc[event.selection['rows'], 'id'].tolist())

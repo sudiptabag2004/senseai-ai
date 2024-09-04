@@ -1,9 +1,16 @@
-from typing import Union
-from typing_extensions import TypedDict
+from enum import Enum
+from pydantic import BaseModel, Field
 
 
-class Node(TypedDict):
+class ChatRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+class ChatMessage(BaseModel):
     id: int
-    name: str
-    depth: int
-    parent_id: Union[int, None]
+    user_id: str
+    task_id: int
+    task_name: str
+    role: ChatRole
+    content: str
+    timestamp: str

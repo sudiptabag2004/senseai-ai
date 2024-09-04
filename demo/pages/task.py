@@ -1,45 +1,42 @@
 import streamlit as st
 import os
-import asyncio
-import traceback
-import random
-import time
 from functools import partial
 
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
 from openai import OpenAI
-from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
-from lib.utils import load_json
+# from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
+from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user
 from lib.init import init_env_vars
 from lib.config import tasks_db_path
+from auth import init_auth_from_cookies
 
 init_env_vars()
+
+init_auth_from_cookies()
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 st.link_button('Open task list', '/task_list')
 
-tasks = load_json(tasks_db_path)
+task_id = st.query_params.get('id')
 
-task_index = st.query_params.get('index')
-
-if not task_index:
-    st.error('No task index provided')
+if not task_id:
+    st.error('No task id provided')
     st.stop()
 
 try:
-    task_index = int(task_index)
+    task_index = int(task_id)
 except ValueError:
     st.error('Task index must be an integer')
     st.stop()
 
-if task_index >= len(tasks):
-    st.error('Task index out of range')
-    st.stop()
+task = get_task_by_id(task_id)
 
-task = tasks[task_index]
+if not task:
+    st.error('No task found')
+    st.stop()
 
 if not task['verified']:
     st.error('Task not verified. Please ask your mentor/teacher to verify the task so that you can solve it.')
@@ -48,13 +45,31 @@ if not task['verified']:
 st.write(f"## {task['name']}")
 st.write(task['description'])
 
+# st.session_state
+
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+    st.session_state.chat_history = get_task_chat_history_for_user(task_id, st.session_state.email)
+
+
+def transform_user_message_for_ai_history(message: dict):
+    return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
+
+
+def transform_assistant_message_for_ai_history(message: dict):
+    return {"role": message['role'], "content": message['content']}
 
 if "ai_chat_history" not in st.session_state:
-    st.session_state.ai_chat_history = []
+    st.session_state.ai_chat_history = [{"role": "user", "content": f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```"""}]
+    for message in st.session_state.chat_history:
+        if message['role'] == 'user':
+            st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(message))
+        else:
+            st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(message))
 
+# st.session_state.ai_chat_history
+# st.session_state.chat_history
 
+# st.stop()
 
 def delete_user_chat_message(index_to_delete: int):
     # delete both the user message and the AI assistant's response to it
@@ -83,8 +98,8 @@ def display_user_message(user_response: str, message_index: int):
             key=f'message_{message_index}',
         )
 
-# st.session_state.chat_history
-# st.session_state.ai_chat_history
+st.session_state.chat_history
+st.session_state.ai_chat_history
 
 # Display chat messages from history on app rerun
 for index, message in enumerate(st.session_state.chat_history):
@@ -108,11 +123,6 @@ def get_ai_response():
     #     time.sleep(0.05)
 
     system_prompt = """You are a Socratic tutor.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has been provided to you for evaluating the student's response only. Keep this in mind while responding to the student."""
-
-    if not st.session_state.ai_chat_history:
-        st.session_state.ai_chat_history.append({"role": "user", "content": f"""Task: {task['description']}\n\nSolution: ```\n{task['answer']}\n```"""})
-    
-    st.session_state.ai_chat_history.append({"role": "user", "content": f'''Student's response: ```\n{user_response}\n```'''})
 
     return client.chat.completions.create(
         model='gpt-4o-2024-08-06',
@@ -163,17 +173,22 @@ def get_ai_response():
 
 if user_response := st.chat_input("Your response"):
     display_user_message(user_response, len(st.session_state.chat_history))
-
+    
     # Add user message to chat history
-    st.session_state.chat_history.append({"role": "user", "content": user_response})
+    new_message = store_message_to_db(st.session_state.email, task_id, "user", user_response)
+    
+    st.session_state.chat_history.append(new_message)
+    st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(new_message))
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
         ai_response = st.write_stream(get_ai_response())
 
+    new_message = store_message_to_db(st.session_state.email, task_id, "assistant", ai_response)
+
     # Add assistant response to chat history
-    st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-    st.session_state.ai_chat_history.append({"role": "assistant", "content": ai_response})
+    st.session_state.chat_history.append(new_message)
+    st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(new_message))
 
     st.rerun()
 

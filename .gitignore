@@ -12,3 +12,4 @@ question_generator
 archive
 .env
 demo/english_activity.csv
+demo/db/

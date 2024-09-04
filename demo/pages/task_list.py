@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-from lib.utils import load_json
 from lib.config import tasks_db_path
+from lib.db import get_all_tasks
 
 st.write('## Tasks')
 st.write('Select a task by clicking beside the index of the task')
 
-st.session_state.tasks = load_json(tasks_db_path)
+st.session_state.tasks = get_all_tasks()
 
 if not st.session_state.tasks:
     st.error('No tasks added yet. Ask you mentors/teachers to add tasks for you to solve.')
@@ -16,7 +16,7 @@ df = pd.DataFrame(st.session_state.tasks)
 
 df_actions = st.container(border=True)
 
-filtered_df = df[df['verified']][['name', 'description', 'tags']]
+filtered_df = df[df['verified']][['id', 'name', 'description', 'tags']]
 
 
 event = st.dataframe(
@@ -31,16 +31,14 @@ event = st.dataframe(
             width='medium',
             help='Description of the task'
         ),
-        '_index': st.column_config.TextColumn(
-            label='Task Index'
-        )
+        'id': None
     }
 )
 
 
 if len(event.selection['rows']):
     df_actions.write('Do you want to start this task?')
-    task_index = filtered_df.index[event.selection['rows'][0]]
-    df_actions.link_button('Yes', '/task?index=' + str(task_index))
+    task_id = filtered_df.iloc[event.selection['rows'][0]]['id']
+    df_actions.link_button('Yes', '/task?id=' + str(task_id))
     # print()
         # delete_tasks(event.selection['rows'])

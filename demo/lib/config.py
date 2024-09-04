@@ -1,13 +1,20 @@
+import os
 from os.path import exists
-from lib.utils import save_json
+# from lib.utils import save_json
 
 if exists("/appdata"):
-    root_dir = "/appdata"
+    data_root_dir = "/appdata"
+    root_dir = '/demo'
 else:
-    root_dir = "./db"
+    data_root_dir = "./db"
+    root_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-tasks_db_path = f"{root_dir}/tasks.json"
+# tasks_db_path = f"{data_root_dir}/tasks.json"
 
-if not exists(tasks_db_path):
-    save_json(tasks_db_path, [])
+# if not exists(tasks_db_path):
+#     save_json(tasks_db_path, [])
+
+sqlite_db_path = f"{data_root_dir}/db.sqlite"
+chat_history_table_name = "chat_history"
+tasks_table_name = "tasks"
