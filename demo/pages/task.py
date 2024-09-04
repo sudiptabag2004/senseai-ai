@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from openai import OpenAI
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
-from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user
+from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user, delete_message as delete_message_from_db
 from lib.init import init_env_vars
 from auth import init_auth_from_cookies
 
@@ -74,6 +74,9 @@ def delete_user_chat_message(index_to_delete: int):
     # delete both the user message and the AI assistant's response to it
     updated_chat_history = st.session_state.chat_history[:index_to_delete]
     updated_ai_chat_history = st.session_state.ai_chat_history[:index_to_delete]
+
+    delete_message_from_db(st.session_state.chat_history[index_to_delete]['id']) # delete user message
+    delete_message_from_db(st.session_state.chat_history[index_to_delete + 1]['id']) # delete ai message
 
     if index_to_delete + 2 < len(st.session_state.chat_history):
         updated_chat_history += st.session_state.chat_history[index_to_delete + 2 :]
