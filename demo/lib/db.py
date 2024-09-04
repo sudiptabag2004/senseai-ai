@@ -64,7 +64,7 @@ def get_db_connection():
     return sqlite3.connect(sqlite_db_path)
 
 
-def store_task(task_name: str, description: str, answer: str, task_tags: List[str], generation_model: str, verified: bool):
+def store_task(name: str, description: str, answer: str, task_tags: List[str], generation_model: str, verified: bool):
     task_tags_str = ",".join(task_tags)
 
     conn = get_db_connection()
@@ -73,7 +73,22 @@ def store_task(task_name: str, description: str, answer: str, task_tags: List[st
     cursor.execute(f'''
     INSERT INTO {tasks_table_name} (name, description, answer, tags, generation_model, verified)
     VALUES (?, ?, ?, ?, ?, ?)
-    ''', (task_name, description, answer, task_tags_str, generation_model, verified))
+    ''', (name, description, answer, task_tags_str, generation_model, verified))
+
+    conn.commit()
+    conn.close()
+
+def update_task(task_id: int, name: str, description: str, answer: str, task_tags: List[str], generation_model: str, verified: bool):
+    task_tags_str = ",".join(task_tags)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f'''
+    UPDATE {tasks_table_name}
+    SET name = ?, description = ?, answer = ?, tags = ?, generation_model = ?, verified = ?
+    WHERE id = ?
+    ''', (name, description, answer, task_tags_str, generation_model, verified, task_id))
 
     conn.commit()
     conn.close()
@@ -84,7 +99,7 @@ def get_all_tasks():
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT id, name, description, answer, tags, generation_model, verified FROM {tasks_table_name}
+    SELECT id, name, description, answer, tags, generation_model, verified, timestamp FROM {tasks_table_name}
     ORDER BY timestamp ASC
     ''')
 
@@ -98,7 +113,8 @@ def get_all_tasks():
             'answer': row[3],
             'tags': row[4].split(','),
             'generation_model': row[5],
-            'verified': bool(row[6])
+            'verified': bool(row[6]),
+            'timestamp': row[7]
         }
         for row in tasks
     ]
@@ -113,7 +129,7 @@ def get_task_by_id(task_id: int):
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT id, name, description, answer, tags, generation_model, verified FROM {tasks_table_name} WHERE id = ?
+    SELECT id, name, description, answer, tags, generation_model, verified, timestamp FROM {tasks_table_name} WHERE id = ?
     ''', (task_id,))
 
     task = cursor.fetchone()
@@ -130,7 +146,8 @@ def get_task_by_id(task_id: int):
         'answer': task[3],
         'tags': task[4].split(','),
         'generation_model': task[5],
-        'verified': bool(task[6])
+        'verified': bool(task[6]),
+        'timestamp': task[7]
     }
 
 
@@ -150,9 +167,11 @@ def delete_tasks(task_ids: List[int]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # import ipdb; ipdb.set_trace()
+
     cursor.execute(f'''
-    DELETE FROM {tasks_table_name} WHERE id IN ({','.join(task_ids)})
-    ''', (task_ids,))
+    DELETE FROM {tasks_table_name} WHERE id IN ({','.join(map(str, task_ids))})
+    ''')
 
     conn.commit()
     conn.close()

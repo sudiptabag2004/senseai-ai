@@ -254,7 +254,6 @@ async def call_openai_chat_model(
     # ipdb.set_trace()
 
     if verbose:
-        print('yes')
         logger.info(
             f"model: {model} prompt: {messages} response: {ai_response} input tokens: {input_tokens} output tokens: {output_tokens}"
         )
