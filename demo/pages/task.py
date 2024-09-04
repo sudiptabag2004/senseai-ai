@@ -42,7 +42,7 @@ if not task['verified']:
     st.stop()
 
 st.write(f"## {task['name']}")
-st.write(task['description'])
+st.text(task['description'].replace('\n', '\n\n'))
 
 # st.session_state
 
