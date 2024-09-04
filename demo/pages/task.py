@@ -173,21 +173,22 @@ def get_ai_response():
 if user_response := st.chat_input("Your response"):
     display_user_message(user_response, len(st.session_state.chat_history))
     
-    # Add user message to chat history
-    new_message = store_message_to_db(st.session_state.email, task_id, "user", user_response)
-    
-    st.session_state.chat_history.append(new_message)
-    st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(new_message))
+    user_message = {'role': 'user', 'content': user_response}
+    st.session_state.chat_history.append(user_message)
+    st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(user_message))
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
         ai_response = st.write_stream(get_ai_response())
 
-    new_message = store_message_to_db(st.session_state.email, task_id, "assistant", ai_response)
+    # Add user message to chat history [store to db only if ai response has been completely fetched]
+    new_user_message = store_message_to_db(st.session_state.email, task_id, "user", user_response)
+    st.session_state.chat_history[-1] = new_user_message
 
     # Add assistant response to chat history
-    st.session_state.chat_history.append(new_message)
-    st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(new_message))
+    new_ai_message = store_message_to_db(st.session_state.email, task_id, "assistant", ai_response)
+    st.session_state.chat_history.append(new_ai_message)
+    st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(new_ai_message))
 
     st.rerun()
 
