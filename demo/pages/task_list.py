@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 from lib.db import get_all_tasks
+from lib.init import init_db
+
+init_db()
 
 st.write('## Tasks')
 st.write('Select a task by clicking beside the index of the task')

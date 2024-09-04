@@ -97,8 +97,8 @@ def display_user_message(user_response: str, message_index: int):
             key=f'message_{message_index}',
         )
 
-st.session_state.chat_history
-st.session_state.ai_chat_history
+# st.session_state.chat_history
+# st.session_state.ai_chat_history
 
 # Display chat messages from history on app rerun
 for index, message in enumerate(st.session_state.chat_history):
