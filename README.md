@@ -49,7 +49,13 @@ Use the `Dockerfile` provided to build a docker image and deploy the image to wh
 
 ## Overview
 
-The app is built using `streamlit`. We use `streamlit-cookies-manager` for storing a user's credentials and keeping them logged in.
+The app is built using `streamlit` (entry point is `src/home.py`). We use `streamlit-cookies-manager` for storing a user's credentials and keeping them logged in (`src/auth.py`).
+The API is built using `fastapi` (`src/api.py`). SQLite is used as the database. When developing locally, the sqlite db file is created in `src/db/`.
 
-- `app`: this folder contains the main AI logic for assessments and the FastAPI server
-- `demo`: this folder contains various `streamlit` demos - for english, programming assessment and generating chapters + questions from a video (in the branch `content`). 
+`src/lib` contains various helper functions.
+
+Each of the individual app pages are under `src/pages`.
+
+- `src/pages/admin.py`: Admin panel to add tasks/questions and verify the AI generated answers.
+- `src/pages/task_list.py`: List of all verified tasks/questions that a learner can access.
+- `src/pages/task.py`: Page for every task/question where the learner interacted with the AI tutor.
