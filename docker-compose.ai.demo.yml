@@ -9,7 +9,7 @@ services:
         - ENV=staging
     ports:
       - '8001:8001'
-    working_dir: /demo
+    working_dir: /src
     command: uvicorn api:app --host 0.0.0.0 --port 8001
     volumes:
       - /appdata:/appdata
@@ -23,35 +23,7 @@ services:
         - ENV=staging
     ports:
       - '8501:8501'
-    working_dir: /demo
+    working_dir: /src
     command: streamlit run home.py
     volumes:
       - /appdata:/appdata
-  
-  # english_demo:
-  #   image: dalmiamanhv/sensai-ai:demos
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       - ENV=staging
-  #   ports:
-  #     - '8502:8502'
-  #   working_dir: /demo
-  #   command: streamlit run english_new.py --server.port 8502
-  #   volumes:
-  #     - /appdata:/appdata
-
-  # english_activity:
-  #   image: dalmiamanhv/sensai-ai:demos
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       - ENV=staging
-  #   ports:
-  #     - '8503:8503'
-  #   working_dir: /demo
-  #   command: streamlit run english_activity.py --server.port 8503
-  #   volumes:
-  #     - /appdata:/appdata
