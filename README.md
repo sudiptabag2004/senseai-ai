@@ -59,3 +59,13 @@ Each of the individual app pages are under `src/pages`.
 - `src/pages/admin.py`: Admin panel to add tasks/questions and verify the AI generated answers.
 - `src/pages/task_list.py`: List of all verified tasks/questions that a learner can access.
 - `src/pages/task.py`: Page for every task/question where the learner interacted with the AI tutor.
+
+## Roadmap
+
+Our public roadmap is live [here](https://hyperverge.notion.site/fa1dd0cef7194fa9bf95c28820dca57f?v=ec52c6a716e94df180dcc8ced3d87610). Go check it out!
+
+## Community
+We are building a community of creators, builders, teachers, learners, parents, entrepreneurs, non-profits and volunteers who are excited about the future of AI and education. If you identify as one and want to be part of it, [join](https://chat.whatsapp.com/LmiulDbWpcXIgqNK6fZyxe) our WhatsApp group.
+
+Our current thesis on AI + Education is summarized in the mindmap below:
+![ai + education thesis](./images/thesis.png)
