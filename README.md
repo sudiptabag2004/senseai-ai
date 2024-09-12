@@ -1,11 +1,6 @@
-# SensAI AI
+# SensAI - A Socratic AI Tutor
 
-## Overview
-
-- `app`: this folder contains the main AI logic for assessments and the FastAPI server
-- `demo`: this folder contains various `streamlit` demos - for english, programming assessment and generating chapters + questions from a video (in the branch `content`). 
-
-## Setup
+## Local Setup
 
 - Install `virtualenv`
 - Create a new virtual environment (choose Python3.8+)
@@ -20,14 +15,17 @@
   ```
   pip install -r app/requirements.txt
   ```
-- Copy `app/.env.example` to `app/.env` and set the OpenAI credentials.
-- Update certain langchain files to fix issues with langchain streaming and cache for chat models:
-  ```
-  bash update_langchain.sh
-  ```
-  Before runnning this, make sure that you set `SITE_PACKAGES_DIR` in `update_langchain.sh` to the directory containing `site-packages` in your local setup. The changes made are shown in the images inside the `langchain` dir.
+- Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials.
 
-## Running the API locally
+### Running the app locally
+
+```
+cd demo; streamlit run app.py
+```
+
+The app will be hosted on http://localhost:8501.
+
+### Running the API locally
 
 ```
 cd app; uvicorn main:app --reload --port 8001
@@ -36,12 +34,12 @@ cd app; uvicorn main:app --reload --port 8001
 The app will be hosted on http://localhost:8001.
 The docs will be available on http://localhost:8001/docs
 
-## Running the demo app locally
 
-```
-cd demo; streamlit run app.py
-```
-
-The app will be hosted on http://localhost:8501.
+## Deployment
+Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance for doing so and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD).
 
 
+## Overview
+
+- `app`: this folder contains the main AI logic for assessments and the FastAPI server
+- `demo`: this folder contains various `streamlit` demos - for english, programming assessment and generating chapters + questions from a video (in the branch `content`). 
