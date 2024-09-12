@@ -151,7 +151,7 @@ async def generate_answers_for_tasks(tasks_df):
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-    uploaded_file = st.file_uploader("Choose a file", type='csv')
+    uploaded_file = st.file_uploader("Choose a CSV file with columns: `Name`, `Description`, `Tags`", type='csv')
     if uploaded_file:
         tasks_df = pd.read_csv(uploaded_file)    
 

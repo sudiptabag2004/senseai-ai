@@ -1,5 +1,26 @@
 # SensAI - A Socratic AI Tutor
 
+**For Teachers** (`http://localhost:8501/admin`)
+- Add a task, use AI to generate the answer and verify it. A task is the same as a question.
+- Bulk upload tasks instead of feeding tasks one by one. 
+  - Just add a CSV file with the following columns: `Name`, `Description`, `Tags`
+  - Once the answers are generated, select `Verify Mode` to verify the answers and save your verification.
+- Get the entire chat history. Make a GET request to `http://localhost:8001/chat_history`. You can connect this with Google Sheets using AppScript to view the entire chat history on Sheets.
+- Select one or more tasks and delete them if you want to.
+
+**For learners** (`http://localhost:8501/`)
+- See the list of verified tasks that you can work on by visiting `http://localhost:8501/task_list`
+- Click on one of the tasks and start attempting it. The AI tutor will help guide the learner with any doubts they might have and assess their responses. Students will receive personalized feedback on their answers and guidance tailored to their needs.
+
+Many more things to come soon, for both learners and teachers.
+
+Watch the demo below to understand more:
+<div>
+  <a href="https://www.loom.com/share/a763d6c5cd4c4bb38e74f1f72c4aa48c">
+    <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/a763d6c5cd4c4bb38e74f1f72c4aa48c-ba42b26917ee9648-full-play.gif">
+  </a>
+</div>
+
 ## Local Setup
 
 - Install `virtualenv`
