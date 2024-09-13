@@ -5,7 +5,6 @@ import streamlit as st
 import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
-from tqdm.asyncio import tqdm_asyncio
 
 # root_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -17,7 +16,6 @@ from lib.init import init_env_vars, init_db
 from lib.db import get_all_tasks, store_task as store_task_to_db, delete_tasks as delete_tasks_from_db, update_task as update_task_in_db
 
 init_env_vars()
-
 init_db()
 
 if 'tasks' not in st.session_state:
@@ -221,10 +219,10 @@ if not st.session_state.tasks:
 df = pd.DataFrame(st.session_state.tasks)
 
 column_config={
-            'id': None
+    # 'id': None
 }
 
-column_order = ['verified', 'name', 'description', 'answer', 'tags', 'generation_model', 'timestamp']
+column_order = ['id','verified', 'name', 'description', 'answer', 'tags', 'generation_model', 'timestamp']
 
 
 def save_changes_in_verify_mode(edited_df):

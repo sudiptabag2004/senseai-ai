@@ -8,9 +8,32 @@ import streamlit as st
 from lib.config import sqlite_db_path, chat_history_table_name, tasks_table_name
 
 
+def check_and_update_chat_history_table():
+    conn = sqlite3.connect(sqlite_db_path)
+    cursor = conn.cursor()
+
+    # check if a column exists in a table
+    cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
+    columns = [column[1] for column in cursor.fetchall()]
+
+    if 'is_solved' in columns:
+        conn.close()
+        return
+    
+    try:
+        cursor.execute(f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        # ignore the error
+        pass
+
+    conn.close()
+
+
 def init_db():
     if exists(sqlite_db_path):
-        # db already exists, so table must already exist
+        # db exists, check for and apply any necessary schema changes
+        check_and_update_chat_history_table()
         return
 
     # Connect to the SQLite database (it will create the database if it doesn't exist)
@@ -42,6 +65,7 @@ def init_db():
             task_id INTEGER NOT NULL,
             role TEXT NOT NULL,
             content TEXT NOT NULL,
+            is_solved BOOLEAN NOT NULL DEFAULT 0,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
         )
@@ -189,14 +213,14 @@ def delete_all_tasks():
     conn.close()
 
 
-def store_message(user_id: str, task_id: int, role: str, content: str):
+def store_message(user_id: str, task_id: int, role: str, content: str, is_solved: bool = False):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    INSERT INTO {chat_history_table_name} (user_id, task_id, role, content)
-    VALUES (?, ?, ?, ?)
-    ''', (user_id, task_id, role, content))
+    INSERT INTO {chat_history_table_name} (user_id, task_id, role, content, is_solved)
+    VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, task_id, role, content, is_solved))
 
     # Get the ID of the newly inserted row
     new_id = cursor.lastrowid
@@ -234,7 +258,7 @@ def get_all_chat_history():
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content 
+    SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved 
     FROM {chat_history_table_name} message
     LEFT JOIN {tasks_table_name} task ON message.task_id = task.id
     ORDER BY message.timestamp ASC
@@ -252,7 +276,8 @@ def get_all_chat_history():
             'task_id': row[3],
             'task_name': row[4],
             'role': row[5],
-            'content': row[6]
+            'content': row[6],
+            'is_solved': bool(row[7])
         }
         for row in chat_history
     ]
@@ -265,7 +290,7 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT id, timestamp, user_id, task_id, role, content FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
+    SELECT id, timestamp, user_id, task_id, role, content, is_solved FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
     ''', (task_id, user_id))
 
     chat_history = cursor.fetchall()
@@ -279,11 +304,23 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
             'user_id': row[2],
             'task_id': row[3],
             'role': row[4],
-            'content': row[5]
+            'content': row[5],
+            'is_solved': bool(row[6])
         }
         for row in chat_history
     ]
     return chat_history_dicts
+
+
+def get_solved_tasks_for_user(user_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f'''
+    SELECT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
+    ''', (user_id,))
+
+    return [task[0] for task in cursor.fetchall()]
 
 
 def delete_message(message_id: int):

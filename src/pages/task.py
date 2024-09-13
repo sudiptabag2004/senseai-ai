@@ -1,23 +1,34 @@
 import streamlit as st
+from typing import Literal
 import os
+import time
+import json
 from functools import partial
-
-from langchain_core.output_parsers import PydanticOutputParser
+import asyncio
 from pydantic import BaseModel, Field
-
 from openai import OpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_openai import ChatOpenAI
+from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.chat_history import (
+    InMemoryChatMessageHistory,
+)
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
+from components.sticky_container import sticky_container
 from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user, delete_message as delete_message_from_db
-from lib.init import init_env_vars
+from lib.init import init_env_vars, init_db
 from auth import init_auth_from_cookies
 
 init_env_vars()
+init_db()
 
 init_auth_from_cookies()
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
-st.link_button('Open task list', '/task_list')
 
 task_id = st.query_params.get('id')
 
@@ -41,29 +52,47 @@ if not task['verified']:
     st.error('Task not verified. Please ask your mentor/teacher to verify the task so that you can solve it.')
     st.stop()
 
-st.write(f"## {task['name']}")
-st.text(task['description'].replace('\n', '\n\n'))
-
-# st.session_state
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(task_id, st.session_state.email)
 
+# TODO: Update is_solved to DB and retrieve from DB
+if 'is_solved' not in st.session_state:
+    st.session_state.is_solved = st.session_state.chat_history[-2]['is_solved']
+
+with sticky_container(mode="top", border=True):
+    st.link_button('Open task list', '/task_list')
+
+    heading = f"## {task['name']}"
+    if st.session_state.is_solved:
+        heading += " ✅"
+    st.write(heading)
+
+    with st.expander("Task description"):
+        st.text(task['description'].replace('\n', '\n\n'))
+
+# st.session_state
 
 def transform_user_message_for_ai_history(message: dict):
-    return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
+    # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
+    return HumanMessage(content=f'''Student's response: ```\n{message['content']}\n```''')
 
 
 def transform_assistant_message_for_ai_history(message: dict):
-    return {"role": message['role'], "content": message['content']}
+    # return {"role": message['role'], "content": message['content']}
+    return AIMessage(content=message['content'])
+
 
 if "ai_chat_history" not in st.session_state:
-    st.session_state.ai_chat_history = [{"role": "user", "content": f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```"""}]
+    st.session_state.ai_chat_history = InMemoryChatMessageHistory()
+    st.session_state.ai_chat_history.add_user_message(f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```""")
+
+    # st.session_state.ai_chat_history = [{"role": "user", "content": f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```"""}]
     for message in st.session_state.chat_history:
         if message['role'] == 'user':
-            st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(message))
+            st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(message))
         else:
-            st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(message))
+            st.session_state.ai_chat_history.add_ai_message(transform_assistant_message_for_ai_history(message))
 
 # st.session_state.ai_chat_history
 # st.session_state.chat_history
@@ -73,19 +102,23 @@ if "ai_chat_history" not in st.session_state:
 def delete_user_chat_message(index_to_delete: int):
     # delete both the user message and the AI assistant's response to it
     updated_chat_history = st.session_state.chat_history[:index_to_delete]
-    updated_ai_chat_history = st.session_state.ai_chat_history[:index_to_delete]
+    current_ai_chat_history = st.session_state.ai_chat_history.messages
+    # import ipdb; ipdb.set_trace()
+    ai_chat_index_to_delete = index_to_delete + 1 # since we have an extra message in ai_chat_history at the start
+    updated_ai_chat_history = current_ai_chat_history[:ai_chat_index_to_delete]
 
     delete_message_from_db(st.session_state.chat_history[index_to_delete]['id']) # delete user message
     delete_message_from_db(st.session_state.chat_history[index_to_delete + 1]['id']) # delete ai message
 
     if index_to_delete + 2 < len(st.session_state.chat_history):
         updated_chat_history += st.session_state.chat_history[index_to_delete + 2 :]
-        updated_ai_chat_history += st.session_state.ai_chat_history[
-            index_to_delete + 2 :
+        updated_ai_chat_history += current_ai_chat_history[
+            ai_chat_index_to_delete + 2 :
         ]
 
     st.session_state.chat_history = updated_chat_history
-    st.session_state.ai_chat_history = updated_ai_chat_history
+    st.session_state.ai_chat_history.clear()
+    st.session_state.ai_chat_history.add_messages(updated_ai_chat_history)
 
 
 def display_user_message(user_response: str, message_index: int):
@@ -112,87 +145,118 @@ for index, message in enumerate(st.session_state.chat_history):
             st.markdown(message["content"])
 
 
-def get_ai_response():
-    # response = random.choice(
-    #     [
-    #         "Hello there! How can I assist you today?",
-    #         "Hi, human! Is there anything I can help you with?",
-    #         "Do you need help?",
-    #     ]
-    # )
-    # for word in response.split():
-    #     yield word + " "
-    #     time.sleep(0.05)
-
-    system_prompt = """You are a Socratic tutor.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has been provided to you for evaluating the student's response only. Keep this in mind while responding to the student."""
-
-    return client.chat.completions.create(
-        model='gpt-4o-2024-08-06',
-        messages=[{'role': "system", 'content': system_prompt}] + [
-            {"role": message["role"], "content": message["content"]}
-            for message in st.session_state.ai_chat_history
-        ],
-        stream=True,
-    )
+def get_session_history():
+    return st.session_state.ai_chat_history
 
 
+async def _extract_feedback(input_stream):
+    """A function that operates on input streams."""
+    # feedback = ""
+    async for input in input_stream:
+        if not isinstance(input, dict):
+            continue
+
+        if "feedback" not in input:
+            continue
+        
+        if "is_solved" in input:
+            if not isinstance(input["is_solved"], bool):
+                continue
+
+            yield json.dumps({'is_solved': input["is_solved"]})
+
+        feedback = input["feedback"]
+
+        if not isinstance(feedback, str):
+            continue
+    
+        # print(feedback)
+
+        yield feedback
 
 
-    # class Output(BaseModel):
-    #     solution: str = Field(
-    #         title="solution",
-    #         description="The solution to the task",
-    #     )
+async def get_ai_response(user_message: str):
+    class Output(BaseModel):
+        feedback: str = Field(description="Feedback on the student's response")
+        is_solved: bool = Field(description="Whether the student's response correctly solves the task")
 
-    # output_parser = PydanticOutputParser(pydantic_object=Output)
+    parser = PydanticOutputParser(pydantic_object=Output)
+    format_instructions = parser.get_format_instructions()
 
-    # llm_input_messages = get_llm_input_messages(
-    #     system_prompt_template,
-    #     user_prompt_template,
-    #     task_description=task['description'],
-    #     solution=task['answer'],
-    #     student_answer=st.session_state.chat_history[-1]['content'],
-    #     # format_instructions=output_parser.get_format_instructions(),
-    #     # common_instructions=COMMON_INSTRUCTIONS
-    # )
+    system_prompt = """You are a Socratic tutor who responds only in JSON.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has been provided to you for evaluating the student's response only. Keep this in mind while responding to the student.\n\n{format_instructions}."""
 
-    # try:
-    #     pred_dict = asyncio.run(call_llm_and_parse_output(
-    #         llm_input_messages,
-    #         model='gpt-4o-2024-08-06',
-    #         # output_parser=output_parser,
-    #         max_tokens=2048,
-    #         verbose=True,
-    #         # labels=["final_answers", "audit rights"],
-    #         # model_type=model_type,
-    #     ))
-    #     st.session_state.answer = pred_dict['solution']
-    # except Exception as exception:
-    #     traceback.print_exc()
-    #     raise Exception
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        MessagesPlaceholder(variable_name="messages"),
+    ]).partial(format_instructions=format_instructions)
+
+    model = ChatOpenAI(model='gpt-4o-2024-08-06', temperature=0, top_p=1, frequency_penalty=0, presence_penalty=0, verbose=True)
+
+    chain = prompt_template | model | JsonOutputParser() | _extract_feedback
+
+    with_message_history = RunnableWithMessageHistory(chain, get_session_history)
+
+    async for chunk in with_message_history.astream({
+        "messages": [transform_user_message_for_ai_history(user_message)]
+    }):
+        yield chunk
+    # response = await with_message_history.ainvoke({
+    #     "messages": [transform_user_message_for_ai_history(user_message)]
+    # })
+    # import ipdb; ipdb.set_trace()
+    # return response
 
 
+def sync_generator(async_gen):
+    loop = asyncio.new_event_loop()
+    try:
+        while True:
+            yield loop.run_until_complete(async_gen.__anext__())
+    except StopAsyncIteration:
+        pass
+    finally:
+        loop.close()
+
+
+# st.session_state.ai_chat_history
+# st.session_state.is_solved
 
 if user_response := st.chat_input("Your response"):
     display_user_message(user_response, len(st.session_state.chat_history))
     
     user_message = {'role': 'user', 'content': user_response}
     st.session_state.chat_history.append(user_message)
-    st.session_state.ai_chat_history.append(transform_user_message_for_ai_history(user_message))
-
+    # st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(user_message))
+    
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
-        ai_response = st.write_stream(get_ai_response())
+        ai_response_container = st.empty()
+        for chunk in sync_generator(get_ai_response(user_message)):
+            if "is_solved" not in chunk:
+                ai_response = chunk
+                ai_response_container.write(ai_response)
+            else:
+                # print(chunk)
+                is_solved = json.loads(chunk)['is_solved']
+                if not st.session_state.is_solved and is_solved:
+                    st.balloons()
+                    st.session_state.is_solved = True
+                    time.sleep(2)
 
+        # ai_response = st.write_stream(sync_generator(get_ai_response(user_message)))
+        # ai_response = asyncio.run(get_ai_response(user_message))
+    
+    st.session_state.ai_chat_history.messages[-1].content = ai_response
+
+    # st.session_state.chat_history.append(ai_response)
     # Add user message to chat history [store to db only if ai response has been completely fetched]
-    new_user_message = store_message_to_db(st.session_state.email, task_id, "user", user_response)
+    new_user_message = store_message_to_db(st.session_state.email, task_id, "user", user_response, st.session_state.is_solved)
     st.session_state.chat_history[-1] = new_user_message
 
     # Add assistant response to chat history
     new_ai_message = store_message_to_db(st.session_state.email, task_id, "assistant", ai_response)
     st.session_state.chat_history.append(new_ai_message)
-    st.session_state.ai_chat_history.append(transform_assistant_message_for_ai_history(new_ai_message))
+    # st.session_state.ai_chat_history.add_ai_message(transform_assistant_message_for_ai_history(new_ai_message))
 
     st.rerun()
-
 
