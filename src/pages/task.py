@@ -56,9 +56,8 @@ if not task['verified']:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(task_id, st.session_state.email)
 
-# TODO: Update is_solved to DB and retrieve from DB
 if 'is_solved' not in st.session_state:
-    st.session_state.is_solved = st.session_state.chat_history[-2]['is_solved']
+    st.session_state.is_solved = len(st.session_state.chat_history) and st.session_state.chat_history[-2]['is_solved']
 
 with sticky_container(mode="top", border=True):
     st.link_button('Open task list', '/task_list')
