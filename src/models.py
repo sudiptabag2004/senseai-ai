@@ -13,4 +13,5 @@ class ChatMessage(BaseModel):
     task_name: str
     role: ChatRole
     content: str
+    is_solved: bool
     timestamp: str
