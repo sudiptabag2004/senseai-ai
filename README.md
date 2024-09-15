@@ -92,6 +92,9 @@ Our current thesis on AI + Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
 
 ## What's New
+**2024-09-15**
+- Added support for fetching all tasks
+- Added LICENSE
 **2024-09-13**
 - AI response returned as a JSON with the keys `feedback` and `is_solved`. The feedback is streamed to the user. `is_solved` indicates if the question has been solved.
 - The task title/description is now inside a sticky container that remains fixed on the top of the task page. If the task has been solved, a green tick mark appears next to the task name.
