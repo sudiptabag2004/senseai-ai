@@ -21,6 +21,9 @@ Watch the demo below to understand more:
   </a>
 </div>
 
+## Contributing
+To learn more about making a contribution to SensAI, please see our [Contributing guide](./CONTRIBUTING.md).
+
 ## Local Setup
 
 - Install `virtualenv`
