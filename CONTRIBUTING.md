@@ -6,6 +6,7 @@ You can contribute to SensAI in many ways:
 4. If you are a teacher or a non-profit, you can test SensAI with your learners and provide valuable feedback.
 5. Spread the word: reference the project from your blog and articles, link to it from your website, or simply star it.
 6. Give us feedback on how we can do better, in general.
+7. Learning engineering: SensAI generates a lot of data on how learners are learning and growing in their journey. Analysing this data and uncovering insights will help us improve SensAI to better support our learners and teachers. If you are interested in this, do reach out to us on the WhatsApp community and we'll be happy to discuss this with you.
 
 ## Code of Conduct
 We abide by the principles of openness, respect, and consideration of others of the Python Software Foundation: https://www.python.org/psf/codeofconduct/.
