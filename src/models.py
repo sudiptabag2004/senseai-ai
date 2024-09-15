@@ -1,5 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, Field
+from typing import List
 
 
 class ChatRole(str, Enum):
@@ -14,4 +15,14 @@ class ChatMessage(BaseModel):
     role: ChatRole
     content: str
     is_solved: bool
+    timestamp: str
+
+class Task(BaseModel):
+    id: int
+    name: str
+    description: str
+    answer: str
+    tags: List[str]
+    generation_model: str
+    verified: bool
     timestamp: str
