@@ -25,6 +25,9 @@ div[data-testid="stVerticalBlock"] div:has(div.fixed-header-{i}) {{
 count = 0
 
 
+DEFAULT_BACKGROUND_COLOR = '#000000'
+DEFAULT_TEXT_COLOR = '#FFFFFF'
+
 def sticky_container(
     *,
     container_cls = st.container,
@@ -40,7 +43,15 @@ def sticky_container(
         margin = MARGINS[mode]
 
     global count
-    html_code = STICKY_CONTAINER_HTML.format(position=mode, margin=margin, i=count, background_color=theme['backgroundColor'], text_color=theme['textColor'])
+
+    kwargs = {
+        'background_color': DEFAULT_BACKGROUND_COLOR,
+        'text_color': DEFAULT_TEXT_COLOR,
+    }
+    if theme is not None:
+        kwargs['background_color'] = theme['backgroundColor']
+        kwargs['text_color'] = theme['textColor']
+    html_code = STICKY_CONTAINER_HTML.format(position=mode, margin=margin, i=count, **kwargs)
     count += 1
 
     container = container_cls(height=height, border=border)

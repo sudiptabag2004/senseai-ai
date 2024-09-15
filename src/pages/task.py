@@ -67,6 +67,7 @@ if "chat_history" not in st.session_state:
 if 'is_solved' not in st.session_state:
     st.session_state.is_solved = len(st.session_state.chat_history) and st.session_state.chat_history[-2]['is_solved']
 
+
 with sticky_container(mode="top", border=True):
     # st.link_button('Open task list', '/task_list')
 
@@ -75,13 +76,16 @@ with sticky_container(mode="top", border=True):
         heading += " ✅"
     st.write(heading)
 
-    with st.expander("Task description"):
+    with st.expander("Task description", expanded=False):
         st.text(task['description'].replace('\n', '\n\n'))
 
 # st.session_state
 # st.session_state['code']
 
-chat_column, code_column = st.columns([5, 5])
+if task['type'] == 'coding':
+    chat_column, code_column = st.columns([5, 5])
+else:
+    chat_column = st.columns(1)
 
 def transform_user_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
@@ -231,63 +235,98 @@ def sync_generator(async_gen):
 # st.session_state.ai_chat_history
 # st.session_state.is_solved
 
-supported_language_keys = ['html_code', 'css_code', 'js_code', 'python_code']
+supported_language_keys = ['html_code', 'css_code', 'js_code']
 
 def retain_code():
     for key in supported_language_keys:
         if key in st.session_state:
             st.session_state[key] = st.session_state[key]
 
-with code_column:
-    for lang in supported_language_keys:
-        if lang not in st.session_state:
-            st.session_state[lang] = ''
-        
-    # TODO: config for whether to show the code editor
-    # TODO: config for code language
-    is_preview_mode = st.toggle("Preview mode", value=False, on_change=retain_code)
-    if not is_preview_mode:
-        html_tab, code_tab, js_tab = st.tabs(['HTML', 'CSS', 'JS'])
-        with html_tab:
-            st_ace(min_lines=25, theme='monokai', language='html', tab_size=2, key='html_code', auto_update=True, value=st.session_state.html_code, placeholder="Write your HTML code here...",)
-        with code_tab:
-            st_ace(min_lines=25, theme='monokai', language='css', tab_size=2, key='css_code', auto_update=True, value=st.session_state.css_code, placeholder="Write your CSS code here...")
-        with js_tab:
-            st_ace(min_lines=25, theme='monokai', language='js', tab_size=2, key='js_code', auto_update=True, value=st.session_state.js_code, placeholder="Write your JS code here...")
-    else:
-        import streamlit.components.v1 as components
-        try:
-            # Render the HTML code in Streamlit using components.v1.html
-            # code = "<h1>Hello World</h1>"
-            # st.write(f'Inputing: {st.session_state.code}')
-            combined_code = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>HTML + CSS + JavaScript Preview</title>
-                <style>
-                    {css_code}  <!-- Insert the CSS code here -->
-                </style>
-            </head>
-            <body>
-                {html_code}  <!-- Insert the HTML code here -->
-                <script>
-                    {js_code}  <!-- Insert the JavaScript code here -->
-                </script>
-            </body>
-            </html>
-            """
 
-            combined_code = combined_code.format(html_code=st.session_state.html_code, css_code=st.session_state.css_code, js_code=st.session_state.js_code)
+def is_any_code_present():
+    return bool(st.session_state.html_code or st.session_state.css_code or st.session_state.js_code)
 
-            components.html(combined_code, height=400, scrolling=True)
-        except Exception as e:
-            st.error(f"Error: {e}")
+def get_combined_code():
+    if not is_any_code_present():
+        return ''
+
+    combined_code = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            {css_code}  <!-- Insert the CSS code here -->
+        </style>
+    </head>
+    <body>
+        {html_code}  <!-- Insert the HTML code here -->
+        <script>
+            {js_code}  <!-- Insert the JavaScript code here -->
+        </script>
+    </body>
+    </html>
+    """
+
+    return combined_code.format(html_code=st.session_state.html_code, css_code=st.session_state.css_code, js_code=st.session_state.js_code)
 
 
-if user_response := st.chat_input("Your response"):
+if task['type'] == 'coding':
+    with code_column:
+        for lang in supported_language_keys:
+            if lang not in st.session_state:
+                st.session_state[lang] = ''
+            
+        if task['show_code_preview']:
+            is_preview_mode = st.toggle("Preview mode", value=False, on_change=retain_code)
+        else:
+            is_preview_mode = False
+
+        if not is_preview_mode:
+            tab_name_to_language = {
+                'HTML': 'html',
+                'CSS': 'css',
+                'JS': 'javascript'
+            }
+            if task['coding_language'] == 'html':
+                tab_names = ['HTML']
+            elif task['coding_language'] == 'css':
+                tab_names = ['HTML', 'CSS']
+            elif task['coding_language'] == 'Javascript':
+                if task['show_code_preview']:
+                    tab_names = ['HTML', 'CSS', 'JS']
+                else:
+                    tab_names = ['JS']
+
+            tabs = st.tabs(tab_names)
+            for index, tab in enumerate(tabs):
+                with tab:
+                    tab_name = tab_names[index].lower()
+                    language = tab_name_to_language[tab_names[index]]
+                    st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...",)
+
+        else:
+            import streamlit.components.v1 as components
+            try:
+                # Render the HTML code in Streamlit using components.v1.html
+                # code = "<h1>Hello World</h1>"
+                # st.write(f'Inputing: {st.session_state.code}')
+                combined_code = get_combined_code()
+
+                components.html(combined_code, height=400, scrolling=True)
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+# st.session_state.user_response = get_combined_code()
+user_response_placeholder = 'Your response'
+
+if task['type'] == 'coding':
+    user_response_placeholder = 'Use the code editor for writing code and write anything else here'
+
+# st.session_state.js_code
+
+if user_response := st.chat_input(user_response_placeholder):
     display_user_message(user_response, len(st.session_state.chat_history))
     
     user_message = {'role': 'user', 'content': user_response}
@@ -326,3 +365,50 @@ if user_response := st.chat_input("Your response"):
 
     st.rerun()
 
+def get_default_chat_input_value():
+    if not is_any_code_present():
+        return '``'
+
+    combined_code = f"HTML\n\n{st.session_state.html_code}"
+
+    if st.session_state.css_code:
+        combined_code += f"\n\nCSS\n\n{st.session_state.css_code}"
+
+    # st.session_state.js_code
+
+    if st.session_state.js_code:
+        if task['show_code_preview']:
+            combined_code += f"\n\nJS\n\n{st.session_state.js_code}"
+        else:
+            combined_code = f"{st.session_state.js_code}"
+
+    combined_code = combined_code.replace('`', '\`').replace('{', '\{').replace('}', '\}').replace('$', '\$')
+    combined_code = f'`{combined_code}`'
+
+    return combined_code
+
+# st.write(default_chat_input_value)
+
+default_chat_input_value = get_default_chat_input_value()
+# default_chat_input_value = "`Default value`"
+# default_chat_input_value = """`<h1>Hello, World!</h1>
+# <p>This is a live HTML preview with CSS and JavaScript.</p>
+# <button onclick="changeText()">Click Me</button>`"""
+# st.write(default_chat_input_value)
+
+# if default_chat_input_value:
+# print(default_chat_input_value)
+js = f"""
+    <script>
+        function insertText(dummy_var_to_force_repeat_execution) {{
+            var chatInput = parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+            var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+            nativeInputValueSetter.call(chatInput, {default_chat_input_value});
+            var event = new Event('input', {{ bubbles: true}});
+            chatInput.dispatchEvent(event);
+        }}
+        insertText({len(st.session_state.chat_history)});
+    </script>
+    """
+st.components.v1.html(js, height=0)
+    # st.markdown(js, unsafe_allow_html=True)

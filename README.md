@@ -91,7 +91,7 @@ Our public roadmap is live [here](https://hyperverge.notion.site/fa1dd0cef7194fa
 ## Community
 We are building a community of creators, builders, teachers, learners, parents, entrepreneurs, non-profits and volunteers who are excited about the future of AI and education. If you identify as one and want to be part of it, [join](https://chat.whatsapp.com/LmiulDbWpcXIgqNK6fZyxe) our WhatsApp group.
 
-Our current thesis on AI + Education is summarized in the mindmap below:
+Our thinking on how AI can impact Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
 
 ## What's New
