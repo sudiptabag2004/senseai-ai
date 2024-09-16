@@ -22,11 +22,11 @@ solved_task_ids = get_solved_tasks_for_user(st.session_state.email)
 
 df = pd.DataFrame(st.session_state.tasks)
 
-df['status'] = df['id'].apply(lambda x: '✅' if x in solved_task_ids else '')
-
 if not len(df):
     st.error('No tasks added yet. Ask you mentors/teachers to add tasks for you to solve.')
     st.stop()
+
+df['status'] = df['id'].apply(lambda x: '✅' if x in solved_task_ids else '')
 
 filtered_df = df[df['verified']][['status', 'id', 'name', 'description', 'tags']]
 
