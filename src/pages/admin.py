@@ -3,7 +3,7 @@ import traceback
 import asyncio
 from functools import partial
 import streamlit as st
-# st.set_page_config(layout="wide")
+st.set_page_config(layout="wide")
 
 import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
