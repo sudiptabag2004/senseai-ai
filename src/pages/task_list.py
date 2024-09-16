@@ -1,12 +1,18 @@
 import streamlit as st
 import pandas as pd
+import time
 from lib.db import get_all_tasks, get_solved_tasks_for_user
 from lib.init import init_env_vars, init_db
-from auth import init_auth_from_cookies
 
 init_env_vars()
 init_db()
-init_auth_from_cookies()
+
+if 'email' not in st.query_params:
+    st.error('Not authorized. Redirecting to home page...')
+    time.sleep(2)
+    st.switch_page('./home.py')
+
+st.session_state.email = st.query_params['email']
 
 st.write('## Tasks')
 st.write('Select a task by clicking beside the index of the task')
@@ -53,6 +59,6 @@ event = st.dataframe(
 if len(event.selection['rows']):
     df_actions.write('Do you want to work on this task?')
     task_id = filtered_df.iloc[event.selection['rows'][0]]['id']
-    df_actions.link_button('Yes', '/task?id=' + str(task_id))
+    df_actions.link_button('Yes', f'/task?id={task_id}&email={st.session_state.email}')
     # print()
         # delete_tasks(event.selection['rows'])

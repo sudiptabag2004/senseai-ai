@@ -11,3 +11,4 @@ pydantic_core==2.20.1
 backoff==2.2.1
 fastapi==0.114.1
 uvicorn==0.30.6
+streamlit-page-link-params=0.3.3

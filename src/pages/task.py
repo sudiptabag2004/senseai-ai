@@ -21,12 +21,16 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from components.sticky_container import sticky_container
 from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user, delete_message as delete_message_from_db
 from lib.init import init_env_vars, init_db
-from auth import init_auth_from_cookies
 
 init_env_vars()
 init_db()
 
-init_auth_from_cookies()
+if 'email' not in st.query_params:
+    st.error('Not authorized. Redirecting to home page...')
+    time.sleep(2)
+    st.switch_page('./home.py')
+
+st.session_state.email = st.query_params['email']
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
