@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(layout="wide")
+
 import pandas as pd
 import time
 from lib.db import get_all_tasks, get_solved_tasks_for_user
@@ -45,12 +47,12 @@ event = st.dataframe(
     selection_mode='single-row',
     use_container_width=True,
     hide_index=True, 
-    column_order=['status', 'id', 'tags', 'name', 'description'],
+    column_order=[ 'id', 'status', 'tags', 'name', 'description'],
     column_config={
-        'description': st.column_config.TextColumn(
-            width='medium',
-            help='Description of the task'
-        ),
+        # 'description': st.column_config.TextColumn(
+        #     width='large',
+        #     help='Description of the task'
+        # ),
         # 'id': None
     }
 )

@@ -1,4 +1,3 @@
-import streamlit as st
 from typing import Literal
 import os
 import time
@@ -16,6 +15,11 @@ from langchain_core.chat_history import (
 )
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
+
+import streamlit as st
+st.set_page_config(layout="wide")
+
+from streamlit_ace import st_ace, THEMES
 
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
 from components.sticky_container import sticky_container
@@ -63,18 +67,27 @@ if "chat_history" not in st.session_state:
 if 'is_solved' not in st.session_state:
     st.session_state.is_solved = len(st.session_state.chat_history) and st.session_state.chat_history[-2]['is_solved']
 
-with sticky_container(mode="top", border=True):
-    st.link_button('Open task list', '/task_list')
 
-    heading = f"## {task['name']}"
+with sticky_container(mode="top", border=True):
+    # st.link_button('Open task list', '/task_list')
+
+    heading = f"**{task['name']}**"
     if st.session_state.is_solved:
         heading += " ✅"
     st.write(heading)
 
-    with st.expander("Task description"):
+    with st.expander("Task description", expanded=False):
         st.text(task['description'].replace('\n', '\n\n'))
 
 # st.session_state
+# st.session_state['code']
+
+if task['type'] == 'coding':
+    chat_column, code_column = st.columns([5, 5])
+    chat_container = chat_column.container(height=400)
+else:
+    # chat_column = st.columns(1)[0]
+    chat_container = st.container()
 
 def transform_user_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
@@ -125,8 +138,8 @@ def delete_user_chat_message(index_to_delete: int):
 
 
 def display_user_message(user_response: str, message_index: int):
-    with st.chat_message("user"):
-        user_answer_cols = st.columns([7, 1])
+    with chat_container.chat_message("user"):
+        user_answer_cols = st.columns([5, 1])
         user_answer_cols[0].markdown(user_response)
         user_answer_cols[1].button(
             "Delete",
@@ -144,7 +157,7 @@ for index, message in enumerate(st.session_state.chat_history):
     if message['role'] == 'user':
         display_user_message(message['content'], message_index=index)
     else:
-        with st.chat_message(message["role"]):
+        with chat_container.chat_message(message["role"]):
             st.markdown(message["content"])
 
 
@@ -221,18 +234,18 @@ def sync_generator(async_gen):
         loop.close()
 
 
-# st.session_state.ai_chat_history
-# st.session_state.is_solved
-
-if user_response := st.chat_input("Your response"):
+def get_ai_feedback(user_response: str):
+    # import ipdb; ipdb.set_trace()
     display_user_message(user_response, len(st.session_state.chat_history))
     
     user_message = {'role': 'user', 'content': user_response}
     st.session_state.chat_history.append(user_message)
     # st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(user_message))
-    
+
+    # ipdb.set_trace()
+
     # Display assistant response in chat message container
-    with st.chat_message("assistant"):
+    with chat_container.chat_message("assistant"):
         ai_response_container = st.empty()
         for chunk in sync_generator(get_ai_response(user_message)):
             if "is_solved" not in chunk:
@@ -263,3 +276,178 @@ if user_response := st.chat_input("Your response"):
 
     st.rerun()
 
+# st.session_state.ai_chat_history
+# st.session_state.is_solved
+
+supported_language_keys = ['html_code', 'css_code', 'js_code']
+
+def retain_code():
+    for key in supported_language_keys:
+        if key in st.session_state:
+            st.session_state[key] = st.session_state[key]
+
+
+def is_any_code_present():
+    return bool(st.session_state.get('html_code', '') or st.session_state.get('css_code', '') or st.session_state.get('js_code', ''))
+
+
+def get_preview_code():
+    if not is_any_code_present():
+        return ''
+
+    combined_code = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            {css_code}  <!-- Insert the CSS code here -->
+        </style>
+    </head>
+    <body>
+        {html_code}  <!-- Insert the HTML code here -->
+        <script>
+            {js_code}  <!-- Insert the JavaScript code here -->
+        </script>
+    </body>
+    </html>
+    """
+
+    return combined_code.format(html_code=st.session_state.html_code, css_code=st.session_state.css_code, js_code=st.session_state.js_code)
+
+def get_code_for_ai_feedback():
+    combined_code = f"`HTML`\n\n{st.session_state.html_code}"
+
+    if st.session_state.css_code:
+        # CSS code will always come with HTML code
+        combined_code += f"\n\n`CSS`\n\n{st.session_state.css_code}"
+
+    if st.session_state.js_code:
+        if task['show_code_preview']:
+            # JS code will always come with HTML and CSS code when preview mode is enabled
+            combined_code += f"\n\n`JS`\n\n{st.session_state.js_code}"
+        else:
+            # JS code will be submitted as a standalone message when preview mode is disabled
+            combined_code = f"{st.session_state.js_code}"
+
+    # combined_code = combined_code.replace('`', '\`').replace('{', '\{').replace('}', '\}').replace('$', '\$')
+    # combined_code = f'`{combined_code}`'
+    return combined_code
+
+def get_ai_feedback_on_code():
+    get_ai_feedback(get_code_for_ai_feedback())
+
+
+if task['type'] == 'coding':
+    with code_column:
+        for lang in supported_language_keys:
+            if lang not in st.session_state:
+                st.session_state[lang] = ''
+        
+        preview_mode_col, _, _, submit_button_col = st.columns([2, 1, 1, 1])
+        if task['show_code_preview']:
+            is_preview_mode = preview_mode_col.toggle("Show Preview", value=False, on_change=retain_code)
+        else:
+            is_preview_mode = False
+
+        if not is_preview_mode:
+            tab_name_to_language = {
+                'HTML': 'html',
+                'CSS': 'css',
+                'JS': 'javascript'
+            }
+            if task['coding_language'] == 'HTML':
+                tab_names = ['HTML']
+            elif task['coding_language'] == 'CSS':
+                tab_names = ['HTML', 'CSS']
+            elif task['coding_language'] == 'Javascript':
+                if task['show_code_preview']:
+                    tab_names = ['HTML', 'CSS', 'JS']
+                else:
+                    tab_names = ['JS']
+
+            tabs = st.tabs(tab_names)
+            for index, tab in enumerate(tabs):
+                with tab:
+                    tab_name = tab_names[index].lower()
+                    language = tab_name_to_language[tab_names[index]]
+                    st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...",)
+
+        else:
+            import streamlit.components.v1 as components
+            with st.expander("Configuration"):
+                dim_cols = st.columns(2)
+                height = dim_cols[0].slider('Preview Height', min_value=100, max_value=1000, value=300, on_change=retain_code)
+                width = dim_cols[1].slider('Preview Width', min_value=100, max_value=600, value=600, on_change=retain_code)
+
+            try:
+                # Render the HTML code in Streamlit using components.v1.html
+                with st.container(border=True):
+                    # st.write(f'`{get_preview_code()}`')
+                    
+                    components.html(get_preview_code(), width=width, height=height, scrolling=True)
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+        if submit_button_col.button("Submit Code", type='primary'):
+            get_ai_feedback_on_code()
+
+user_response_placeholder = 'Your response'
+
+if task['type'] == 'coding':
+    user_response_placeholder = 'Use the code editor for submitting code and ask/tell anything else here'
+else:
+    user_response_placeholder = 'Write your response here'
+# st.session_state.js_code
+
+if user_response := st.chat_input(user_response_placeholder):
+    get_ai_feedback(user_response)
+
+# def get_default_chat_input_value():
+#     if not is_any_code_present():
+#         return '``'
+
+#     combined_code = f"HTML\n\n{st.session_state.html_code}"
+
+#     if st.session_state.css_code:
+#         combined_code += f"\n\nCSS\n\n{st.session_state.css_code}"
+
+#     # st.session_state.js_code
+
+#     if st.session_state.js_code:
+#         if task['show_code_preview']:
+#             combined_code += f"\n\nJS\n\n{st.session_state.js_code}"
+#         else:
+#             combined_code = f"{st.session_state.js_code}"
+
+#     combined_code = combined_code.replace('`', '\`').replace('{', '\{').replace('}', '\}').replace('$', '\$')
+#     combined_code = f'`{combined_code}`'
+
+#     return combined_code
+
+# st.write(default_chat_input_value)
+
+# default_chat_input_value = get_default_chat_input_value()
+# # default_chat_input_value = "`Default value`"
+# # default_chat_input_value = """`<h1>Hello, World!</h1>
+# # <p>This is a live HTML preview with CSS and JavaScript.</p>
+# # <button onclick="changeText()">Click Me</button>`"""
+# # st.write(default_chat_input_value)
+
+# # if default_chat_input_value:
+# # print(default_chat_input_value)
+# js = f"""
+#     <script>
+#         function insertText(dummy_var_to_force_repeat_execution) {{
+#             var chatInput = parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+#             var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+#             nativeInputValueSetter.call(chatInput, {default_chat_input_value});
+#             var event = new Event('input', {{ bubbles: true}});
+#             chatInput.dispatchEvent(event);
+#         }}
+#         insertText({len(st.session_state.chat_history)});
+#     </script>
+#     """
+# st.components.v1.html(js, height=0)
+    # st.markdown(js, unsafe_allow_html=True)

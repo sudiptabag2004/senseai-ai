@@ -91,13 +91,23 @@ Our public roadmap is live [here](https://hyperverge.notion.site/fa1dd0cef7194fa
 ## Community
 We are building a community of creators, builders, teachers, learners, parents, entrepreneurs, non-profits and volunteers who are excited about the future of AI and education. If you identify as one and want to be part of it, [join](https://chat.whatsapp.com/LmiulDbWpcXIgqNK6fZyxe) our WhatsApp group.
 
-Our current thesis on AI + Education is summarized in the mindmap below:
+Our thinking on how AI can impact Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
 
 ## What's New
+**2024-09-16**
+- Fixed the bug where only one email was being used globally across all users. Used a hack for storing the email in the session state and using the query params in the URL to set it.
+- @shekhar32 [fixed](https://gitlab.com/hvacademy/sensai-ai/-/merge_requests/4) the bug where status was being set for all tasks without checking if tasks exist
+- Added support for filtering tasks by tags for admin
+- Added support for bulk updating task attributes by the admin
+- Code editor for coding questions has been added along with an option to show code preview for the code (supports HTML, CSS, JS for now)
+- Layout has been set to wide mode for each page
+- Adjusted the sticky container's theme to match the theme of the app
+
 **2024-09-15**
 - Added support for fetching all tasks
 - Added LICENSE
+- Added Contributing guidelines
 
 **2024-09-13**
 - AI response returned as a JSON with the keys `feedback` and `is_solved`. The feedback is streamed to the user. `is_solved` indicates if the question has been solved.
