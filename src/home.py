@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(layout="wide")
+
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from lib.init import init_db

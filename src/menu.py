@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit_page_link_params as stpl
 
 def default_menu():
     st.sidebar.page_link(
@@ -10,14 +9,10 @@ def default_menu():
 
 def authenticated_menu():
     with st.sidebar:
-        stpl.page_link(
-            "pages/task_list.py",
-            label="👨‍💻👩‍💻 Start solving tasks",
-            query_params={"email": st.session_state.email}
+        st.link_button(
+            "👨‍💻👩‍💻 Start solving tasks",
+            f"/task_list?email={st.session_state.email}",
         )
-    # st.sidebar.page_link(
-    #     "pages/english_new.py", label=" 📚👂🖊️ 🗣️ Hone your english skills"
-    # )
     pass
 
 
