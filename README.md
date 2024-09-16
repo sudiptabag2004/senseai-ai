@@ -97,7 +97,7 @@ Our thinking on how AI can impact Education is summarized in the mindmap below:
 ## What's New
 **2024-09-16**
 - Fixed the bug where only one email was being used globally across all users. Used a hack for storing the email in the session state and using the query params in the URL to set it.
-- @shekhar32 fixed the bug where status was being set for all tasks without checking if tasks exist
+- @shekhar32 [fixed](https://gitlab.com/hvacademy/sensai-ai/-/merge_requests/4) the bug where status was being set for all tasks without checking if tasks exist
 - Added support for filtering tasks by tags for admin
 - Added support for bulk updating task attributes by the admin
 - Code editor for coding questions has been added along with an option to show code preview for the code (supports HTML, CSS, JS for now)
