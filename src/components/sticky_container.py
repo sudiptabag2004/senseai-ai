@@ -30,11 +30,12 @@ DEFAULT_TEXT_COLOR = '#FFFFFF'
 
 def sticky_container(
     *,
-    container_cls = st.container,
     height: int  = None,
     border: bool  = None,
     mode: Literal["top", "bottom"] = "top",
     margin: str  = None,
+    background_color: str = None,
+    text_color: str = None,
 ):
     theme = st_theme()
     # st.write(theme)
@@ -51,9 +52,15 @@ def sticky_container(
     if theme is not None:
         kwargs['background_color'] = theme['backgroundColor']
         kwargs['text_color'] = theme['textColor']
+    
+    if background_color is not None:
+        kwargs['background_color'] = background_color
+    if text_color is not None:
+        kwargs['text_color'] = text_color
+
     html_code = STICKY_CONTAINER_HTML.format(position=mode, margin=margin, i=count, **kwargs)
     count += 1
 
-    container = container_cls(height=height, border=border)
+    container = st.container(height=height, border=border)
     container.markdown(html_code, unsafe_allow_html=True)
     return container

@@ -67,8 +67,13 @@ if "chat_history" not in st.session_state:
 if 'is_solved' not in st.session_state:
     st.session_state.is_solved = len(st.session_state.chat_history) and st.session_state.chat_history[-2]['is_solved']
 
+task_name_container_background_color = None
+task_name_container_text_color = None
+if st.session_state.is_solved:
+    task_name_container_background_color = '#62B670'
+    task_name_container_text_color = 'white'
 
-with sticky_container(mode="top", border=True):
+with sticky_container(mode="top", border=True, background_color=task_name_container_background_color, text_color=task_name_container_text_color):
     # st.link_button('Open task list', '/task_list')
 
     heading = f"**{task['name']}**"
