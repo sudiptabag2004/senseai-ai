@@ -84,11 +84,10 @@ with sticky_container(mode="top", border=True):
 
 if task['type'] == 'coding':
     chat_column, code_column = st.columns([5, 5])
+    chat_container = chat_column.container(height=400)
 else:
-    chat_column = st.columns(1)
-
-
-chat_container = chat_column.container(height=400)
+    # chat_column = st.columns(1)[0]
+    chat_container = st.container()
 
 def transform_user_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
@@ -375,14 +374,16 @@ if task['type'] == 'coding':
         else:
             import streamlit.components.v1 as components
             with st.expander("Configuration"):
-                height = st.slider('Preview Height', min_value=100, max_value=1000, value=300, on_change=retain_code)
+                dim_cols = st.columns(2)
+                height = dim_cols[0].slider('Preview Height', min_value=100, max_value=1000, value=300, on_change=retain_code)
+                width = dim_cols[1].slider('Preview Width', min_value=100, max_value=600, value=600, on_change=retain_code)
 
             try:
                 # Render the HTML code in Streamlit using components.v1.html
                 with st.container(border=True):
                     # st.write(f'`{get_preview_code()}`')
                     
-                    components.html(get_preview_code(), height=height, scrolling=True)
+                    components.html(get_preview_code(), width=width, height=height, scrolling=True)
             except Exception as e:
                 st.error(f"Error: {e}")
 
