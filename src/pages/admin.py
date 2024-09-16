@@ -268,7 +268,7 @@ num_tasks = len(st.session_state.tasks)
 
 if num_tasks > 0:
     tasks_heading = f'## Tasks ({num_tasks})'
-    tasks_description = f"You can select multiple tasks and do any of the following\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, whether to show code preview, coding language)\n\nYou can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`."
+    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, whether to show code preview, coding language)\n\nYou can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`."
 
 st.write(tasks_heading)
 with st.expander('Learn more'):

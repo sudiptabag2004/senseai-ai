@@ -235,12 +235,15 @@ def sync_generator(async_gen):
 
 
 def get_ai_feedback(user_response: str):
+    # import ipdb; ipdb.set_trace()
     display_user_message(user_response, len(st.session_state.chat_history))
     
     user_message = {'role': 'user', 'content': user_response}
     st.session_state.chat_history.append(user_message)
     # st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(user_message))
-    
+
+    # ipdb.set_trace()
+
     # Display assistant response in chat message container
     with chat_container.chat_message("assistant"):
         ai_response_container = st.empty()
@@ -354,9 +357,9 @@ if task['type'] == 'coding':
                 'CSS': 'css',
                 'JS': 'javascript'
             }
-            if task['coding_language'] == 'html':
+            if task['coding_language'] == 'HTML':
                 tab_names = ['HTML']
-            elif task['coding_language'] == 'css':
+            elif task['coding_language'] == 'CSS':
                 tab_names = ['HTML', 'CSS']
             elif task['coding_language'] == 'Javascript':
                 if task['show_code_preview']:
@@ -387,7 +390,8 @@ if task['type'] == 'coding':
             except Exception as e:
                 st.error(f"Error: {e}")
 
-        submit_button_col.button("Submit Code", type='primary', on_click=get_ai_feedback_on_code)
+        if submit_button_col.button("Submit Code", type='primary'):
+            get_ai_feedback_on_code()
 
 user_response_placeholder = 'Your response'
 
