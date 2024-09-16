@@ -1,7 +1,9 @@
 from typing import List
+import itertools
 import traceback
 import asyncio
 from functools import partial
+import numpy as np
 import streamlit as st
 st.set_page_config(layout="wide")
 
@@ -281,6 +283,12 @@ if not st.session_state.tasks:
     st.stop()
 
 df = pd.DataFrame(st.session_state.tasks)
+
+all_tags = np.unique(list(itertools.chain(*[tags for tags in df['tags'].tolist()]))).tolist()
+filter_tags = st.multiselect('Filter by tags', all_tags)
+
+if filter_tags:
+    df = df[df['tags'].apply(lambda x: any(tag in x for tag in filter_tags))]
 
 column_config={
     # 'id': None
