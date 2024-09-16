@@ -31,6 +31,11 @@ def check_and_update_chat_history_table():
 
 
 def init_db():
+    # Ensure the database folder exists
+    db_folder = os.path.dirname(sqlite_db_path)
+    if not os.path.exists(db_folder):
+        os.makedirs(db_folder)
+
     if exists(sqlite_db_path):
         # db exists, check for and apply any necessary schema changes
         check_and_update_chat_history_table()
