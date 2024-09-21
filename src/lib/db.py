@@ -46,9 +46,9 @@ def check_and_update_tasks_table():
             # ignore the error
             pass
 
-    if 'show_code_preview' not in columns:
+    if 'show_code_preview' in columns:
         try:
-            cursor.execute(f"ALTER TABLE {tasks_table_name} ADD COLUMN show_code_preview BOOLEAN NOT NULL DEFAULT FALSE")
+            cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN show_code_preview")
             conn.commit()
         except sqlite3.OperationalError:
             # ignore the error
@@ -88,7 +88,6 @@ def init_db():
             answer TEXT NOT NULL,
             tags TEXT NOT NULL,  -- Stored as comma-separated values
             type TEXT NOT NULL DEFAULT 'text',
-            show_code_preview BOOLEAN NOT NULL DEFAULT FALSE,
             coding_language TEXT,
             generation_model TEXT NOT NULL,
             verified BOOLEAN NOT NULL,
@@ -127,36 +126,43 @@ def get_db_connection():
     return sqlite3.connect(sqlite_db_path)
 
 
-def store_task(name: str, description: str, answer: str, tags: List[str], task_type: str, show_code_preview: bool, coding_language: str, generation_model: str, verified: bool):
+def store_task(name: str, description: str, answer: str, tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
     tags_str = ",".join(tags)
+    coding_language_str = ",".join(coding_languages)
+
+    # import ipdb; ipdb.set_trace()
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    INSERT INTO {tasks_table_name} (name, description, answer, tags, type, show_code_preview, coding_language, generation_model, verified)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (name, description, answer, tags_str, task_type, show_code_preview, coding_language, generation_model, verified))
+    INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (name, description, answer, tags_str, task_type, coding_language_str, generation_model, verified))
 
     conn.commit()
     conn.close()
 
-def update_task(task_id: int, name: str, description: str, answer: str, task_tags: List[str], task_type: str, show_code_preview: bool, coding_language: str, generation_model: str, verified: bool):
+def update_task(task_id: int, name: str, description: str, answer: str, task_tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
     task_tags_str = ",".join(task_tags)
+    coding_language_str = ",".join(coding_languages)
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(f'''
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, tags = ?, type = ?, show_code_preview = ?, coding_language = ?, generation_model = ?, verified = ?
+    SET name = ?, description = ?, answer = ?, tags = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?
     WHERE id = ?
-    ''', (name, description, answer, task_tags_str, task_type, show_code_preview, coding_language, generation_model, verified, task_id))
+    ''', (name, description, answer, task_tags_str, task_type, coding_language_str, generation_model, verified, task_id))
 
     conn.commit()
     conn.close()
 
 def update_column_for_task_ids(task_ids: List[int], column_name: Any, new_value: Any):
+    if isinstance(new_value, list):
+        new_value = ",".join(new_value)
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -175,7 +181,7 @@ def get_all_tasks():
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT id, name, description, answer, tags, type, show_code_preview, coding_language, generation_model, verified, timestamp FROM {tasks_table_name}
+    SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name}
     ORDER BY timestamp ASC
     ''')
 
@@ -191,8 +197,7 @@ def get_all_tasks():
             'answer': row[3],
             'tags': row[4].split(','),
             'type': row[5],
-            'show_code_preview': bool(row[6]),
-            'coding_language': row[7],
+            'coding_language': row[6].split(','),
             'generation_model': row[-3],
             'verified': bool(row[-2]),
             'timestamp': row[-1]
@@ -210,7 +215,7 @@ def get_task_by_id(task_id: int):
     cursor = conn.cursor()
 
     cursor.execute(f'''
-    SELECT id, name, description, answer, tags, type, show_code_preview, coding_language, generation_model, verified, timestamp FROM {tasks_table_name} WHERE id = ?
+    SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name} WHERE id = ?
     ''', (task_id,))
 
     task = cursor.fetchone()
@@ -227,8 +232,7 @@ def get_task_by_id(task_id: int):
         'answer': task[3],
         'tags': task[4].split(','),
         'type': task[5],
-        'show_code_preview': bool(task[6]),
-        'coding_language': task[7],
+        'coding_language': task[6].split(','),
         'generation_model': task[-3],
         'verified': bool(task[-2]),
         'timestamp': task[-1]

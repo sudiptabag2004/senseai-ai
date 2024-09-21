@@ -293,6 +293,8 @@ def get_ai_feedback(user_response: str):
     st.session_state.chat_history.append(new_ai_message)
     # st.session_state.ai_chat_history.add_ai_message(transform_assistant_message_for_ai_history(new_ai_message))
 
+    retain_code()
+
     st.rerun()
 
 # st.session_state.ai_chat_history
@@ -308,7 +310,6 @@ def retain_code():
 
 def is_any_code_present():
     return bool(st.session_state.get('html_code', '') or st.session_state.get('css_code', '') or st.session_state.get('js_code', ''))
-
 
 def get_preview_code():
     if not is_any_code_present():
@@ -336,25 +337,25 @@ def get_preview_code():
     return combined_code.format(html_code=st.session_state.html_code, css_code=st.session_state.css_code, js_code=st.session_state.js_code)
 
 def get_code_for_ai_feedback():
-    combined_code = f"`HTML`\n\n{st.session_state.html_code}"
+    combined_code = []
+
+    if st.session_state.html_code:
+        combined_code.append(f"`HTML`\n\n{st.session_state.html_code}")
 
     if st.session_state.css_code:
-        # CSS code will always come with HTML code
-        combined_code += f"\n\n`CSS`\n\n{st.session_state.css_code}"
+        combined_code.append(f"`CSS`\n\n{st.session_state.css_code}")
 
     if st.session_state.js_code:
-        if task['show_code_preview']:
-            # JS code will always come with HTML and CSS code when preview mode is enabled
-            combined_code += f"\n\n`JS`\n\n{st.session_state.js_code}"
-        else:
-            # JS code will be submitted as a standalone message when preview mode is disabled
-            combined_code = f"{st.session_state.js_code}"
+        combined_code.append(f"`JS`\n\n{st.session_state.js_code}")
+
+    # st.session_state.js_code
 
     # combined_code = combined_code.replace('`', '\`').replace('{', '\{').replace('}', '\}').replace('$', '\$')
     # combined_code = f'`{combined_code}`'
-    return combined_code
+    return "\n\n".join(combined_code)
 
 def get_ai_feedback_on_code():
+    toggle_show_code_output()
     get_ai_feedback(get_code_for_ai_feedback())
 
 
@@ -362,6 +363,9 @@ if 'show_code_output' not in st.session_state:
     st.session_state.show_code_output = False
 
 def toggle_show_code_output():
+    if not is_any_code_present():
+        return
+
     st.session_state.show_code_output = not st.session_state.show_code_output
     retain_code()
 
@@ -370,26 +374,24 @@ if task['type'] == 'coding':
         for lang in supported_language_keys:
             if lang not in st.session_state:
                 st.session_state[lang] = ''
-        
+
         close_preview_button_col, _, _, submit_button_col = st.columns([2, 1, 1, 1])
 
         if not st.session_state.show_code_output:
+            lang_name_to_tab_name = {
+                'HTML': 'HTML',
+                'CSS': 'CSS',
+                'Javascript': 'JS'
+            }
             tab_name_to_language = {
                 'HTML': 'html',
                 'CSS': 'css',
                 'JS': 'javascript'
             }
-            if task['coding_language'] == 'HTML':
-                tab_names = ['HTML']
-            elif task['coding_language'] == 'CSS':
-                tab_names = ['HTML', 'CSS']
-            elif task['coding_language'] == 'Javascript':
-                if task['show_code_preview']:
-                    tab_names = ['HTML', 'CSS', 'JS']
-                else:
-                    tab_names = ['JS']
+            tab_names = []
+            for lang in task['coding_language']:
+                tab_names.append(lang_name_to_tab_name[lang])
 
-            
             with st.form('Code'):
                 st.form_submit_button("Run Code", on_click=toggle_show_code_output)
 
@@ -398,7 +400,7 @@ if task['type'] == 'coding':
                     with tab:
                         tab_name = tab_names[index].lower()
                         language = tab_name_to_language[tab_names[index]]
-                        st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...",)
+                        st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...")
 
         else:
             import streamlit.components.v1 as components
@@ -408,20 +410,17 @@ if task['type'] == 'coding':
                 width = dim_cols[1].slider('Preview Width', min_value=100, max_value=600, value=600, on_change=retain_code)
 
             try:
-                # Render the HTML code in Streamlit using components.v1.html
                 with st.container(border=True):
-                    # st.write(f'`{get_preview_code()}`')
-                    
-                    components.html(get_preview_code(), width=width, height=height, scrolling=True)
+                    if 'HTML' in task['coding_language']:
+                        components.html(get_preview_code(), width=width, height=height, scrolling=True)
+                    # TODO: support for only JS
+                    # TODO: support for other languages
             except Exception as e:
                 st.error(f"Error: {e}")
 
             close_preview_button_col.button("Back to Editor", on_click=toggle_show_code_output)
 
-        if submit_button_col.button("Submit Code", type='primary'):
-            get_ai_feedback_on_code()
-
-        
+            submit_button_col.button("Submit Code", type='primary', on_click=get_ai_feedback_on_code)
 
 user_response_placeholder = 'Your response'
 

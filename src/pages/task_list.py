@@ -41,7 +41,7 @@ df_actions = st.container(border=True)
 
 event = st.dataframe(
     filtered_df.style.map(
-        lambda _: "background-color: green;", subset=(filtered_df[filtered_df['status'] != ''].index, slice(None))
+        lambda _: "background-color: #62B670;", subset=(filtered_df[filtered_df['status'] != ''].index, slice(None))
     ),
     on_select='rerun',
     selection_mode='single-row',
