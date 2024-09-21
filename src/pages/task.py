@@ -29,6 +29,18 @@ from lib.init import init_env_vars, init_db
 init_env_vars()
 init_db()
 
+st.markdown("""
+<style>
+        .block-container {
+            padding-top: 3rem;
+            padding-bottom: 2rem;
+            padding-left: 5rem;
+            padding-right: 5rem;
+        }
+</style>
+""", unsafe_allow_html=True)
+
+
 if 'email' not in st.query_params:
     st.error('Not authorized. Redirecting to home page...')
     time.sleep(2)
@@ -89,10 +101,12 @@ with sticky_container(mode="top", border=True, background_color=task_name_contai
 
 if task['type'] == 'coding':
     chat_column, code_column = st.columns([5, 5])
-    chat_container = chat_column.container(height=400)
+    chat_container = chat_column.container(height=450)
+    chat_input_container = chat_column.container(height=100, border=False)
 else:
     # chat_column = st.columns(1)[0]
     chat_container = st.container()
+    chat_input_container = None
 
 def transform_user_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
@@ -344,19 +358,22 @@ def get_ai_feedback_on_code():
     get_ai_feedback(get_code_for_ai_feedback())
 
 
+if 'show_code_output' not in st.session_state:
+    st.session_state.show_code_output = False
+
+def toggle_show_code_output():
+    st.session_state.show_code_output = not st.session_state.show_code_output
+    retain_code()
+
 if task['type'] == 'coding':
     with code_column:
         for lang in supported_language_keys:
             if lang not in st.session_state:
                 st.session_state[lang] = ''
         
-        preview_mode_col, _, _, submit_button_col = st.columns([2, 1, 1, 1])
-        if task['show_code_preview']:
-            is_preview_mode = preview_mode_col.toggle("Show Preview", value=False, on_change=retain_code)
-        else:
-            is_preview_mode = False
+        close_preview_button_col, _, _, submit_button_col = st.columns([2, 1, 1, 1])
 
-        if not is_preview_mode:
+        if not st.session_state.show_code_output:
             tab_name_to_language = {
                 'HTML': 'html',
                 'CSS': 'css',
@@ -372,12 +389,16 @@ if task['type'] == 'coding':
                 else:
                     tab_names = ['JS']
 
-            tabs = st.tabs(tab_names)
-            for index, tab in enumerate(tabs):
-                with tab:
-                    tab_name = tab_names[index].lower()
-                    language = tab_name_to_language[tab_names[index]]
-                    st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...",)
+            
+            with st.form('Code'):
+                st.form_submit_button("Run Code", on_click=toggle_show_code_output)
+
+                tabs = st.tabs(tab_names)
+                for index, tab in enumerate(tabs):
+                    with tab:
+                        tab_name = tab_names[index].lower()
+                        language = tab_name_to_language[tab_names[index]]
+                        st_ace(min_lines=15, theme='monokai', language=language, tab_size=2, key=f'{tab_name}_code', auto_update=True, value=st.session_state[f'{tab_name}_code'], placeholder=f"Write your {language} code here...",)
 
         else:
             import streamlit.components.v1 as components
@@ -395,8 +416,12 @@ if task['type'] == 'coding':
             except Exception as e:
                 st.error(f"Error: {e}")
 
+            close_preview_button_col.button("Back to Editor", on_click=toggle_show_code_output)
+
         if submit_button_col.button("Submit Code", type='primary'):
             get_ai_feedback_on_code()
+
+        
 
 user_response_placeholder = 'Your response'
 
@@ -406,8 +431,16 @@ else:
     user_response_placeholder = 'Write your response here'
 # st.session_state.js_code
 
-if user_response := st.chat_input(user_response_placeholder):
-    get_ai_feedback(user_response)
+
+def show_and_handle_chat_input():
+    if user_response := st.chat_input(user_response_placeholder):
+        get_ai_feedback(user_response)
+
+if chat_input_container:
+    with chat_input_container:
+        show_and_handle_chat_input()
+else:
+    show_and_handle_chat_input()
 
 # def get_default_chat_input_value():
 #     if not is_any_code_present():
