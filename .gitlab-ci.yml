@@ -1,7 +1,6 @@
 stages:
   - build
-  - deploy-staging
-  - deploy-production
+  - deploy-dev
   - deploy-demo
 
 build:
@@ -14,8 +13,8 @@ build:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
 
-deploy-staging:
-  stage: deploy-staging
+deploy-dev:
+  stage: deploy-dev
   image: ubuntu:latest
   before_script:
     - apt-get update
@@ -24,40 +23,17 @@ deploy-staging:
     - echo "$SSH_DEV_PRIVATE_KEY" | ssh-add -
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - ssh-keyscan -H $DEPLOY_DEV_SERVER_IP >> ~/.ssh/known_hosts
+    - ssh-keyscan -H $DEPLOY_DEMO_SERVER_IP >> ~/.ssh/known_hosts
   script:
-    - scp -o StrictHostKeyChecking=no docker-compose.ai.staging.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP:~/docker-compose.ai.staging.yml
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml down --rmi "all"'
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml pull'
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEV_SERVER_IP 'sudo docker compose -f docker-compose.ai.staging.yml up -d'
-
+    - scp -o StrictHostKeyChecking=no docker-compose.ai.dev.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP:~/docker-compose.ai.dev.yml
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.dev.yml down --rmi "all"'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.dev.yml pull'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.dev.yml up -d'
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "staging" '
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "staging"'
-    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "staging"'
-
-deploy-production:
-  stage: deploy-production
-  image: ubuntu:latest
-  before_script:
-    - apt-get update
-    - apt-get install -y openssh-client
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PROD_PRIVATE_KEY" | ssh-add -
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - ssh-keyscan -H $DEPLOY_PROD_SERVER_IP >> ~/.ssh/known_hosts
-  script:
-    - scp -o StrictHostKeyChecking=no docker-compose.ai.production.yml $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP:~/docker-compose.ai.production.yml
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml down --rmi "all"'
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml pull'
-    - ssh $DEPLOY_PROD_SERVER_USERNAME@$DEPLOY_PROD_SERVER_IP 'sudo docker compose -f docker-compose.ai.production.yml up -d'
-
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "production"'
-    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "production"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "v2-dev" '
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "v2-dev"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == "v2-dev"'
 
 deploy-demo:
   stage: deploy-demo
