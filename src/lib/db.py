@@ -202,7 +202,7 @@ def get_all_tasks():
             'answer': row[3],
             'tags': row[4].split(','),
             'type': row[5],
-            'coding_language': row[6].split(','),
+            'coding_language': row[6].split(',') if row[6] else row[6],
             'generation_model': row[-3],
             'verified': bool(row[-2]),
             'timestamp': row[-1]
@@ -237,7 +237,7 @@ def get_task_by_id(task_id: int):
         'answer': task[3],
         'tags': task[4].split(','),
         'type': task[5],
-        'coding_language': task[6].split(','),
+        'coding_language': task[6].split(',') if task[6] else task[6],
         'generation_model': task[-3],
         'verified': bool(task[-2]),
         'timestamp': task[-1]
