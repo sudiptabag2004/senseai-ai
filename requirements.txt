@@ -13,3 +13,4 @@ fastapi==0.114.1
 uvicorn==0.30.6
 streamlit-ace==0.1.1
 st-theme==1.2.3
+instructor==1.4.3

@@ -95,6 +95,13 @@ Our thinking on how AI can impact Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
 
 ## What's New
+**2024-09-22**
+- Fixed a bug where an error was thrown upon toggling the "Show Code Editor" button while creating a task.
+- Updated the list of tags that can be used while creating a task.
+- Removed LangChain for streaming JSON responses. Using Instructor and a much simpler approach overall to stream JSON responses.
+- Improved the system prompt to not give away the answer, to maintain formatting and diversity in the feedback while also including an emojis in the feedback from time to time.
+- Fixed the widget duplication error being thrown on the task page when rendering the chat UI.
+
 **2024-09-21**
 - Added support for a dev container to test new features before pushing to prod.
 - Fixed the bug where adding code to the code editor kept refreshing the entire page making for a page experience. Instead of automatically updating the session state variables where the code for each language is stored as one is typing, the variables are now set only after the learner manually clicks the "Run Code" button.
