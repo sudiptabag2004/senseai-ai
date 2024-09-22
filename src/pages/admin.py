@@ -175,7 +175,7 @@ def show_bulk_upload_tasks_form():
     coding_languages = None
 
     if show_code_editor:
-        coding_languages = st.selectbox(admin_code_editor_language_label, coding_languages_supported, help=admin_code_editor_language_help, key='coding_languages')
+        coding_languages = st.multiselect(admin_code_editor_language_label, coding_languages_supported, help=admin_code_editor_language_help, key='coding_languages')
 
     task_type = get_task_type(show_code_editor)
     

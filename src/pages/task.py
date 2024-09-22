@@ -413,6 +413,8 @@ if task['type'] == 'coding':
                 with st.container(border=True):
                     if 'HTML' in task['coding_language']:
                         components.html(get_preview_code(), width=width, height=height, scrolling=True)
+                    else:
+                        st.write('**No output to show**')
                     # TODO: support for only JS
                     # TODO: support for other languages
             except Exception as e:
