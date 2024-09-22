@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from lib.llm import get_llm_input_messages, call_llm_and_parse_output, COMMON_INSTRUCTIONS
 from lib.init import init_env_vars, init_db
 from lib.db import get_all_tasks, store_task as store_task_to_db, delete_tasks as delete_tasks_from_db, update_task as update_task_in_db, update_column_for_task_ids
+from lib.strings import *
+from lib.config import coding_languages_supported
 
 init_env_vars()
 init_db()
@@ -83,8 +85,8 @@ def get_task_type(is_code_editor_enabled: bool):
 
 def add_verified_task_to_list():
     task_type = get_task_type(st.session_state.show_code_editor)
-
-    store_task_to_db(st.session_state.task_name, st.session_state.task_description, st.session_state.answer, st.session_state.tags, task_type, st.session_state.show_code_preview, st.session_state.coding_language, model['version'], True)
+    
+    store_task_to_db(st.session_state.task_name, st.session_state.task_description, st.session_state.answer, st.session_state.tags, task_type, st.session_state.coding_languages, model['version'], True)
     st.session_state.tasks = get_all_tasks()
 
 @st.dialog("Add a new task")
@@ -102,12 +104,10 @@ Rewrite the greet function as an arrow function.""")
 
     cols = st.columns(2)
 
-    if cols[0].checkbox("Show code editor?", value=True, key="show_code_editor", help='Whether to show a code editor to write the answer'):
-        cols[1].checkbox("Show code preview?", value=True, key="show_code_preview", help='Whether to show a preview for the code. There might be programming tasks for which preview is not needed (e.g. tasks in pure Javascript, not connected to any HTML)')
-        st.selectbox("Code editor language (more languages coming soon!)", ['HTML', 'CSS', 'Javascript'], help="For CSS, space for both HTML and CSS is provided. For JS, space for HTML, CSS and JS is provided.", key='coding_language')
+    if cols[0].checkbox(admin_show_code_editor_label, value=True, key="show_code_editor", help=admin_show_code_editor_help):
+        st.multiselect(admin_code_editor_language_label, coding_languages_supported, help=admin_code_editor_language_help, key='coding_languages')
     else:
-        st.session_state.show_code_preview = False
-        st.session_state.coding_language = None
+        st.session_state.coding_languages = None
 
     answer = st.text_area("Answer", key='answer')
     generate_answer_col, _, verify_col = st.columns(3)
@@ -170,15 +170,12 @@ async def generate_answers_for_tasks(tasks_df):
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-
     cols = st.columns(2)
-    show_code_editor = cols[0].checkbox("Show code editor?", value=True, help='Whether to show a code editor to write the answer')
-    coding_language = None
-    show_code_preview = False
+    show_code_editor = cols[0].checkbox(admin_show_code_editor_label, value=True, help=admin_show_code_editor_help)
+    coding_languages = None
 
     if show_code_editor:
-        show_code_preview = cols[1].checkbox("Show code preview?", value=True, help='Whether to show a preview for the code. There might be programming tasks for which preview is not needed (e.g. tasks in pure Javascript, not connected to any HTML)')
-        coding_language = st.selectbox("Code editor language (more languages coming soon!)", ['HTML', 'CSS', 'Javascript'], help="For CSS, space for both HTML and CSS is provided. For JS, space for HTML, CSS and JS is provided.", key='coding_language')
+        coding_languages = st.multiselect(admin_code_editor_language_label, coding_languages_supported, help=admin_code_editor_language_help, key='coding_languages')
 
     task_type = get_task_type(show_code_editor)
     
@@ -197,7 +194,7 @@ def show_bulk_upload_tasks_form():
         # st.dataframe(tasks_df)
         
         for _, row in tasks_df.iterrows():
-            store_task_to_db(row['Name'], row['Description'], row['Answer'], row['Tags'].split(','), task_type, show_code_preview, coding_language, model['version'], False)
+            store_task_to_db(row['Name'], row['Description'], row['Answer'], row['Tags'].split(','), task_type, coding_languages, model['version'], False)
 
         # st.success("Answers generated successfully. Select 'Verify Mode', go through the unverified answers and verify them for learners to access them.")
 
@@ -240,15 +237,15 @@ def update_tasks_with_new_value(task_ids: List[int], column_to_update: str, new_
 
 @st.dialog("Edit tasks")
 def show_task_edit_dialog(task_ids):
-    column_to_update = st.selectbox("Select a column to update", ['type', 'show_code_preview', 'coding_language'])
+    column_to_update = st.selectbox("Select a column to update", ['type', 'coding_language'])
     if column_to_update == 'type':
+        option_component = st.selectbox
         options = ['text', 'coding']
-    elif column_to_update == 'show_code_preview':
-        options = [True, False]
     else:
-        options = ['HTML', 'CSS', 'Javascript']
+        option_component = st.multiselect
+        options = coding_languages_supported
 
-    new_value = st.selectbox("Select the new value", options)
+    new_value = option_component("Select the new value", options)
 
     st.write('Are you sure you want to update the selected tasks?')
 
@@ -300,7 +297,7 @@ column_config={
     ),
 }
 
-column_order = ['id','verified', 'name', 'description', 'answer', 'tags', 'type', 'show_code_preview', 'coding_language', 'generation_model', 'timestamp']
+column_order = ['id','verified', 'name', 'description', 'answer', 'tags', 'type', 'coding_language', 'generation_model', 'timestamp']
 
 
 def save_changes_in_edit_mode(edited_df):
@@ -312,7 +309,7 @@ def save_changes_in_edit_mode(edited_df):
     for _, row in changed_rows.iterrows():
         task_id = row['id']
         # print(task_id)
-        update_task_in_db(task_id, row['name'], row['description'], row['answer'], row['tags'], row['type'], row['show_code_preview'], row['coding_language'], row['generation_model'], row['verified'])
+        update_task_in_db(task_id, row['name'], row['description'], row['answer'], row['tags'], row['type'], row['coding_language'], row['generation_model'], row['verified'])
     
     # Refresh the tasks in the session state
     st.session_state.tasks = get_all_tasks()
