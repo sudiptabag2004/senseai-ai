@@ -75,7 +75,7 @@ def generate_answer_for_form_task():
     st.session_state.answer = asyncio.run(generate_answer_for_task(st.session_state.task_name, st.session_state.task_description))
 
 
-tag_list = ['Functions', 'Javascript']
+tag_list = ['Functions', 'Javascript', 'Strings', 'Arrays', 'Objects', 'Classes', "Basic CSS Properties", "Box Model", 'Display', 'Flexbox', 'HTML', 'Media Queries', 'Page Structuring', 'Project', 'Selectors', 'Advanced Arrays', 'Advanced Loops', 'Basic HTML Tags', 'CSS', 'Conditions', 'Forms', 'HTML Introduction', 'Loops', 'React']
 
 def get_task_type(is_code_editor_enabled: bool):
     if is_code_editor_enabled:
@@ -100,12 +100,15 @@ Modify the greet function to have a default argument of "Guest" for the name par
 Rewrite the greet function as a function expression and store it in a variable called greetFunction.
 Rewrite the greet function as an arrow function.""")
 
-    st.multiselect("Tags", tag_list, key='tags', default=tag_list)
+    st.multiselect("Tags", tag_list, key='tags', default=[tag_list[0]])
 
     cols = st.columns(2)
 
-    if cols[0].checkbox(admin_show_code_editor_label, value=True, key="show_code_editor", help=admin_show_code_editor_help):
+    if cols[0].checkbox(admin_show_code_editor_label, value=True, help=admin_show_code_editor_help, key='show_code_editor'):
+        if 'coding_languages' in st.session_state and st.session_state.coding_languages is None:
+            st.session_state.coding_languages = []
         st.multiselect(admin_code_editor_language_label, coding_languages_supported, help=admin_code_editor_language_help, key='coding_languages')
+        # st.session_state.coding_languages 
     else:
         st.session_state.coding_languages = None
 

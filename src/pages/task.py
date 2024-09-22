@@ -1,4 +1,5 @@
-from typing import Literal
+from typing import List
+from typing_extensions import TypedDict, Annotated
 import os
 import time
 import json
@@ -10,11 +11,12 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.chat_history import (
-    InMemoryChatMessageHistory,
-)
+# from langchain_core.chat_history import (
+#     InMemoryChatMessageHistory,
+# )
+from langchain.globals import set_verbose, set_debug
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables.history import RunnableWithMessageHistory
+# from langchain_core.runnables.history import RunnableWithMessageHistory
 
 import streamlit as st
 st.set_page_config(layout="wide")
@@ -25,9 +27,13 @@ from streamlit_ace import st_ace, THEMES
 from components.sticky_container import sticky_container
 from lib.db import get_task_by_id, store_message as store_message_to_db, get_task_chat_history_for_user, delete_message as delete_message_from_db
 from lib.init import init_env_vars, init_db
+from lib.chat import MessageHistory
 
 init_env_vars()
 init_db()
+
+# set_verbose(True)
+# set_debug(True)
 
 st.markdown("""
 <style>
@@ -110,21 +116,23 @@ else:
 
 def transform_user_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": f'''Student's response: ```\n{message['content']}\n```'''}
-    return HumanMessage(content=f'''Student's response: ```\n{message['content']}\n```''')
+    return f'''Student's response: ```\n{message['content']}\n```'''
 
 
 def transform_assistant_message_for_ai_history(message: dict):
     # return {"role": message['role'], "content": message['content']}
-    return AIMessage(content=message['content'])
+    return message['content']
 
 
 if "ai_chat_history" not in st.session_state:
-    st.session_state.ai_chat_history = InMemoryChatMessageHistory()
+    st.session_state.ai_chat_history = MessageHistory()
     st.session_state.ai_chat_history.add_user_message(f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```""")
 
     # st.session_state.ai_chat_history = [{"role": "user", "content": f"""Task:\n```\n{task['description']}\n```\n\nSolution:\n```\n{task['answer']}\n```"""}]
     for message in st.session_state.chat_history:
+        # import ipdb; ipdb.set_trace()
         if message['role'] == 'user':
+            # import ipdb; ipdb.set_trace()
             st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(message))
         else:
             st.session_state.ai_chat_history.add_ai_message(transform_assistant_message_for_ai_history(message))
@@ -157,15 +165,19 @@ def delete_user_chat_message(index_to_delete: int):
 
 
 def display_user_message(user_response: str, message_index: int):
+    delete_button_key = f'message_{message_index}'
+    # if delete_button_key in st.session_state:
+    #     return
+
     with chat_container.chat_message("user"):
         user_answer_cols = st.columns([5, 1])
-        user_answer_cols[0].markdown(user_response)
+        user_answer_cols[0].markdown(user_response, unsafe_allow_html=True)
         user_answer_cols[1].button(
             "Delete",
             on_click=partial(
                 delete_user_chat_message, index_to_delete=message_index
             ),
-            key=f'message_{message_index}',
+            key=delete_button_key,
         )
 
 # st.session_state.chat_history
@@ -174,10 +186,11 @@ def display_user_message(user_response: str, message_index: int):
 # Display chat messages from history on app rerun
 for index, message in enumerate(st.session_state.chat_history):
     if message['role'] == 'user':
+        # import ipdb; ipdb.set_trace()
         display_user_message(message['content'], message_index=index)
     else:
         with chat_container.chat_message(message["role"]):
-            st.markdown(message["content"])
+            st.markdown(message["content"], unsafe_allow_html=True)
 
 
 def get_session_history():
@@ -210,48 +223,77 @@ async def _extract_feedback(input_stream):
         yield feedback
 
 
-async def get_ai_response(user_message: str):
+def get_ai_response(user_message: str):
+    import instructor
+    import openai
+
+    client = instructor.from_openai(openai.OpenAI())
+
+    # class Output(TypedDict):
+    #     response: Annotated[str, "Your response to the student's message"]
+    #     is_solved: Annotated[bool, "Whether the student's response correctly solves the task"]
+
     class Output(BaseModel):
-        feedback: str = Field(description="Feedback on the student's response")
-        is_solved: bool = Field(description="Whether the student's response correctly solves the task")
+        feedback: List[str] = Field(description="Feedback on the student's response; return each word as a separate element in the list; add newline characters to the feedback to make it more readable")
+        is_correct: bool = Field(description="Whether the student's response correctly solves the task given to the student")
 
     parser = PydanticOutputParser(pydantic_object=Output)
     format_instructions = parser.get_format_instructions()
 
-    system_prompt = """You are a Socratic tutor who responds only in JSON.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has been provided to you for evaluating the student's response only. Keep this in mind while responding to the student.\n\n{format_instructions}."""
+    system_prompt = f"""You are a Socratic tutor.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the student's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- If the task resolves around code, use backticks ("`", "```") to format sections of code or variable/function names in your feedback.\n- No matter how frustrated the student gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has only been given to you for evaluating the student's response. Keep this in mind while responding to the student.\n\n{format_instructions}"""
 
-    prompt_template = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        MessagesPlaceholder(variable_name="messages"),
-    ]).partial(format_instructions=format_instructions)
+    model = 'gpt-4o-2024-08-06'
 
-    model = ChatOpenAI(model='gpt-4o-2024-08-06', temperature=0, top_p=1, frequency_penalty=0, presence_penalty=0, verbose=True)
+    st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(user_message))
 
-    chain = prompt_template | model | JsonOutputParser() | _extract_feedback
+    messages = [{'role': 'system', 'content': system_prompt}] + st.session_state.ai_chat_history.messages
 
-    with_message_history = RunnableWithMessageHistory(chain, get_session_history)
-
-    async for chunk in with_message_history.astream({
-        "messages": [transform_user_message_for_ai_history(user_message)]
-    }):
-        yield chunk
-    # response = await with_message_history.ainvoke({
-    #     "messages": [transform_user_message_for_ai_history(user_message)]
-    # })
     # import ipdb; ipdb.set_trace()
-    # return response
+
+    return client.chat.completions.create_partial(
+        model=model,
+        messages=messages,
+        response_model=Output,
+        temperature=0,
+        top_p=1,
+        stream=True,
+        frequency_penalty=0,
+        presence_penalty=0,
+    )
 
 
-def sync_generator(async_gen):
-    loop = asyncio.new_event_loop()
-    try:
-        while True:
-            yield loop.run_until_complete(async_gen.__anext__())
-    except StopAsyncIteration:
-        pass
-    finally:
-        loop.close()
-
+def display_waiting_indicator():
+    st.markdown("""
+        <style>
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            height: 20px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            margin: 0 2px;
+            background: #999;
+            border-radius: 50%;
+            animation: bounce 1s infinite alternate;
+        }
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-15px); }
+        }
+        </style>
+        <div class="typing-indicator">
+            <span></span><span></span><span></span>
+        </div>
+    """, unsafe_allow_html=True)
 
 def get_ai_feedback(user_response: str):
     # import ipdb; ipdb.set_trace()
@@ -266,22 +308,28 @@ def get_ai_feedback(user_response: str):
     # Display assistant response in chat message container
     with chat_container.chat_message("assistant"):
         ai_response_container = st.empty()
-        for chunk in sync_generator(get_ai_response(user_message)):
-            if "is_solved" not in chunk:
-                ai_response = chunk
-                ai_response_container.write(ai_response)
-            else:
-                # print(chunk)
-                is_solved = json.loads(chunk)['is_solved']
+
+        with ai_response_container:
+            display_waiting_indicator()
+
+        for extraction in get_ai_response(user_message):
+            if json_dump := extraction.model_dump():
+                # print(json_dump)
+                ai_response_list = json_dump['feedback']
+                if ai_response_list:
+                    ai_response = ' '.join(ai_response_list)
+                    ai_response = ai_response.replace('\n', '\n\n')
+                    ai_response_container.markdown(ai_response, unsafe_allow_html=True)
+
+                is_solved = json_dump['is_correct'] if json_dump['is_correct'] is not None else False
+
                 if not st.session_state.is_solved and is_solved:
                     st.balloons()
                     st.session_state.is_solved = True
                     time.sleep(2)
 
-        # ai_response = st.write_stream(sync_generator(get_ai_response(user_message)))
-        # ai_response = asyncio.run(get_ai_response(user_message))
-    
-    st.session_state.ai_chat_history.messages[-1].content = ai_response
+    st.write(ai_response)
+    st.session_state.ai_chat_history.add_ai_message(ai_response)
 
     # st.session_state.chat_history.append(ai_response)
     # Add user message to chat history [store to db only if ai response has been completely fetched]
@@ -291,9 +339,8 @@ def get_ai_feedback(user_response: str):
     # Add assistant response to chat history
     new_ai_message = store_message_to_db(st.session_state.email, task_id, "assistant", ai_response)
     st.session_state.chat_history.append(new_ai_message)
-    # st.session_state.ai_chat_history.add_ai_message(transform_assistant_message_for_ai_history(new_ai_message))
 
-    retain_code()
+    # retain_code()
 
     st.rerun()
 
@@ -304,7 +351,7 @@ supported_language_keys = ['html_code', 'css_code', 'js_code']
 
 def retain_code():
     for key in supported_language_keys:
-        if key in st.session_state:
+        if key in st.session_state and st.session_state[key]:
             st.session_state[key] = st.session_state[key]
 
 
@@ -339,13 +386,13 @@ def get_preview_code():
 def get_code_for_ai_feedback():
     combined_code = []
 
-    if st.session_state.html_code:
+    if st.session_state.get('html_code'):
         combined_code.append(f"`HTML`\n\n{st.session_state.html_code}")
 
-    if st.session_state.css_code:
+    if st.session_state.get('css_code'):
         combined_code.append(f"`CSS`\n\n{st.session_state.css_code}")
 
-    if st.session_state.js_code:
+    if st.session_state.get('js_code'):
         combined_code.append(f"`JS`\n\n{st.session_state.js_code}")
 
     # st.session_state.js_code
@@ -363,6 +410,7 @@ if 'show_code_output' not in st.session_state:
     st.session_state.show_code_output = False
 
 def toggle_show_code_output():
+    submit_button_col.write(is_any_code_present())
     if not is_any_code_present():
         return
 
@@ -376,6 +424,8 @@ if task['type'] == 'coding':
                 st.session_state[lang] = ''
 
         close_preview_button_col, _, _, submit_button_col = st.columns([2, 1, 1, 1])
+
+        # st.session_state.show_code_output
 
         if not st.session_state.show_code_output:
             lang_name_to_tab_name = {
@@ -422,7 +472,8 @@ if task['type'] == 'coding':
 
             close_preview_button_col.button("Back to Editor", on_click=toggle_show_code_output)
 
-            submit_button_col.button("Submit Code", type='primary', on_click=get_ai_feedback_on_code)
+            if submit_button_col.button("Submit Code", type='primary'):
+                get_ai_feedback_on_code()
 
 user_response_placeholder = 'Your response'
 
@@ -430,8 +481,9 @@ if task['type'] == 'coding':
     user_response_placeholder = 'Use the code editor for submitting code and ask/tell anything else here'
 else:
     user_response_placeholder = 'Write your response here'
-# st.session_state.js_code
 
+# st.session_state.chat_history
+# st.session_state.ai_chat_history.messages
 
 def show_and_handle_chat_input():
     if user_response := st.chat_input(user_response_placeholder):
@@ -442,51 +494,3 @@ if chat_input_container:
         show_and_handle_chat_input()
 else:
     show_and_handle_chat_input()
-
-# def get_default_chat_input_value():
-#     if not is_any_code_present():
-#         return '``'
-
-#     combined_code = f"HTML\n\n{st.session_state.html_code}"
-
-#     if st.session_state.css_code:
-#         combined_code += f"\n\nCSS\n\n{st.session_state.css_code}"
-
-#     # st.session_state.js_code
-
-#     if st.session_state.js_code:
-#         if task['show_code_preview']:
-#             combined_code += f"\n\nJS\n\n{st.session_state.js_code}"
-#         else:
-#             combined_code = f"{st.session_state.js_code}"
-
-#     combined_code = combined_code.replace('`', '\`').replace('{', '\{').replace('}', '\}').replace('$', '\$')
-#     combined_code = f'`{combined_code}`'
-
-#     return combined_code
-
-# st.write(default_chat_input_value)
-
-# default_chat_input_value = get_default_chat_input_value()
-# # default_chat_input_value = "`Default value`"
-# # default_chat_input_value = """`<h1>Hello, World!</h1>
-# # <p>This is a live HTML preview with CSS and JavaScript.</p>
-# # <button onclick="changeText()">Click Me</button>`"""
-# # st.write(default_chat_input_value)
-
-# # if default_chat_input_value:
-# # print(default_chat_input_value)
-# js = f"""
-#     <script>
-#         function insertText(dummy_var_to_force_repeat_execution) {{
-#             var chatInput = parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-#             var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-#             nativeInputValueSetter.call(chatInput, {default_chat_input_value});
-#             var event = new Event('input', {{ bubbles: true}});
-#             chatInput.dispatchEvent(event);
-#         }}
-#         insertText({len(st.session_state.chat_history)});
-#     </script>
-#     """
-# st.components.v1.html(js, height=0)
-    # st.markdown(js, unsafe_allow_html=True)
