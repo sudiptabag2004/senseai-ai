@@ -95,6 +95,12 @@ Our thinking on how AI can impact Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
 
 ## What's New
+**2024-09-21**
+- Added support for a dev container to test new features before pushing to prod.
+- Fixed the bug where adding code to the code editor kept refreshing the entire page making for a page experience. Instead of automatically updating the session state variables where the code for each language is stored as one is typing, the variables are now set only after the learner manually clicks the "Run Code" button.
+- Updated the Task UI to give more space to the code editor and restrict the learner's chat input to the chat section of the page.
+- Removed the `Show Code Preview` button from the task creator page and converted `coding_language` to a list of languages so that we avoid hardcoding which languages to show in the code editor and everything is clearly specified by the task creator.
+
 **2024-09-16**
 - Fixed the bug where only one email was being used globally across all users. Used a hack for storing the email in the session state and using the query params in the URL to set it.
 - @shekhar32 [fixed](https://gitlab.com/hvacademy/sensai-ai/-/merge_requests/4) the bug where status was being set for all tasks without checking if tasks exist

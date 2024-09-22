@@ -49,7 +49,7 @@ deploy-demo:
   script:
     - scp -o StrictHostKeyChecking=no docker-compose.ai.demo.yml $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP:~/docker-compose.ai.demo.yml
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP "sudo docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD"
-    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml -p sensai-prod down --rmi local'
+    - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml -p sensai-prod down --rmi "all"'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml pull'
     - ssh $DEPLOY_DEV_SERVER_USERNAME@$DEPLOY_DEMO_SERVER_IP 'sudo docker compose -f docker-compose.ai.demo.yml -p sensai-prod up -d'
   rules:
