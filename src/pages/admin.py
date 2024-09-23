@@ -182,13 +182,13 @@ def show_bulk_upload_tasks_form():
 
     task_type = get_task_type(show_code_editor)
     
-    uploaded_file = st.file_uploader("Choose a CSV file with columns: `Name`, `Description`, `Tags`", type='csv')
+    uploaded_file = st.file_uploader("Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags`, `Answer` (optional)", type='csv')
 
     if uploaded_file:
-        tasks_df = pd.read_csv(uploaded_file)    
+        tasks_df = pd.read_csv(uploaded_file)
 
-        # with st.spinner("Generating answers for tasks..."):
-        tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
+        if 'Answer' not in tasks_df.columns:
+            tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
 
             # st.write(row)
             # my_bar.progress(index + 1, text="Generating answers for tasks... ({}/{})".format(index + 1, len(tasks_df)))
