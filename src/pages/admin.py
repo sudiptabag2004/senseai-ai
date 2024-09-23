@@ -283,6 +283,7 @@ if not st.session_state.tasks:
     st.stop()
 
 df = pd.DataFrame(st.session_state.tasks)
+df['coding_language'] = df['coding_language'].apply(lambda x: x.split(',') if isinstance(x, str) else x)
 
 all_tags = np.unique(list(itertools.chain(*[tags for tags in df['tags'].tolist()]))).tolist()
 filter_tags = st.multiselect('Filter by tags', all_tags)
@@ -318,8 +319,6 @@ def save_changes_in_edit_mode(edited_df):
     st.session_state.tasks = get_all_tasks()
     st.toast('Changes saved successfully!')
     # st.rerun()
-
-df['coding_language'] = df['coding_language'].apply(lambda x: x.split(',') if isinstance(x, str) else x)
 
 if not is_edit_mode:
     delete_col, edit_col, _, _ = st.columns([2, 4, 3, 3])
