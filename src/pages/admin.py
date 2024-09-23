@@ -319,6 +319,8 @@ def save_changes_in_edit_mode(edited_df):
     st.toast('Changes saved successfully!')
     # st.rerun()
 
+df['coding_language'] = df['coding_language'].apply(lambda x: x.split(',') if isinstance(x, str) else x)
+
 if not is_edit_mode:
     delete_col, edit_col, _, _ = st.columns([2, 4, 3, 3])
 
