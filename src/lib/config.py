@@ -19,4 +19,4 @@ sqlite_db_path = f"{data_root_dir}/db.sqlite"
 chat_history_table_name = "chat_history"
 tasks_table_name = "tasks"
 
-coding_languages_supported = ['HTML', 'CSS', 'Javascript']
+coding_languages_supported = ['HTML', 'CSS', 'Javascript', 'NodeJS', 'Python']
