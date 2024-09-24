@@ -131,9 +131,21 @@ def get_db_connection():
     return sqlite3.connect(sqlite_db_path)
 
 
+def serialise_list_to_str(list_to_serialise: List[str]):
+    if list_to_serialise:
+        return ",".join(list_to_serialise)
+    
+    return None
+    
+def deserialise_list_from_str(str_to_deserialise: str):
+    if str_to_deserialise:
+        return str_to_deserialise.split(',')
+    
+    return []
+
 def store_task(name: str, description: str, answer: str, tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
-    tags_str = ",".join(tags)
-    coding_language_str = ",".join(coding_languages)
+    tags_str = serialise_list_to_str(tags)
+    coding_language_str = serialise_list_to_str(coding_languages)
 
     # import ipdb; ipdb.set_trace()
 
@@ -149,8 +161,8 @@ def store_task(name: str, description: str, answer: str, tags: List[str], task_t
     conn.close()
 
 def update_task(task_id: int, name: str, description: str, answer: str, task_tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
-    task_tags_str = ",".join(task_tags)
-    coding_language_str = ",".join(coding_languages)
+    task_tags_str = serialise_list_to_str(task_tags)
+    coding_language_str = serialise_list_to_str(coding_languages)
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -200,9 +212,9 @@ def get_all_tasks():
             'name': row[1],
             'description': row[2],
             'answer': row[3],
-            'tags': row[4].split(','),
+            'tags': deserialise_list_from_str(row[4]),
             'type': row[5],
-            'coding_language': row[6].split(',') if row[6] else row[6],
+            'coding_language': deserialise_list_from_str(row[6]),
             'generation_model': row[-3],
             'verified': bool(row[-2]),
             'timestamp': row[-1]
@@ -235,9 +247,9 @@ def get_task_by_id(task_id: int):
         'name': task[1],
         'description': task[2],
         'answer': task[3],
-        'tags': task[4].split(','),
+        'tags': deserialise_list_from_str(task[4]),
         'type': task[5],
-        'coding_language': task[6].split(',') if task[6] else task[6],
+        'coding_language': deserialise_list_from_str(task[6]),
         'generation_model': task[-3],
         'verified': bool(task[-2]),
         'timestamp': task[-1]

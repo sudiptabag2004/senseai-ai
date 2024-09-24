@@ -309,6 +309,8 @@ def save_changes_in_edit_mode(edited_df):
     # and update the db with the new values
     # import ipdb; ipdb.set_trace()
     changed_rows = edited_df[(df != edited_df).any(axis=1)]
+
+    print(f'Changed rows: {len(changed_rows)}', flush=True)
     
     for _, row in changed_rows.iterrows():
         task_id = row['id']
