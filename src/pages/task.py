@@ -347,7 +347,7 @@ def get_ai_feedback(user_response: str):
 # st.session_state.ai_chat_history
 # st.session_state.is_solved
 
-supported_language_keys = ['html_code', 'css_code', 'js_code']
+supported_language_keys = ['html_code', 'css_code', 'js_code', 'nodejs_code', 'python_code']
 
 def retain_code():
     for key in supported_language_keys:
@@ -356,7 +356,7 @@ def retain_code():
 
 
 def is_any_code_present():
-    return bool(st.session_state.get('html_code', '') or st.session_state.get('css_code', '') or st.session_state.get('js_code', ''))
+    return bool(st.session_state.get('html_code', '') or st.session_state.get('css_code', '') or st.session_state.get('js_code', '') or st.session_state.get('nodejs_code', '') or st.session_state.get('python_code', ''))
 
 def get_preview_code():
     if not is_any_code_present():
@@ -383,17 +383,26 @@ def get_preview_code():
 
     return combined_code.format(html_code=st.session_state.html_code, css_code=st.session_state.css_code, js_code=st.session_state.js_code)
 
+def clean_code(code: str):
+    return code.strip()
+
 def get_code_for_ai_feedback():
     combined_code = []
 
     if st.session_state.get('html_code'):
-        combined_code.append(f"`HTML`\n\n{st.session_state.html_code}")
+        combined_code.append(f"```html\n{clean_code(st.session_state.html_code)}\n```")
 
     if st.session_state.get('css_code'):
-        combined_code.append(f"`CSS`\n\n{st.session_state.css_code}")
+        combined_code.append(f"```css\n{clean_code(st.session_state.css_code)}\n```")
 
     if st.session_state.get('js_code'):
-        combined_code.append(f"`JS`\n\n{st.session_state.js_code}")
+        combined_code.append(f"```js\n{clean_code(st.session_state.js_code)}\n```")
+
+    if st.session_state.nodejs_code:
+        combined_code.append(f"```js\n{clean_code(st.session_state.nodejs_code)}\n```")
+
+    if st.session_state.python_code:
+        combined_code.append(f"```python\n{clean_code(st.session_state.python_code)}\n```")
 
     # st.session_state.js_code
 
@@ -410,7 +419,7 @@ if 'show_code_output' not in st.session_state:
     st.session_state.show_code_output = False
 
 def toggle_show_code_output():
-    submit_button_col.write(is_any_code_present())
+    # submit_button_col.write(is_any_code_present())
     if not is_any_code_present():
         return
 
@@ -431,12 +440,16 @@ if task['type'] == 'coding':
             lang_name_to_tab_name = {
                 'HTML': 'HTML',
                 'CSS': 'CSS',
-                'Javascript': 'JS'
+                'Javascript': 'JS',
+                'NodeJS': 'NodeJS',
+                'Python': 'Python'
             }
             tab_name_to_language = {
                 'HTML': 'html',
                 'CSS': 'css',
-                'JS': 'javascript'
+                'JS': 'javascript',
+                'NodeJS': 'javascript',
+                'Python': 'python'
             }
             tab_names = []
             for lang in task['coding_language']:
@@ -454,10 +467,11 @@ if task['type'] == 'coding':
 
         else:
             import streamlit.components.v1 as components
-            with st.expander("Configuration"):
-                dim_cols = st.columns(2)
-                height = dim_cols[0].slider('Preview Height', min_value=100, max_value=1000, value=300, on_change=retain_code)
-                width = dim_cols[1].slider('Preview Width', min_value=100, max_value=600, value=600, on_change=retain_code)
+            if any(lang in task['coding_language'] for lang in ['HTML', 'CSS', 'Javascript']):
+                with st.expander("Configuration"):
+                    dim_cols = st.columns(2)
+                    height = dim_cols[0].slider('Preview Height', min_value=100, max_value=1000, value=300, on_change=retain_code)
+                    width = dim_cols[1].slider('Preview Width', min_value=100, max_value=600, value=600, on_change=retain_code)
 
             try:
                 with st.container(border=True):
