@@ -1,11 +1,10 @@
-
-
 import os
 from os.path import exists
 import sqlite3
 from typing import List, Any
-import streamlit as st
+from datetime import datetime
 from lib.config import sqlite_db_path, chat_history_table_name, tasks_table_name
+from lib.utils import get_date_from_str
 
 
 def check_and_update_chat_history_table():
@@ -16,12 +15,14 @@ def check_and_update_chat_history_table():
     cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
     columns = [column[1] for column in cursor.fetchall()]
 
-    if 'is_solved' in columns:
+    if "is_solved" in columns:
         conn.close()
         return
-    
+
     try:
-        cursor.execute(f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0")
+        cursor.execute(
+            f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         # ignore the error
@@ -38,25 +39,31 @@ def check_and_update_tasks_table():
     cursor.execute(f"PRAGMA table_info({tasks_table_name})")
     columns = [column[1] for column in cursor.fetchall()]
 
-    if 'type' not in columns:
+    if "type" not in columns:
         try:
-            cursor.execute(f"ALTER TABLE {tasks_table_name} ADD COLUMN type TEXT NOT NULL DEFAULT 'text'")
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN type TEXT NOT NULL DEFAULT 'text'"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             # ignore the error
             pass
 
-    if 'show_code_preview' in columns:
+    if "show_code_preview" in columns:
         try:
-            cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN show_code_preview")
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} DROP COLUMN show_code_preview"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             # ignore the error
             pass
 
-    if 'coding_language' not in columns:
+    if "coding_language" not in columns:
         try:
-            cursor.execute(f"ALTER TABLE {tasks_table_name} ADD COLUMN coding_language TEXT")
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN coding_language TEXT"
+            )
             conn.commit()
         except sqlite3.OperationalError:
             # ignore the error
@@ -85,7 +92,8 @@ def init_db():
         cursor = conn.cursor()
 
         # Create a table to store tasks
-        cursor.execute(f'''
+        cursor.execute(
+            f"""
         CREATE TABLE IF NOT EXISTS {tasks_table_name} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -98,10 +106,12 @@ def init_db():
             verified BOOLEAN NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-        ''')
+        """
+        )
 
         # Create a table to store chat history
-        cursor.execute(f'''
+        cursor.execute(
+            f"""
         CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -112,7 +122,8 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
         )
-        ''')
+        """
+        )
 
         # Commit the changes and close the connection
         conn.commit()
@@ -122,7 +133,7 @@ def init_db():
         # delete db
         conn.close()
         os.remove(sqlite_db_path)
-        raise exception    
+        raise exception
 
 
 # @st.cache_resource
@@ -134,16 +145,27 @@ def get_db_connection():
 def serialise_list_to_str(list_to_serialise: List[str]):
     if list_to_serialise:
         return ",".join(list_to_serialise)
-    
+
     return None
-    
+
+
 def deserialise_list_from_str(str_to_deserialise: str):
     if str_to_deserialise:
-        return str_to_deserialise.split(',')
-    
+        return str_to_deserialise.split(",")
+
     return []
 
-def store_task(name: str, description: str, answer: str, tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
+
+def store_task(
+    name: str,
+    description: str,
+    answer: str,
+    tags: List[str],
+    task_type: str,
+    coding_languages: List[str],
+    generation_model: str,
+    verified: bool,
+):
     tags_str = serialise_list_to_str(tags)
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -152,29 +174,66 @@ def store_task(name: str, description: str, answer: str, tags: List[str], task_t
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (name, description, answer, tags_str, task_type, coding_language_str, generation_model, verified))
+    """,
+        (
+            name,
+            description,
+            answer,
+            tags_str,
+            task_type,
+            coding_language_str,
+            generation_model,
+            verified,
+        ),
+    )
 
     conn.commit()
     conn.close()
 
-def update_task(task_id: int, name: str, description: str, answer: str, task_tags: List[str], task_type: str, coding_languages: List[str], generation_model: str, verified: bool):
+
+def update_task(
+    task_id: int,
+    name: str,
+    description: str,
+    answer: str,
+    task_tags: List[str],
+    task_type: str,
+    coding_languages: List[str],
+    generation_model: str,
+    verified: bool,
+):
     task_tags_str = serialise_list_to_str(task_tags)
     coding_language_str = serialise_list_to_str(coding_languages)
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     UPDATE {tasks_table_name}
     SET name = ?, description = ?, answer = ?, tags = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?
     WHERE id = ?
-    ''', (name, description, answer, task_tags_str, task_type, coding_language_str, generation_model, verified, task_id))
+    """,
+        (
+            name,
+            description,
+            answer,
+            task_tags_str,
+            task_type,
+            coding_language_str,
+            generation_model,
+            verified,
+            task_id,
+        ),
+    )
 
     conn.commit()
     conn.close()
+
 
 def update_column_for_task_ids(task_ids: List[int], column_name: Any, new_value: Any):
     if isinstance(new_value, list):
@@ -183,24 +242,29 @@ def update_column_for_task_ids(task_ids: List[int], column_name: Any, new_value:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     UPDATE {tasks_table_name}
     SET {column_name} = ?
     WHERE id IN ({','.join(map(str, task_ids))})
-    ''', (new_value,))
+    """,
+        (new_value,),
+    )
 
     conn.commit()
     conn.close()
 
-    
+
 def get_all_tasks():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name}
     ORDER BY timestamp ASC
-    ''')
+    """
+    )
 
     tasks = cursor.fetchall()
 
@@ -208,16 +272,16 @@ def get_all_tasks():
 
     tasks_dicts = [
         {
-            'id': row[0],
-            'name': row[1],
-            'description': row[2],
-            'answer': row[3],
-            'tags': deserialise_list_from_str(row[4]),
-            'type': row[5],
-            'coding_language': deserialise_list_from_str(row[6]),
-            'generation_model': row[-3],
-            'verified': bool(row[-2]),
-            'timestamp': row[-1]
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "answer": row[3],
+            "tags": deserialise_list_from_str(row[4]),
+            "type": row[5],
+            "coding_language": deserialise_list_from_str(row[6]),
+            "generation_model": row[-3],
+            "verified": bool(row[-2]),
+            "timestamp": row[-1],
         }
         for row in tasks
     ]
@@ -231,9 +295,12 @@ def get_task_by_id(task_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name} WHERE id = ?
-    ''', (task_id,))
+    """,
+        (task_id,),
+    )
 
     task = cursor.fetchone()
 
@@ -243,16 +310,16 @@ def get_task_by_id(task_id: int):
         return None
 
     return {
-        'id': task[0],
-        'name': task[1],
-        'description': task[2],
-        'answer': task[3],
-        'tags': deserialise_list_from_str(task[4]),
-        'type': task[5],
-        'coding_language': deserialise_list_from_str(task[6]),
-        'generation_model': task[-3],
-        'verified': bool(task[-2]),
-        'timestamp': task[-1]
+        "id": task[0],
+        "name": task[1],
+        "description": task[2],
+        "answer": task[3],
+        "tags": deserialise_list_from_str(task[4]),
+        "type": task[5],
+        "coding_language": deserialise_list_from_str(task[6]),
+        "generation_model": task[-3],
+        "verified": bool(task[-2]),
+        "timestamp": task[-1],
     }
 
 
@@ -260,9 +327,12 @@ def delete_task(task_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     DELETE FROM {tasks_table_name} WHERE id = ?
-    ''', (task_id,))
+    """,
+        (task_id,),
+    )
 
     conn.commit()
     conn.close()
@@ -274,9 +344,11 @@ def delete_tasks(task_ids: List[int]):
 
     # import ipdb; ipdb.set_trace()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     DELETE FROM {tasks_table_name} WHERE id IN ({','.join(map(str, task_ids))})
-    ''')
+    """
+    )
 
     conn.commit()
     conn.close()
@@ -286,22 +358,29 @@ def delete_all_tasks():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     DELETE FROM {tasks_table_name}
-    ''')
+    """
+    )
 
     conn.commit()
     conn.close()
 
 
-def store_message(user_id: str, task_id: int, role: str, content: str, is_solved: bool = False):
+def store_message(
+    user_id: str, task_id: int, role: str, content: str, is_solved: bool = False
+):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     INSERT INTO {chat_history_table_name} (user_id, task_id, role, content, is_solved)
     VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, task_id, role, content, is_solved))
+    """,
+        (user_id, task_id, role, content, is_solved),
+    )
 
     # Get the ID of the newly inserted row
     new_id = cursor.lastrowid
@@ -313,11 +392,14 @@ def store_message(user_id: str, task_id: int, role: str, content: str, is_solved
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT id, timestamp, user_id, task_id, role, content
     FROM {chat_history_table_name}
     WHERE id = ?
-    ''', (new_id,))
+    """,
+        (new_id,),
+    )
 
     new_row = cursor.fetchone()
 
@@ -325,12 +407,12 @@ def store_message(user_id: str, task_id: int, role: str, content: str, is_solved
 
     # Return the newly inserted row as a dictionary
     return {
-        'id': new_row[0],
-        'timestamp': new_row[1],
-        'user_id': new_row[2],
-        'task_id': new_row[3],
-        'role': new_row[4],
-        'content': new_row[5]
+        "id": new_row[0],
+        "timestamp": new_row[1],
+        "user_id": new_row[2],
+        "task_id": new_row[3],
+        "role": new_row[4],
+        "content": new_row[5],
     }
 
 
@@ -338,12 +420,14 @@ def get_all_chat_history():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved 
     FROM {chat_history_table_name} message
     LEFT JOIN {tasks_table_name} task ON message.task_id = task.id
     ORDER BY message.timestamp ASC
-    ''')
+    """
+    )
 
     chat_history = cursor.fetchall()
 
@@ -351,14 +435,14 @@ def get_all_chat_history():
 
     chat_history_dicts = [
         {
-            'id': row[0],
-            'timestamp': row[1],
-            'user_id': row[2],
-            'task_id': row[3],
-            'task_name': row[4],
-            'role': row[5],
-            'content': row[6],
-            'is_solved': bool(row[7])
+            "id": row[0],
+            "timestamp": row[1],
+            "user_id": row[2],
+            "task_id": row[3],
+            "task_name": row[4],
+            "role": row[5],
+            "content": row[6],
+            "is_solved": bool(row[7]),
         }
         for row in chat_history
     ]
@@ -370,9 +454,12 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT id, timestamp, user_id, task_id, role, content, is_solved FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
-    ''', (task_id, user_id))
+    """,
+        (task_id, user_id),
+    )
 
     chat_history = cursor.fetchall()
 
@@ -380,13 +467,13 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
 
     chat_history_dicts = [
         {
-            'id': row[0],
-            'timestamp': row[1],
-            'user_id': row[2],
-            'task_id': row[3],
-            'role': row[4],
-            'content': row[5],
-            'is_solved': bool(row[6])
+            "id": row[0],
+            "timestamp": row[1],
+            "user_id": row[2],
+            "task_id": row[3],
+            "role": row[4],
+            "content": row[5],
+            "is_solved": bool(row[6]),
         }
         for row in chat_history
     ]
@@ -397,9 +484,12 @@ def get_solved_tasks_for_user(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
-    ''', (user_id,))
+    """,
+        (user_id,),
+    )
 
     return [task[0] for task in cursor.fetchall()]
 
@@ -408,9 +498,12 @@ def delete_message(message_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     DELETE FROM {chat_history_table_name} WHERE id = ?
-    ''', (message_id,))
+    """,
+        (message_id,),
+    )
 
     conn.commit()
     conn.close()
@@ -420,9 +513,60 @@ def delete_all_chat_history():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     DELETE FROM {chat_history_table_name}
-    ''')
+    """
+    )
 
     conn.commit()
     conn.close()
+
+
+def get_streaks():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all user interactions, ordered by user and timestamp
+    cursor.execute(
+        f"""
+    SELECT user_id, GROUP_CONCAT(timestamp) as timestamps
+    FROM (
+        SELECT user_id, MAX(timestamp) as timestamp
+        FROM {chat_history_table_name}
+        GROUP BY user_id, DATE(timestamp)
+        ORDER BY user_id, timestamp DESC
+    )
+    GROUP BY user_id
+    """
+    )
+
+    usage_per_user = cursor.fetchall()
+    conn.close()
+
+    streaks = {}
+    today = datetime.now().date()
+
+    for user_id, user_usage_dates_str in usage_per_user:
+        user_usage_dates = user_usage_dates_str.split(",")
+        user_usage_dates = [
+            get_date_from_str(date_str) for date_str in user_usage_dates
+        ]
+
+        if not user_usage_dates:
+            streaks[user_id] = 0
+            continue
+
+        current_streak = 0
+        for i, date in enumerate(user_usage_dates):
+            if i == 0 and (today - date).days > 1:
+                # the user has not used the app yesterday or today, so the streak is broken
+                break
+            if i == 0 or (user_usage_dates[i - 1] - date).days == 1:
+                current_streak += 1
+            else:
+                break
+
+        streaks[user_id] = current_streak
+
+    return streaks

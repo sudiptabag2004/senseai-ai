@@ -1,11 +1,12 @@
 from enum import Enum
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict
 
 
 class ChatRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
+
 
 class ChatMessage(BaseModel):
     id: int
@@ -17,6 +18,7 @@ class ChatMessage(BaseModel):
     is_solved: bool
     timestamp: str
 
+
 class Task(BaseModel):
     id: int
     name: str
@@ -26,3 +28,6 @@ class Task(BaseModel):
     generation_model: str
     verified: bool
     timestamp: str
+
+
+Streaks = Dict[str, int]
