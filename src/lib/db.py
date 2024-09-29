@@ -523,6 +523,51 @@ def delete_all_chat_history():
     conn.close()
 
 
+def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
+    if not user_usage_dates:
+        return []
+
+    today = datetime.now().date()
+    current_streak = []
+
+    user_usage_dates = [get_date_from_str(date_str) for date_str in user_usage_dates]
+
+    for i, date in enumerate(user_usage_dates):
+        if i == 0 and (today - date).days > 1:
+            # the user has not used the app yesterday or today, so the streak is broken
+            break
+        if i == 0 or (user_usage_dates[i - 1] - date).days == 1:
+            current_streak.append(date)
+        else:
+            break
+
+    return current_streak
+
+
+def get_user_streak(user_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get the user's interactions, ordered by timestamp
+    cursor.execute(
+        f"""
+    SELECT MAX(timestamp) as timestamp
+    FROM {chat_history_table_name}
+    WHERE user_id = ?
+    GROUP BY DATE(timestamp)
+    ORDER BY timestamp DESC
+    """,
+        (user_id,),
+    )
+
+    user_usage_dates = cursor.fetchall()
+    conn.close()
+
+    return get_user_streak_from_usage_dates(
+        [date_str for date_str, in user_usage_dates]
+    )
+
+
 def get_streaks():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -545,28 +590,11 @@ def get_streaks():
     conn.close()
 
     streaks = {}
-    today = datetime.now().date()
 
     for user_id, user_usage_dates_str in usage_per_user:
         user_usage_dates = user_usage_dates_str.split(",")
-        user_usage_dates = [
-            get_date_from_str(date_str) for date_str in user_usage_dates
-        ]
-
-        if not user_usage_dates:
-            streaks[user_id] = 0
-            continue
-
-        current_streak = 0
-        for i, date in enumerate(user_usage_dates):
-            if i == 0 and (today - date).days > 1:
-                # the user has not used the app yesterday or today, so the streak is broken
-                break
-            if i == 0 or (user_usage_dates[i - 1] - date).days == 1:
-                current_streak += 1
-            else:
-                break
-
-        streaks[user_id] = current_streak
+        streaks[user_id] = len(
+            get_user_streak_from_usage_dates(user_usage_dates, only_count=True)
+        )
 
     return streaks
