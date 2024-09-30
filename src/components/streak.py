@@ -43,11 +43,9 @@ def display_day_level_streak(user_streak: List[datetime]):
     # Get the current date
     today = datetime.now().date()
 
-    # Find the most recent Sunday
-    start_of_week = today - timedelta(days=today.weekday())
-
-    # Generate the list of day numbers for the current week
-    days = [(start_of_week + timedelta(days=i)).day for i in range(7)]
+    # Generate the list of day numbers with the current day at the center
+    today_index = 3  # Index of today in the 7-day list (0-based)
+    days = [(today - timedelta(days=today_index - i)).day for i in range(7)]
 
     # Create columns for each day
     cols = st.columns(7)
