@@ -593,8 +593,6 @@ def get_streaks():
 
     for user_id, user_usage_dates_str in usage_per_user:
         user_usage_dates = user_usage_dates_str.split(",")
-        streaks[user_id] = len(
-            get_user_streak_from_usage_dates(user_usage_dates, only_count=True)
-        )
+        streaks[user_id] = len(get_user_streak_from_usage_dates(user_usage_dates))
 
     return streaks
