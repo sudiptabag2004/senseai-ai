@@ -36,6 +36,7 @@ from lib.db import (
 )
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
+from components.code_execution import execute_code
 
 init_env_vars()
 init_db()
@@ -594,6 +595,12 @@ if task["type"] == "coding":
                             height=height,
                             scrolling=True,
                         )
+                    elif "Javascript" in task["coding_language"]:
+                        execute_code(st.session_state.js_code, "Javascript")
+                    elif "NodeJS" in task["coding_language"]:
+                        execute_code(st.session_state.nodejs_code, "NodeJS")
+                    elif "Python" in task["coding_language"]:
+                        execute_code(st.session_state.python_code, "Python")
                     else:
                         st.write("**No output to show**")
                     # TODO: support for only JS
