@@ -2,6 +2,12 @@ FROM python:3.9.19-slim-bookworm
 
 RUN apt-get update && apt-get install -y gcc python3-dev
 
+# Install Node.js and npm
+RUN apt-get install -y curl
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+RUN apt-get install -y nodejs
+
+
 # Copy requirements.txt to the container
 COPY requirements.txt ./
 
