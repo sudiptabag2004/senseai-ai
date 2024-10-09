@@ -31,13 +31,28 @@ def check_and_update_chat_history_table():
     conn.close()
 
 
+tasks_table_schema = """(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    tags TEXT,  -- Stored as comma-separated values
+    type TEXT NOT NULL DEFAULT 'text',
+    coding_language TEXT,
+    generation_model TEXT NOT NULL,
+    verified BOOLEAN NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+)"""
+
+
 def check_and_update_tasks_table():
     conn = sqlite3.connect(sqlite_db_path)
     cursor = conn.cursor()
 
     # check if a column exists in a table
     cursor.execute(f"PRAGMA table_info({tasks_table_name})")
-    columns = [column[1] for column in cursor.fetchall()]
+    columns_info = cursor.fetchall()
+    columns = [column[1] for column in columns_info]
 
     if "type" not in columns:
         try:
@@ -69,6 +84,38 @@ def check_and_update_tasks_table():
             # ignore the error
             pass
 
+    # Check if tags column is NOT NULL
+    tags_column = next((col for col in columns_info if col[1] == "tags"), None)
+
+    if tags_column and tags_column[3] == 1:  # 1 indicates NOT NULL
+        try:
+            # Create a new table with the desired schema
+            cursor.execute(
+                f"""CREATE TABLE {tasks_table_name}_new {tasks_table_schema}"""
+            )
+
+            # Copy data from the old table to the new table
+            cursor.execute(
+                f"""
+                INSERT INTO {tasks_table_name}_new
+                SELECT * FROM {tasks_table_name}
+            """
+            )
+
+            # Drop the old table
+            cursor.execute(f"DROP TABLE {tasks_table_name}")
+
+            # Rename the new table to the original table name
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name}_new RENAME TO {tasks_table_name}"
+            )
+
+            conn.commit()
+            print(f"Successfully made 'tags' column nullable in {tasks_table_name}")
+        except sqlite3.OperationalError as e:
+            print(f"Error modifying 'tags' column: {e}")
+            conn.rollback()
+
     conn.close()
 
 
@@ -93,20 +140,7 @@ def init_db():
 
         # Create a table to store tasks
         cursor.execute(
-            f"""
-        CREATE TABLE IF NOT EXISTS {tasks_table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            tags TEXT NOT NULL,  -- Stored as comma-separated values
-            type TEXT NOT NULL DEFAULT 'text',
-            coding_language TEXT,
-            generation_model TEXT NOT NULL,
-            verified BOOLEAN NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} {tasks_table_schema}"""
         )
 
         # Create a table to store chat history
