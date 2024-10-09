@@ -512,7 +512,7 @@ if "show_code_output" not in st.session_state:
 
 def toggle_show_code_output():
     # submit_button_col.write(is_any_code_present())
-    if not is_any_code_present():
+    if not st.session_state.show_code_output and not is_any_code_present():
         return
 
     st.session_state.show_code_output = not st.session_state.show_code_output
