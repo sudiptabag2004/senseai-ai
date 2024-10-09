@@ -1,11 +1,16 @@
 from enum import Enum
-from pydantic import BaseModel, Field
-from typing import List, Dict
+from pydantic import BaseModel
+from typing import List, Dict, Optional
 
 
 class ChatRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
+
+
+class ResponseType(str, Enum):
+    TEXT = "text"
+    CODE = "code"
 
 
 class ChatMessage(BaseModel):
@@ -16,6 +21,7 @@ class ChatMessage(BaseModel):
     role: ChatRole
     content: str
     is_solved: bool
+    response_type: Optional[ResponseType]
     timestamp: str
 
 

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 from typing_extensions import TypedDict, Annotated
 import os
 import time
@@ -344,7 +344,7 @@ def display_waiting_indicator():
     )
 
 
-def get_ai_feedback(user_response: str):
+def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     # import ipdb; ipdb.set_trace()
     display_user_message(user_response, len(st.session_state.chat_history))
 
@@ -393,12 +393,17 @@ def get_ai_feedback(user_response: str):
         "user",
         user_response,
         st.session_state.is_solved,
+        response_type,
     )
     st.session_state.chat_history[-1] = new_user_message
 
     # Add assistant response to chat history
     new_ai_message = store_message_to_db(
-        st.session_state.email, task_id, "assistant", ai_response
+        st.session_state.email,
+        task_id,
+        "assistant",
+        ai_response,
+        st.session_state.is_solved,
     )
     st.session_state.chat_history.append(new_ai_message)
 
@@ -498,7 +503,7 @@ def get_code_for_ai_feedback():
 
 def get_ai_feedback_on_code():
     toggle_show_code_output()
-    get_ai_feedback(get_code_for_ai_feedback())
+    get_ai_feedback(get_code_for_ai_feedback(), "code")
 
 
 if "show_code_output" not in st.session_state:
@@ -630,7 +635,7 @@ else:
 
 def show_and_handle_chat_input():
     if user_response := st.chat_input(user_response_placeholder):
-        get_ai_feedback(user_response)
+        get_ai_feedback(user_response, "text")
 
 
 if chat_input_container:

@@ -15,18 +15,25 @@ def check_and_update_chat_history_table():
     cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
     columns = [column[1] for column in cursor.fetchall()]
 
-    if "is_solved" in columns:
-        conn.close()
-        return
+    if "is_solved" not in columns:
+        try:
+            cursor.execute(
+                f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            # ignore the error
+            pass
 
-    try:
-        cursor.execute(
-            f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0"
-        )
-        conn.commit()
-    except sqlite3.OperationalError:
-        # ignore the error
-        pass
+    if "response_type" not in columns:
+        try:
+            cursor.execute(
+                f"ALTER TABLE {chat_history_table_name} ADD COLUMN response_type TEXT"
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            # ignore the error
+            pass
 
     conn.close()
 
@@ -153,6 +160,7 @@ def init_db():
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             is_solved BOOLEAN NOT NULL DEFAULT 0,
+            response_type TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
         )
@@ -403,17 +411,22 @@ def delete_all_tasks():
 
 
 def store_message(
-    user_id: str, task_id: int, role: str, content: str, is_solved: bool = False
+    user_id: str,
+    task_id: int,
+    role: str,
+    content: str,
+    is_solved: bool = False,
+    response_type: str = None,
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         f"""
-    INSERT INTO {chat_history_table_name} (user_id, task_id, role, content, is_solved)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO {chat_history_table_name} (user_id, task_id, role, content, is_solved, response_type)
+    VALUES (?, ?, ?, ?, ?, ?)
     """,
-        (user_id, task_id, role, content, is_solved),
+        (user_id, task_id, role, content, is_solved, response_type),
     )
 
     # Get the ID of the newly inserted row
@@ -428,7 +441,7 @@ def store_message(
 
     cursor.execute(
         f"""
-    SELECT id, timestamp, user_id, task_id, role, content
+    SELECT id, timestamp, user_id, task_id, role, content, is_solved, response_type
     FROM {chat_history_table_name}
     WHERE id = ?
     """,
@@ -447,6 +460,8 @@ def store_message(
         "task_id": new_row[3],
         "role": new_row[4],
         "content": new_row[5],
+        "is_solved": new_row[6],
+        "response_type": new_row[7],
     }
 
 
@@ -456,7 +471,7 @@ def get_all_chat_history():
 
     cursor.execute(
         f"""
-    SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved 
+    SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type 
     FROM {chat_history_table_name} message
     LEFT JOIN {tasks_table_name} task ON message.task_id = task.id
     ORDER BY message.timestamp ASC
@@ -477,6 +492,7 @@ def get_all_chat_history():
             "role": row[5],
             "content": row[6],
             "is_solved": bool(row[7]),
+            "response_type": row[8],
         }
         for row in chat_history
     ]
