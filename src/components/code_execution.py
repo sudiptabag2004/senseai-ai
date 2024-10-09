@@ -55,6 +55,7 @@ def execute_code(code: str, lang: str):
         output = run_nodejs_code(code)
     elif lang == "Python":
         if user_input_instances := get_python_user_input_instances(code):
+
             # Create text input widgets for each user input instance
             with st.expander("User Inputs"):
                 st.markdown("Hit `Enter` after adding the input")
@@ -66,8 +67,13 @@ def execute_code(code: str, lang: str):
                     )
 
             # Replace input() calls with the collected user inputs
+            offset = 0
             for i, (start, end) in enumerate(user_input_instances):
-                code = code[:start] + f"'{st.session_state[f'input_{i}']}'" + code[end:]
+                replacement = f"'{st.session_state[f'input_{i}']}'"
+                code = code[: start + offset] + replacement + code[end + offset :]
+                offset += len(replacement) - (end - start)
+
+            # print(code)
 
         output = run_python_code(code)
     else:
