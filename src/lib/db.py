@@ -91,38 +91,6 @@ def check_and_update_tasks_table():
             # ignore the error
             pass
 
-    # Check if tags column is NOT NULL
-    tags_column = next((col for col in columns_info if col[1] == "tags"), None)
-
-    if tags_column and tags_column[3] == 1:  # 1 indicates NOT NULL
-        try:
-            # Create a new table with the desired schema
-            cursor.execute(
-                f"""CREATE TABLE {tasks_table_name}_new {tasks_table_schema}"""
-            )
-
-            # Copy data from the old table to the new table
-            cursor.execute(
-                f"""
-                INSERT INTO {tasks_table_name}_new
-                SELECT * FROM {tasks_table_name}
-            """
-            )
-
-            # Drop the old table
-            cursor.execute(f"DROP TABLE {tasks_table_name}")
-
-            # Rename the new table to the original table name
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name}_new RENAME TO {tasks_table_name}"
-            )
-
-            conn.commit()
-            print(f"Successfully made 'tags' column nullable in {tasks_table_name}")
-        except sqlite3.OperationalError as e:
-            print(f"Error modifying 'tags' column: {e}")
-            conn.rollback()
-
     conn.close()
 
 
