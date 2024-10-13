@@ -619,9 +619,9 @@ if task["type"] == "coding":
                                 expander_color = "yellow"
 
                             with st.expander(expander_label, icon=expander_icon):
-                                st.write("**Inputs**")
+                                st.markdown("**Inputs**", help=test["description"])
                                 for input_text in test["input"]:
-                                    st.write(input_text)
+                                    st.markdown(input_text)
                                 st.write("**Expected Output**")
                                 st.write(test["output"])
                                 st.write("**Actual Output**")
