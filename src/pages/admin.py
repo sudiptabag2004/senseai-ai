@@ -5,6 +5,7 @@ import asyncio
 from functools import partial
 import numpy as np
 import streamlit as st
+import json
 
 st.set_page_config(layout="wide")
 
@@ -58,9 +59,19 @@ if "show_toast" not in st.session_state:
 if "toast_message" not in st.session_state:
     st.session_state.toast_message = ""
 
-if st.session_state.show_toast:
-    st.toast(st.session_state.toast_message)
-    st.session_state.show_toast = False
+
+def set_toast(message: str):
+    st.session_state.show_toast = True
+    st.session_state.toast_message = message
+
+
+def show_toast():
+    if st.session_state.show_toast:
+        st.toast(st.session_state.toast_message)
+        st.session_state.show_toast = False
+
+
+show_toast()
 
 model = st.selectbox(
     "Model",
@@ -141,13 +152,17 @@ def convert_tests_to_prompt(tests: List[Dict]) -> str:
     )
 
 
-async def generate_tests_for_task_from_llm(task_name, task_description, tests):
-    system_prompt_template = """You are a test case generator for programming tasks.\n\nYou will be given a task name and its description, optionally along with a list of test cases.\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+async def generate_tests_for_task_from_llm(
+    task_name, task_description, num_test_inputs, tests
+):
+    system_prompt_template = """You are a test case generator for programming tasks.\n\nYou will be given a task name, its description, the number of inputs expected and, optionally, a list of test cases.\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
 
-    user_prompt_template = """Task name: {task_name}\n\nTask description: {task_description}\n\nTest cases:\n\n{tests}"""
+    user_prompt_template = """Task name: {task_name}\n\nTask description: {task_description}\n\nNumber of inputs: {num_test_inputs}\n\nTest cases:\n\n{tests}"""
 
     class TestCase(BaseModel):
-        input: str = Field(description="The input for the test case")
+        input: List[str] = Field(
+            description="The list of inputs for a single test case. The number of inputs is {num_test_inputs}. Always return a list"
+        )
         output: str = Field(description="The expected output for the test case")
         description: str = Field(
             description="A very brief description of the test case", default=""
@@ -167,6 +182,7 @@ async def generate_tests_for_task_from_llm(task_name, task_description, tests):
         task_description=task_description,
         format_instructions=output_parser.get_format_instructions(),
         common_instructions=COMMON_INSTRUCTIONS,
+        num_test_inputs=num_test_inputs,
         tests=convert_tests_to_prompt(tests),
     )
 
@@ -192,12 +208,13 @@ async def generate_tests_for_task_from_llm(task_name, task_description, tests):
 
 
 async def generate_tests_for_task(
-    task_name: str, task_description: str, tests: List[Dict]
+    task_name: str, task_description: str, num_test_inputs: int, tests: List[Dict]
 ):
     with st.spinner("Generating tests..."):
         generated_tests = await generate_tests_for_task_from_llm(
             task_name,
             task_description,
+            num_test_inputs,
             tests,
         )
 
@@ -210,7 +227,10 @@ def delete_test_from_session_state(test_index):
 
 def update_test_in_session_state(test_index):
     st.session_state.tests[test_index] = {
-        "input": st.session_state[f"test_input_{test_index}"],
+        "input": [
+            st.session_state[f"test_input_{test_index}_{i}"]
+            for i in range(len(st.session_state.tests[test_index]["input"]))
+        ],
         "output": st.session_state[f"test_output_{test_index}"],
         "description": st.session_state[f"test_description_{test_index}"],
     }
@@ -234,35 +254,57 @@ def add_verified_task_to_list(final_answer):
 
 
 def add_tests_to_task(task_name: str, task_description: str):
+    container = st.container()
     cols = st.columns([3.5, 1])
-    cols[0].subheader(admin_code_test_cases_label)
+
+    show_toast()
+
+    if st.session_state.tests:
+        num_test_inputs = len(st.session_state.tests[0]["input"])
+        header_container = cols[0]
+    else:
+        header_container = container
+        num_test_inputs = cols[0].number_input("Number of inputs", min_value=1, step=1)
+        cols[1].markdown("####")
+
+    header_container.subheader(admin_code_test_cases_label)
     if cols[1].button("Generate", key="generate_tests"):
         asyncio.run(
-            generate_tests_for_task(task_name, task_description, st.session_state.tests)
+            generate_tests_for_task(
+                task_name, task_description, num_test_inputs, st.session_state.tests
+            )
         )
 
     for test_index, test in enumerate(st.session_state.tests):
         with st.expander(f"Test {test_index + 1}"):
-            st.text_area(
-                label="Input",
-                value=test["input"],
-                key=f"test_input_{test_index}",
-                on_change=update_test_in_session_state,
-                args=(test_index,),
-            )
+            st.text("Inputs")
+            for i, input_value in enumerate(test["input"]):
+                st.text_area(
+                    label=f"Input {i + 1}",
+                    value=input_value,
+                    key=f"test_input_{test_index}_{i}",
+                    on_change=update_test_in_session_state,
+                    args=(test_index,),
+                    label_visibility="collapsed",
+                )
+
+            st.text("Output")
             st.text_area(
                 label="Output",
                 value=test["output"],
                 key=f"test_output_{test_index}",
                 on_change=update_test_in_session_state,
                 args=(test_index,),
+                label_visibility="collapsed",
             )
+            st.text("Description (optional)")
             st.text_area(
-                label="Description (optional)",
+                label="Description",
                 value=test.get("description", ""),
                 key=f"test_description_{test_index}",
                 on_change=update_test_in_session_state,
                 args=(test_index,),
+                label_visibility="collapsed",
             )
             cols = st.columns([3, 1.1, 1])
             cols[-1].button(
@@ -272,27 +314,36 @@ def add_tests_to_task(task_name: str, task_description: str):
                 args=(test_index,),
                 key=f"delete_test_{test_index}",
             )
-            # TODO: add support for deleting tests
 
-    st.text_area("Input", key="test_input")
-    st.text_area("Output", key="test_output")
-    st.text_area("Description (optional)", key="test_description")
+    st.text("Inputs")
+    for i in range(num_test_inputs):
+        st.text_area(
+            f"Input {i + 1}", key=f"new_test_input_{i}", label_visibility="collapsed"
+        )
+
+    st.text("Output")
+    st.text_area("Output", key="test_output", label_visibility="collapsed")
+    st.text("Description (optional)")
+    st.text_area("Description", key="test_description", label_visibility="collapsed")
 
     def add_test():
         st.session_state.tests.append(
             {
-                "input": st.session_state.test_input,
+                "input": [
+                    st.session_state[f"new_test_input_{i}"]
+                    for i in range(num_test_inputs)
+                ],
                 "output": st.session_state.test_output,
                 "description": st.session_state.test_description,
             }
         )
-        st.session_state.test_input = ""
+        for i in range(num_test_inputs):
+            st.session_state[f"new_test_input_{i}"] = ""
+
         st.session_state.test_output = ""
         st.session_state.test_description = ""
+        set_toast("Added test!")
 
-    st.info(
-        "Tip: Click outside the boxes above after you are done typing the last input before clicking the button below"
-    )
     st.button("Add Test", on_click=add_test)
 
     # st.session_state.tests
@@ -322,8 +373,7 @@ def edit_tests_for_task(task_id):
     ):
         update_tests_for_task(task_id, st.session_state.tests)
         st.session_state.tasks = get_all_tasks()
-        st.session_state.show_toast = True
-        st.session_state.toast_message = "Tests updated successfully!"
+        set_toast("Tests updated successfully!")
         st.session_state.tests = []
         st.rerun()
 
@@ -620,7 +670,7 @@ df = pd.DataFrame(st.session_state.tasks)
 df["coding_language"] = df["coding_language"].apply(
     lambda x: x.split(",") if isinstance(x, str) else x
 )
-df["tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
+df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
 all_tags = np.unique(
     list(itertools.chain(*[tags for tags in df["tags"].tolist()]))
@@ -639,7 +689,7 @@ column_config = {
 column_order = [
     "id",
     "verified",
-    "tests",
+    "num_tests",
     "name",
     "description",
     "answer",

@@ -10,6 +10,7 @@ from lib.config import (
     tests_table_name,
 )
 from lib.utils import get_date_from_str
+import json
 
 
 def check_and_update_chat_history_table():
@@ -49,7 +50,7 @@ def create_tests_table(cursor):
             CREATE TABLE IF NOT EXISTS {tests_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
-                input TEXT NOT NULL,
+                input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
                 output TEXT NOT NULL,
                 description TEXT,
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
@@ -242,7 +243,12 @@ def store_task(
                 INSERT INTO {tests_table_name} (task_id, input, output, description)
                 VALUES (?, ?, ?, ?)
                 """,
-                (task_id, test["input"], test["output"], test.get("description", None)),
+                (
+                    task_id,
+                    json.dumps(test["input"]),
+                    test["output"],
+                    test.get("description", None),
+                ),
             )
 
         conn.commit()
@@ -315,7 +321,8 @@ def update_column_for_task_ids(task_ids: List[int], column_name: Any, new_value:
 
 def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict]:
     return [
-        {"input": row[0], "output": row[1], "description": row[2]} for row in test_rows
+        {"input": json.loads(row[0]), "output": row[1], "description": row[2]}
+        for row in test_rows
     ]
 
 
@@ -754,7 +761,12 @@ def update_tests_for_task(task_id: int, tests: List[dict]):
                 INSERT INTO {tests_table_name} (task_id, input, output, description)
                 VALUES (?, ?, ?, ?)
                 """,
-                (task_id, test["input"], test["output"], test.get("description", None)),
+                (
+                    task_id,
+                    json.dumps(test["input"]),
+                    test["output"],
+                    test.get("description", None),
+                ),
             )
 
         conn.commit()

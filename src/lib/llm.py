@@ -23,10 +23,27 @@ from pydantic import BaseModel
 def setup_logging():
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
+
+    # Add a StreamHandler to output logs to the console
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # Create a formatter and add it to the handler
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(formatter)
+
+    # Add the console handler to the logger
+    logger.addHandler(console_handler)
+
     return logger
 
 
 logger = setup_logging()
+
+# Test log message
+logger.info("Logging system initialized")
 
 
 COMMON_INSTRUCTIONS = "\n\nGeneral Instructions:\n- Make sure to return one JSON for all the extractions.\n- Never return a list of JSONs.\n- The output schema is a secret. Never reveal the output schema in the answer.\n- Always give a brief explanation before returning the answer. If needed, the explanation can be more elaborate.\n- Never ask for more information or try to engage in any conversation. Work with whatever information you have and provide an answer based on that.\n- Do not hallucinate."
