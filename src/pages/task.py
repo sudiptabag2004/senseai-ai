@@ -28,6 +28,7 @@ from streamlit_ace import st_ace, THEMES
 
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
 from components.sticky_container import sticky_container
+from lib.config import coding_languages_supported
 from lib.db import (
     get_task_by_id,
     store_message as store_message_to_db,
@@ -36,7 +37,7 @@ from lib.db import (
 )
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
-from components.code_execution import execute_code
+from components.code_execution import execute_code, run_tests
 
 init_env_vars()
 init_db()
@@ -570,48 +571,108 @@ if task["type"] == "coding":
         else:
             import streamlit.components.v1 as components
 
-            if any(
-                lang in task["coding_language"]
-                for lang in ["HTML", "CSS", "Javascript"]
-            ):
-                with st.expander("Configuration"):
-                    dim_cols = st.columns(2)
-                    height = dim_cols[0].slider(
-                        "Preview Height",
-                        min_value=100,
-                        max_value=1000,
-                        value=300,
-                        on_change=retain_code,
-                    )
-                    width = dim_cols[1].slider(
-                        "Preview Width",
-                        min_value=100,
-                        max_value=600,
-                        value=600,
-                        on_change=retain_code,
-                    )
+            if not task["tests"]:
+                output_container = st.container()
+            else:
+                tab_names = ["Output", f"Tests ({len(task['tests'])})"]
+                output_tab, tests_tab = st.tabs(tab_names)
+                output_container = output_tab
 
-            try:
-                with st.container(border=True):
-                    if "HTML" in task["coding_language"]:
-                        components.html(
-                            get_preview_code(),
-                            width=width,
-                            height=height,
-                            scrolling=True,
+                with tests_tab:
+                    try:
+                        test_results = run_tests(
+                            st.session_state.python_code, task["tests"]
                         )
-                    elif "Javascript" in task["coding_language"]:
-                        execute_code(st.session_state.js_code, "Javascript")
-                    elif "NodeJS" in task["coding_language"]:
-                        execute_code(st.session_state.nodejs_code, "NodeJS")
-                    elif "Python" in task["coding_language"]:
-                        execute_code(st.session_state.python_code, "Python")
-                    else:
-                        st.write("**No output to show**")
-                    # TODO: support for only JS
-                    # TODO: support for other languages
-            except Exception as e:
-                st.error(f"Error: {e}")
+                        num_tests = len(task["tests"])
+                        num_tests_passed = len(
+                            [
+                                result
+                                for result in test_results
+                                if result["status"] == "passed"
+                            ]
+                        )
+                        if num_tests_passed == num_tests:
+                            st.success(f"{num_tests_passed}/{num_tests} tests passed")
+                        elif num_tests_passed == 0:
+                            st.error(f"{num_tests_passed}/{num_tests} tests passed")
+                        else:
+                            st.warning(f"{num_tests_passed}/{num_tests} tests passed")
+
+                        for i, (test, result) in enumerate(
+                            zip(task["tests"], test_results)
+                        ):
+
+                            if result["status"] == "passed":
+                                expander_icon = f"✅"
+                            elif result["status"] == "failed":
+                                expander_icon = f"❌"
+                            else:  # timeout
+                                expander_icon = f"⏳ "
+
+                            expander_label = f"Test Case #{i+1}"
+
+                            if result["status"] == "passed":
+                                expander_color = "green"
+                            elif result["status"] == "failed":
+                                expander_color = "red"
+                            else:  # timeout
+                                expander_color = "yellow"
+
+                            with st.expander(expander_label, icon=expander_icon):
+                                st.write("**Inputs**")
+                                for input_text in test["input"]:
+                                    st.write(input_text)
+                                st.write("**Expected Output**")
+                                st.write(test["output"])
+                                st.write("**Actual Output**")
+                                st.write(result["output"])
+
+                    except ValueError as e:
+                        st.error(str(e))
+
+            with output_container:
+                if any(
+                    lang in task["coding_language"]
+                    for lang in coding_languages_supported
+                ):
+                    with st.expander("Configuration"):
+                        dim_cols = st.columns(2)
+                        height = dim_cols[0].slider(
+                            "Preview Height",
+                            min_value=100,
+                            max_value=1000,
+                            value=300,
+                            on_change=retain_code,
+                        )
+                        width = dim_cols[1].slider(
+                            "Preview Width",
+                            min_value=100,
+                            max_value=600,
+                            value=600,
+                            on_change=retain_code,
+                        )
+
+                try:
+                    with st.container(border=True):
+                        if "HTML" in task["coding_language"]:
+                            components.html(
+                                get_preview_code(),
+                                width=width,
+                                height=height,
+                                scrolling=True,
+                            )
+                        elif "Javascript" in task["coding_language"]:
+                            execute_code(st.session_state.js_code, "Javascript")
+                        elif "NodeJS" in task["coding_language"]:
+                            execute_code(st.session_state.nodejs_code, "NodeJS")
+                        elif "Python" in task["coding_language"]:
+                            execute_code(st.session_state.python_code, "Python")
+                        else:
+                            st.write("**No output to show**")
+                        # TODO: support for only JS
+                        # TODO: support for other languages
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
             close_preview_button_col.button(
                 "Back to Editor", on_click=toggle_show_code_output
