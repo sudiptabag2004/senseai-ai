@@ -93,7 +93,9 @@ def execute_code(code: str, lang: str):
         if user_input_instances := get_python_user_input_instances(code):
             # Create text input widgets for each user input instance
             with st.expander("User Inputs", expanded=True):
-                st.markdown("Hit `Enter` after adding the input")
+                st.markdown(
+                    "Your code requires user inputs to run. Hit `Enter` after adding each input"
+                )
                 for i, _ in enumerate(user_input_instances):
                     st.text_input(
                         f"Input {i+1}",
