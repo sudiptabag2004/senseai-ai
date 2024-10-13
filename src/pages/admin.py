@@ -216,13 +216,13 @@ def update_test_in_session_state(test_index):
     }
 
 
-def add_verified_task_to_list():
+def add_verified_task_to_list(final_answer):
     task_type = get_task_type(st.session_state.show_code_editor)
 
     store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
-        st.session_state.final_answer,
+        final_answer,
         st.session_state.tags,
         task_type,
         st.session_state.coding_languages,
@@ -390,23 +390,26 @@ def show_task_form():
             not st.session_state.task_description
             or not st.session_state.task_name
             or st.session_state.final_answer != ""
+            or st.session_state.ai_answer != ""
         ),
         key="generate_answer",
     ):
-        generate_answer_for_form_task()
+        with cols[0]:
+            generate_answer_for_form_task()
 
-    cols[0].text_area(
+    final_answer = cols[0].text_area(
         "Answer",
         key="final_answer",
         value=st.session_state.ai_answer,
         label_visibility="collapsed",
     )
+    if not final_answer and st.session_state.ai_answer:
+        final_answer = st.session_state.ai_answer
 
-    # st.spinner('Generating answer...', visible=st.session_state.is_answer_generation_in_progress)
-
-    if st.session_state.final_answer and st.button(
+    if final_answer and st.button(
         "Verify and Add",
         on_click=add_verified_task_to_list,
+        args=(final_answer,),
         use_container_width=True,
         type="primary",
     ):
@@ -423,6 +426,7 @@ bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
 if add_task:
     st.session_state.tests = []
     st.session_state.ai_answer = ""
+    st.session_state.final_answer = ""
     show_task_form()
 
 
