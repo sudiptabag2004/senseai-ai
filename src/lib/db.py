@@ -1,9 +1,14 @@
 import os
 from os.path import exists
 import sqlite3
-from typing import List, Any
+from typing import List, Any, Tuple, Dict
 from datetime import datetime
-from lib.config import sqlite_db_path, chat_history_table_name, tasks_table_name
+from lib.config import (
+    sqlite_db_path,
+    chat_history_table_name,
+    tasks_table_name,
+    tests_table_name,
+)
 from lib.utils import get_date_from_str
 
 
@@ -38,18 +43,19 @@ def check_and_update_chat_history_table():
     conn.close()
 
 
-tasks_table_schema = """(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    tags TEXT,  -- Stored as comma-separated values
-    type TEXT NOT NULL DEFAULT 'text',
-    coding_language TEXT,
-    generation_model TEXT NOT NULL,
-    verified BOOLEAN NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-)"""
+def create_tests_table(cursor):
+    cursor.execute(
+        f"""
+            CREATE TABLE IF NOT EXISTS {tests_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                input TEXT NOT NULL,
+                output TEXT NOT NULL,
+                description TEXT,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+            )
+            """
+    )
 
 
 def check_and_update_tasks_table():
@@ -100,50 +106,76 @@ def init_db():
     if not os.path.exists(db_folder):
         os.makedirs(db_folder)
 
+    conn = sqlite3.connect(sqlite_db_path)
+    cursor = conn.cursor()
+
     if exists(sqlite_db_path):
-        # db exists, check for and apply any necessary schema changes
+        # Check if the tests table exists
+        cursor.execute(
+            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tests_table_name}'"
+        )
+        table_exists = cursor.fetchone()
+
+        if not table_exists:
+            # Create the tests table if it doesn't exist
+            create_tests_table(cursor)
+            conn.commit()
+
+        # Apply any necessary schema changes
         check_and_update_chat_history_table()
         check_and_update_tasks_table()
+
+        conn.close()
         return
 
-    # Connect to the SQLite database (it will create the database if it doesn't exist)
-    conn = sqlite3.connect(sqlite_db_path)
-
     try:
-        # Create a cursor object
-        cursor = conn.cursor()
-
         # Create a table to store tasks
         cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} {tasks_table_schema}"""
+            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    tags TEXT,  -- Stored as comma-separated values
+                    type TEXT NOT NULL DEFAULT 'text',
+                    coding_language TEXT,
+                    generation_model TEXT NOT NULL,
+                    verified BOOLEAN NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
         )
 
         # Create a table to store chat history
         cursor.execute(
             f"""
-        CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            task_id INTEGER NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            is_solved BOOLEAN NOT NULL DEFAULT 0,
-            response_type TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+            CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                is_solved BOOLEAN NOT NULL DEFAULT 0,
+                response_type TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+            )
+            """
         )
-        """
-        )
+
+        # Create a table to store tests
+        create_tests_table(cursor)
 
         # Commit the changes and close the connection
         conn.commit()
-        conn.close()
 
     except Exception as exception:
         # delete db
         conn.close()
         os.remove(sqlite_db_path)
         raise exception
+
+    finally:
+        conn.close()
 
 
 # @st.cache_resource
@@ -175,34 +207,50 @@ def store_task(
     coding_languages: List[str],
     generation_model: str,
     verified: bool,
+    tests: List[dict],
 ):
     tags_str = serialise_list_to_str(tags)
     coding_language_str = serialise_list_to_str(coding_languages)
 
-    # import ipdb; ipdb.set_trace()
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"""
-    INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            name,
-            description,
-            answer,
-            tags_str,
-            task_type,
-            coding_language_str,
-            generation_model,
-            verified,
-        ),
-    )
+    try:
+        cursor.execute(
+            f"""
+        INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                name,
+                description,
+                answer,
+                tags_str,
+                task_type,
+                coding_language_str,
+                generation_model,
+                verified,
+            ),
+        )
 
-    conn.commit()
-    conn.close()
+        task_id = cursor.lastrowid
+
+        # Insert test cases
+        for test in tests:
+            cursor.execute(
+                f"""
+                INSERT INTO {tests_table_name} (task_id, input, output, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (task_id, test["input"], test["output"], test.get("description", None)),
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def update_task(
@@ -265,6 +313,12 @@ def update_column_for_task_ids(task_ids: List[int], column_name: Any, new_value:
     conn.close()
 
 
+def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict]:
+    return [
+        {"input": row[0], "output": row[1], "description": row[2]} for row in test_rows
+    ]
+
+
 def get_all_tasks():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -278,23 +332,35 @@ def get_all_tasks():
 
     tasks = cursor.fetchall()
 
-    # import ipdb; ipdb.set_trace()
+    tasks_dicts = []
+    for row in tasks:
+        task_id = row[0]
 
-    tasks_dicts = [
-        {
-            "id": row[0],
-            "name": row[1],
-            "description": row[2],
-            "answer": row[3],
-            "tags": deserialise_list_from_str(row[4]),
-            "type": row[5],
-            "coding_language": deserialise_list_from_str(row[6]),
-            "generation_model": row[-3],
-            "verified": bool(row[-2]),
-            "timestamp": row[-1],
-        }
-        for row in tasks
-    ]
+        # Fetch associated tests for each task
+        cursor.execute(
+            f"""
+        SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
+
+        tests = return_test_rows_as_dict(cursor.fetchall())
+
+        tasks_dicts.append(
+            {
+                "id": task_id,
+                "name": row[1],
+                "description": row[2],
+                "answer": row[3],
+                "tags": deserialise_list_from_str(row[4]),
+                "type": row[5],
+                "coding_language": deserialise_list_from_str(row[6]),
+                "generation_model": row[-3],
+                "verified": bool(row[-2]),
+                "timestamp": row[-1],
+                "tests": tests,
+            }
+        )
 
     conn.close()
 
@@ -314,10 +380,21 @@ def get_task_by_id(task_id: int):
 
     task = cursor.fetchone()
 
-    conn.close()
-
     if not task:
+        conn.close()
         return None
+
+    # Fetch associated tests
+    cursor.execute(
+        f"""
+    SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
+    """,
+        (task_id,),
+    )
+
+    tests = return_test_rows_as_dict(cursor.fetchall())
+
+    conn.close()
 
     return {
         "id": task[0],
@@ -330,6 +407,7 @@ def get_task_by_id(task_id: int):
         "generation_model": task[-3],
         "verified": bool(task[-2]),
         "timestamp": task[-1],
+        "tests": tests,
     }
 
 
@@ -337,31 +415,56 @@ def delete_task(task_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"""
-    DELETE FROM {tasks_table_name} WHERE id = ?
-    """,
-        (task_id,),
-    )
+    try:
+        # Delete associated tests first
+        cursor.execute(
+            f"""
+        DELETE FROM {tests_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
 
-    conn.commit()
-    conn.close()
+        # Then delete the task
+        cursor.execute(
+            f"""
+        DELETE FROM {tasks_table_name} WHERE id = ?
+        """,
+            (task_id,),
+        )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def delete_tasks(task_ids: List[int]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # import ipdb; ipdb.set_trace()
+    try:
+        # Delete associated tests first
+        cursor.execute(
+            f"""
+        DELETE FROM {tests_table_name} WHERE task_id IN ({','.join(map(str, task_ids))})
+        """
+        )
 
-    cursor.execute(
-        f"""
-    DELETE FROM {tasks_table_name} WHERE id IN ({','.join(map(str, task_ids))})
-    """
-    )
+        # Then delete the tasks
+        cursor.execute(
+            f"""
+        DELETE FROM {tasks_table_name} WHERE id IN ({','.join(map(str, task_ids))})
+        """
+        )
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def delete_all_tasks():
@@ -527,6 +630,21 @@ def delete_message(message_id: int):
     conn.close()
 
 
+def delete_user_chat_history_for_task(task_id: int, user_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+    DELETE FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
+    """,
+        (task_id, user_id),
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def delete_all_chat_history():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -614,3 +732,62 @@ def get_streaks():
         streaks[user_id] = len(get_user_streak_from_usage_dates(user_usage_dates))
 
     return streaks
+
+
+def update_tests_for_task(task_id: int, tests: List[dict]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Delete existing tests for the task
+        cursor.execute(
+            f"""
+            DELETE FROM {tests_table_name} WHERE task_id = ?
+            """,
+            (task_id,),
+        )
+
+        # Insert new tests
+        for test in tests:
+            cursor.execute(
+                f"""
+                INSERT INTO {tests_table_name} (task_id, input, output, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (task_id, test["input"], test["output"], test.get("description", None)),
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def delete_all_tests():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {tests_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def drop_tests_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DROP TABLE IF EXISTS {tests_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 import itertools
 import traceback
 import asyncio
@@ -8,6 +8,7 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
+from copy import deepcopy
 import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
@@ -29,6 +30,7 @@ from lib.db import (
     delete_tasks as delete_tasks_from_db,
     update_task as update_task_in_db,
     update_column_for_task_ids,
+    update_tests_for_task,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json
@@ -41,6 +43,25 @@ if "tasks" not in st.session_state:
     st.session_state.tasks = get_all_tasks()
 
 
+if "tests" not in st.session_state:
+    st.session_state.tests = []
+
+if "ai_answer" not in st.session_state:
+    st.session_state.ai_answer = ""
+
+if "final_answer" not in st.session_state:
+    st.session_state.final_answer = ""
+
+if "show_toast" not in st.session_state:
+    st.session_state.show_toast = False
+
+if "toast_message" not in st.session_state:
+    st.session_state.toast_message = ""
+
+if st.session_state.show_toast:
+    st.toast(st.session_state.toast_message)
+    st.session_state.show_toast = False
+
 model = st.selectbox(
     "Model",
     [
@@ -52,8 +73,7 @@ model = st.selectbox(
 
 
 async def generate_answer_for_task(task_name, task_description):
-    system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.
-        \n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructons:\n- Give some reasoning before arriving at the answer but keep it concise.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+    system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
 
     user_prompt_template = (
         """Task name: {task_name}\n\nTask description: {task_description}"""
@@ -94,7 +114,7 @@ async def generate_answer_for_task(task_name, task_description):
 
 @st.spinner("Generating answer...")
 def generate_answer_for_form_task():
-    st.session_state.answer = asyncio.run(
+    st.session_state.ai_answer = asyncio.run(
         generate_answer_for_task(
             st.session_state.task_name, st.session_state.task_description
         )
@@ -112,38 +132,211 @@ def get_task_type(is_code_editor_enabled: bool):
     return "text"
 
 
+def convert_tests_to_prompt(tests: List[Dict]) -> str:
+    if not tests:
+        return ""
+
+    return "\n-----------------\n".join(
+        [f"Input:\n{test['input']}\n\nOutput:\n{test['output']}" for test in tests]
+    )
+
+
+async def generate_tests_for_task_from_llm(task_name, task_description, tests):
+    system_prompt_template = """You are a test case generator for programming tasks.\n\nYou will be given a task name and its description, optionally along with a list of test cases.\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+
+    user_prompt_template = """Task name: {task_name}\n\nTask description: {task_description}\n\nTest cases:\n\n{tests}"""
+
+    class TestCase(BaseModel):
+        input: str = Field(description="The input for the test case")
+        output: str = Field(description="The expected output for the test case")
+        description: str = Field(
+            description="A very brief description of the test case", default=""
+        )
+
+    class Output(BaseModel):
+        test_cases: List[TestCase] = Field(
+            description="A list of test cases for the given task",
+        )
+
+    output_parser = PydanticOutputParser(pydantic_object=Output)
+
+    llm_input_messages = get_llm_input_messages(
+        system_prompt_template,
+        user_prompt_template,
+        task_name=task_name,
+        task_description=task_description,
+        format_instructions=output_parser.get_format_instructions(),
+        common_instructions=COMMON_INSTRUCTIONS,
+        tests=convert_tests_to_prompt(tests),
+    )
+
+    try:
+        pred_dict = await call_llm_and_parse_output(
+            llm_input_messages,
+            model=model["version"],
+            output_parser=output_parser,
+            max_tokens=2048,
+            verbose=True,
+        )
+        return [
+            {
+                "input": tc["input"],
+                "output": tc["output"],
+                "description": tc["description"],
+            }
+            for tc in pred_dict["test_cases"]
+        ]
+    except Exception as exception:
+        traceback.print_exc()
+        raise exception
+
+
+async def generate_tests_for_task(
+    task_name: str, task_description: str, tests: List[Dict]
+):
+    with st.spinner("Generating tests..."):
+        generated_tests = await generate_tests_for_task_from_llm(
+            task_name,
+            task_description,
+            tests,
+        )
+
+    st.session_state.tests.extend(generated_tests)
+
+
+def delete_test_from_session_state(test_index):
+    st.session_state.tests.pop(test_index)
+
+
+def update_test_in_session_state(test_index):
+    st.session_state.tests[test_index] = {
+        "input": st.session_state[f"test_input_{test_index}"],
+        "output": st.session_state[f"test_output_{test_index}"],
+        "description": st.session_state[f"test_description_{test_index}"],
+    }
+
+
 def add_verified_task_to_list():
     task_type = get_task_type(st.session_state.show_code_editor)
 
     store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
-        st.session_state.answer,
+        st.session_state.final_answer,
         st.session_state.tags,
         task_type,
         st.session_state.coding_languages,
         model["version"],
         True,
+        st.session_state.tests,  # Add this line to include the tests
     )
     st.session_state.tasks = get_all_tasks()
 
 
-@st.dialog("Add a new task")
-def show_task_form():
-    # st.session_state.answer = ""
+def add_tests_to_task(task_name: str, task_description: str):
+    cols = st.columns([3.5, 1])
+    cols[0].subheader(admin_code_test_cases_label)
+    if cols[1].button("Generate", key="generate_tests"):
+        asyncio.run(
+            generate_tests_for_task(task_name, task_description, st.session_state.tests)
+        )
 
-    task_name = st.text_input("Name", key="task_name", value="Greet function")
-    task_description = st.text_area(
-        "Description",
-        key="task_description",
-        value="""Define a function called greet that takes a name as an argument and returns a greeting message. For example, if the name is "Alice", the function should return "Hello, Alice!".
-Call the greet function you defined in the previous task with your name as the argument and log the result to the console.
-Modify the greet function to have a default argument of "Guest" for the name parameter. This means that if no name is provided, the function should return "Hello, Guest!".
-Rewrite the greet function as a function expression and store it in a variable called greetFunction.
-Rewrite the greet function as an arrow function.""",
+    for test_index, test in enumerate(st.session_state.tests):
+        with st.expander(f"Test {test_index + 1}"):
+            st.text_area(
+                label="Input",
+                value=test["input"],
+                key=f"test_input_{test_index}",
+                on_change=update_test_in_session_state,
+                args=(test_index,),
+            )
+            st.text_area(
+                label="Output",
+                value=test["output"],
+                key=f"test_output_{test_index}",
+                on_change=update_test_in_session_state,
+                args=(test_index,),
+            )
+            st.text_area(
+                label="Description (optional)",
+                value=test.get("description", ""),
+                key=f"test_description_{test_index}",
+                on_change=update_test_in_session_state,
+                args=(test_index,),
+            )
+            cols = st.columns([3, 1.1, 1])
+            cols[-1].button(
+                "Delete",
+                type="primary",
+                on_click=delete_test_from_session_state,
+                args=(test_index,),
+                key=f"delete_test_{test_index}",
+            )
+            # TODO: add support for deleting tests
+
+    st.text_area("Input", key="test_input")
+    st.text_area("Output", key="test_output")
+    st.text_area("Description (optional)", key="test_description")
+
+    def add_test():
+        st.session_state.tests.append(
+            {
+                "input": st.session_state.test_input,
+                "output": st.session_state.test_output,
+                "description": st.session_state.test_description,
+            }
+        )
+        st.session_state.test_input = ""
+        st.session_state.test_output = ""
+        st.session_state.test_description = ""
+
+    st.button("Add Test", on_click=add_test)
+
+    # st.session_state.tests
+
+
+@st.dialog("Edit tests for task")
+def edit_tests_for_task(task_id):
+    task_details = df[df["id"] == task_id].iloc[0]
+    if not st.session_state.tests:
+        st.session_state.tests = deepcopy(task_details["tests"])
+
+    add_tests_to_task(
+        task_details["name"],
+        task_details["description"],
     )
 
-    st.multiselect("Tags", tag_list, key="tags", default=[tag_list[0]])
+    if st.button(
+        "Update tests",
+        type="primary",
+        use_container_width=True,
+        disabled=task_details["tests"] == st.session_state.tests,
+        help=(
+            "Nothing to update"
+            if task_details["tests"] == st.session_state.tests
+            else ""
+        ),
+    ):
+        update_tests_for_task(task_id, st.session_state.tests)
+        st.session_state.tasks = get_all_tasks()
+        st.session_state.show_toast = True
+        st.session_state.toast_message = "Tests updated successfully!"
+        st.session_state.tests = []
+        st.rerun()
+
+
+@st.dialog("Add a new task")
+def show_task_form():
+    st.text_input("Name", key="task_name", value="Greet function")
+    st.text_area(
+        "Description",
+        key="task_description",
+        value="""Write a python code to take user input and display it.""",
+    )
+
+    st.multiselect(
+        "Tags", tag_list, key="tags", default=[tag_list[tag_list.index("Python")]]
+    )
 
     with st.expander("Add new tags"):
         cols = st.columns([3, 1])
@@ -175,30 +368,51 @@ Rewrite the greet function as an arrow function.""",
             coding_languages_supported,
             help=admin_code_editor_language_help,
             key="coding_languages",
+            default=["Python"],
         )
         # st.session_state.coding_languages
     else:
         st.session_state.coding_languages = None
 
-    answer = st.text_area("Answer", key="answer")
-    generate_answer_col, _, verify_col = st.columns(3)
+    # test cases
+    if st.session_state.show_code_editor and st.checkbox("I want to add tests", True):
+        add_tests_to_task(
+            st.session_state.task_name,
+            st.session_state.task_description,
+        )
 
-    generate_answer_col.button(
-        "Generate answer",
-        on_click=generate_answer_for_form_task,
-        disabled=(not task_description or not task_name or answer != ""),
+    st.subheader("Answer")
+    cols = st.columns([3.5, 1])
+
+    if cols[-1].button(
+        "Generate",
+        disabled=(
+            not st.session_state.task_description
+            or not st.session_state.task_name
+            or st.session_state.final_answer != ""
+        ),
+        key="generate_answer",
+    ):
+        generate_answer_for_form_task()
+
+    cols[0].text_area(
+        "Answer",
+        key="final_answer",
+        value=st.session_state.ai_answer,
+        label_visibility="collapsed",
     )
 
     # st.spinner('Generating answer...', visible=st.session_state.is_answer_generation_in_progress)
 
-    if answer and verify_col.button(
-        "Verify and Add", on_click=add_verified_task_to_list
+    if st.session_state.final_answer and st.button(
+        "Verify and Add",
+        on_click=add_verified_task_to_list,
+        use_container_width=True,
+        type="primary",
     ):
         # st.session_state.vote = {"item": item, "reason": reason}
+        st.session_state.tests = []
         st.rerun()
-
-    # # reset answer
-    # st.session_state.answer = None
 
 
 single_task_col, bulk_upload_tasks_col, _, _ = st.columns([1, 3, 2, 2])
@@ -207,6 +421,8 @@ add_task = single_task_col.button("Add a new task")
 bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
 
 if add_task:
+    st.session_state.tests = []
+    st.session_state.ai_answer = ""
     show_task_form()
 
 
@@ -215,10 +431,8 @@ async def generate_answer_for_bulk_task(task_id, task_name, task_description):
     return task_id, answer
 
 
-def update_progress_bar(progress_bar, count, num_tasks):
-    progress_bar.progress(
-        count / num_tasks, text=f"Generating answers for tasks... ({count}/{num_tasks})"
-    )
+def update_progress_bar(progress_bar, count, num_tasks, message):
+    progress_bar.progress(count / num_tasks, text=f"{message} ({count}/{num_tasks})")
 
 
 async def generate_answers_for_tasks(tasks_df):
@@ -246,7 +460,9 @@ async def generate_answers_for_tasks(tasks_df):
         tasks_df.at[task_id, "Answer"] = answer
         count += 1
 
-        update_progress_bar(progress_bar, count, num_tasks)
+        update_progress_bar(
+            progress_bar, count, num_tasks, "Generating answers for tasks..."
+        )
         # print('done', result)
 
     progress_bar.empty()
@@ -256,8 +472,7 @@ async def generate_answers_for_tasks(tasks_df):
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-    cols = st.columns(2)
-    show_code_editor = cols[0].checkbox(
+    show_code_editor = st.checkbox(
         admin_show_code_editor_label, value=True, help=admin_show_code_editor_help
     )
     coding_languages = None
@@ -457,7 +672,7 @@ def save_changes_in_edit_mode(edited_df):
 
 
 if not is_edit_mode:
-    delete_col, edit_col, _, _ = st.columns([2, 4, 3, 3])
+    delete_col, edit_col, add_tests_col, _ = st.columns([1.5, 2, 4, 7])
 
     event = st.dataframe(
         df,
@@ -471,13 +686,19 @@ if not is_edit_mode:
 
     if len(event.selection["rows"]):
         task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
-        if delete_col.button("Delete selected tasks"):
+        if delete_col.button("Delete tasks"):
             # import ipdb; ipdb.set_trace()
             show_delete_confirmation(task_ids)
 
         if edit_col.button("Edit task attributes"):
             # import ipdb; ipdb.set_trace()
             show_task_edit_dialog(task_ids)
+
+        if add_tests_col.button("Add/Edit tests"):
+            if len(task_ids) == 1:
+                edit_tests_for_task(task_ids[0])
+            else:
+                st.error("Please select only one task to edit tests for.")
 
 else:
     edited_df = st.data_editor(
