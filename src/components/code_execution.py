@@ -92,7 +92,7 @@ def execute_code(code: str, lang: str):
     elif lang == "Python":
         if user_input_instances := get_python_user_input_instances(code):
             # Create text input widgets for each user input instance
-            with st.expander("User Inputs"):
+            with st.expander("User Inputs", expanded=True):
                 st.markdown("Hit `Enter` after adding the input")
                 for i, _ in enumerate(user_input_instances):
                     st.text_input(
