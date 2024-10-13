@@ -344,6 +344,9 @@ def add_tests_to_task(task_name: str, task_description: str):
         st.session_state.test_description = ""
         set_toast("Added test!")
 
+    st.info(
+        "Tip: Click outside the boxes above after you are done typing the last input before clicking the button below"
+    )
     st.button("Add Test", on_click=add_test)
 
     # st.session_state.tests
