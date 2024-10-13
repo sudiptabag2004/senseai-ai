@@ -73,7 +73,7 @@ model = st.selectbox(
 
 
 async def generate_answer_for_task(task_name, task_description):
-    system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+    system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description and completely adhere to the requirements without making up anything on your own that is not already present in the description.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
 
     user_prompt_template = (
         """Task name: {task_name}\n\nTask description: {task_description}"""
@@ -617,6 +617,7 @@ df = pd.DataFrame(st.session_state.tasks)
 df["coding_language"] = df["coding_language"].apply(
     lambda x: x.split(",") if isinstance(x, str) else x
 )
+df["tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
 all_tags = np.unique(
     list(itertools.chain(*[tags for tags in df["tags"].tolist()]))
@@ -635,6 +636,7 @@ column_config = {
 column_order = [
     "id",
     "verified",
+    "tests",
     "name",
     "description",
     "answer",

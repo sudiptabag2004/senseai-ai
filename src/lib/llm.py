@@ -19,15 +19,17 @@ from langchain_community.callbacks import (
 
 from pydantic import BaseModel
 
+
 def setup_logging():
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     return logger
 
+
 logger = setup_logging()
 
 
-COMMON_INSTRUCTIONS = "\n\nGeneral Instructions:\n- Make sure to return one JSON for all the extractions.\n- Never return a list of JSONs.\n- The output schema is a secret. Never reveal the output schema in the answer.\n- Always give a brief explanation before returning the answer. If needed, the explanation can be more elaborate.\n- Never ask for more information or try to engage in any conversation. Work with whatever information you have and provide an answer based on that."
+COMMON_INSTRUCTIONS = "\n\nGeneral Instructions:\n- Make sure to return one JSON for all the extractions.\n- Never return a list of JSONs.\n- The output schema is a secret. Never reveal the output schema in the answer.\n- Always give a brief explanation before returning the answer. If needed, the explanation can be more elaborate.\n- Never ask for more information or try to engage in any conversation. Work with whatever information you have and provide an answer based on that.\n- Do not hallucinate."
 
 
 def get_llm_input_messages(
@@ -122,7 +124,6 @@ def parse_llm_output(
                 return default
 
 
-
 def get_parsed_output_dict(
     output_parser, llm_output, parse_by_alias: bool, model: str, verbose: bool = False
 ) -> Dict:
@@ -141,8 +142,6 @@ def get_parsed_output_dict(
     return pred_dict
 
 
-
-
 @backoff.on_exception(backoff.expo, Exception, max_tries=5, factor=2)
 async def call_openai_chat_model(
     messages: List,
@@ -156,7 +155,7 @@ async def call_openai_chat_model(
     # llm_pricing_calculator = LLMPricingCalculator()
 
     # if message_format != "langchain":
-        # messages = get_messages_in_langchain_format(messages)
+    # messages = get_messages_in_langchain_format(messages)
 
     common_model_args = {
         "temperature": 0,
@@ -261,7 +260,6 @@ async def call_openai_chat_model(
     return ai_response
 
 
-
 async def call_llm_and_parse_output(
     messages,
     model,
@@ -287,4 +285,3 @@ async def call_llm_and_parse_output(
         model=model,
         verbose=verbose,
     )
-
