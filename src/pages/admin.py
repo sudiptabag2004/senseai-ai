@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Literal
 import itertools
 import traceback
 import asyncio
@@ -40,12 +40,21 @@ from lib.config import coding_languages_supported
 init_env_vars()
 init_db()
 
-if "tasks" not in st.session_state:
+
+def refresh_tasks():
     st.session_state.tasks = get_all_tasks()
 
 
-if "tests" not in st.session_state:
+if "tasks" not in st.session_state:
+    refresh_tasks()
+
+
+def reset_tests():
     st.session_state.tests = []
+
+
+if "tests" not in st.session_state:
+    reset_tests()
 
 if "ai_answer" not in st.session_state:
     st.session_state.ai_answer = ""
@@ -61,6 +70,9 @@ if "toast_message" not in st.session_state:
 
 
 def set_toast(message: str):
+    if not message:
+        return
+
     st.session_state.show_toast = True
     st.session_state.toast_message = message
 
@@ -250,10 +262,12 @@ def add_verified_task_to_list(final_answer):
         True,
         st.session_state.tests,  # Add this line to include the tests
     )
-    st.session_state.tasks = get_all_tasks()
+    refresh_tasks()
 
 
-def add_tests_to_task(task_name: str, task_description: str):
+def add_tests_to_task(
+    task_name: str, task_description: str, mode: Literal["add", "edit"]
+):
     container = st.container()
     cols = st.columns([3.5, 1])
 
@@ -265,10 +279,10 @@ def add_tests_to_task(task_name: str, task_description: str):
     else:
         header_container = container
         num_test_inputs = cols[0].number_input("Number of inputs", min_value=1, step=1)
-        cols[1].markdown("####")
+        cols[-1].markdown("####")
 
     header_container.subheader(admin_code_test_cases_label)
-    if cols[1].button("Generate", key="generate_tests"):
+    if cols[-1].button("Generate", key="generate_tests"):
         asyncio.run(
             generate_tests_for_task(
                 task_name, task_description, num_test_inputs, st.session_state.tests
@@ -307,12 +321,19 @@ def add_tests_to_task(task_name: str, task_description: str):
                 label_visibility="collapsed",
             )
             cols = st.columns([3, 1.1, 1])
+            is_delete_disabled = mode == "edit" and len(st.session_state.tests) == 1
             cols[-1].button(
                 "Delete",
                 type="primary",
                 on_click=delete_test_from_session_state,
                 args=(test_index,),
                 key=f"delete_test_{test_index}",
+                disabled=is_delete_disabled,
+                help=(
+                    "To delete all tests, use the `Delete all tests` button below"
+                    if is_delete_disabled
+                    else ""
+                ),
             )
 
     st.text("Inputs")
@@ -352,6 +373,13 @@ def add_tests_to_task(task_name: str, task_description: str):
     # st.session_state.tests
 
 
+def update_tests_for_task_in_db(task_id, tests, toast_message: str = None):
+    update_tests_for_task(task_id, tests)
+    refresh_tasks()
+    reset_tests()
+    set_toast(toast_message)
+
+
 @st.dialog("Edit tests for task")
 def edit_tests_for_task(task_id):
     task_details = df[df["id"] == task_id].iloc[0]
@@ -361,24 +389,36 @@ def edit_tests_for_task(task_id):
     add_tests_to_task(
         task_details["name"],
         task_details["description"],
+        mode="edit",
     )
 
-    if st.button(
+    cols = st.columns(2) if st.session_state.tests else st.columns(1)
+
+    is_tests_updated = task_details["tests"] != st.session_state.tests
+    if cols[0].button(
         "Update tests",
         type="primary",
         use_container_width=True,
-        disabled=task_details["tests"] == st.session_state.tests,
+        disabled=not is_tests_updated,
         help=(
             "Nothing to update"
             if task_details["tests"] == st.session_state.tests
             else ""
         ),
     ):
-        update_tests_for_task(task_id, st.session_state.tests)
-        st.session_state.tasks = get_all_tasks()
-        set_toast("Tests updated successfully!")
-        st.session_state.tests = []
+        update_tests_for_task_in_db(
+            task_id, st.session_state.tests, toast_message="Tests updated successfully!"
+        )
         st.rerun()
+
+    if len(cols) == 2:
+        if cols[1].button(
+            "Delete all tests",
+            type="primary" if not is_tests_updated else "secondary",
+            use_container_width=True,
+        ):
+            update_tests_for_task_in_db(task_id, [], "Tests deleted successfully!")
+            st.rerun()
 
 
 @st.dialog("Add a new task")
@@ -435,6 +475,7 @@ def show_task_form():
         add_tests_to_task(
             st.session_state.task_name,
             st.session_state.task_description,
+            mode="add",
         )
 
     st.subheader("Answer")
@@ -470,7 +511,7 @@ def show_task_form():
         type="primary",
     ):
         # st.session_state.vote = {"item": item, "reason": reason}
-        st.session_state.tests = []
+        reset_tests()
         st.rerun()
 
 
@@ -480,7 +521,7 @@ add_task = single_task_col.button("Add a new task")
 bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
 
 if add_task:
-    st.session_state.tests = []
+    reset_tests()
     st.session_state.ai_answer = ""
     st.session_state.final_answer = ""
     show_task_form()
@@ -578,7 +619,7 @@ def show_bulk_upload_tasks_form():
 
         # st.success("Answers generated successfully. Select 'Verify Mode', go through the unverified answers and verify them for learners to access them.")
 
-        st.session_state.tasks = get_all_tasks()
+        refresh_tasks()
         st.rerun()
 
         # if st.button("Got it!"):
@@ -594,7 +635,7 @@ if bulk_upload_tasks:
 
 def delete_tasks_from_list(task_ids):
     delete_tasks_from_db(task_ids)
-    st.session_state.tasks = get_all_tasks()
+    refresh_tasks()
     st.rerun()
 
 
@@ -615,7 +656,7 @@ def update_tasks_with_new_value(
     task_ids: List[int], column_to_update: str, new_value: str
 ):
     update_column_for_task_ids(task_ids, column_to_update, new_value)
-    st.session_state.tasks = get_all_tasks()
+    refresh_tasks()
     st.rerun()
 
 
@@ -728,7 +769,7 @@ def save_changes_in_edit_mode(edited_df):
         )
 
     # Refresh the tasks in the session state
-    st.session_state.tasks = get_all_tasks()
+    refresh_tasks()
     st.toast("Changes saved successfully!")
     # st.rerun()
 
@@ -758,6 +799,7 @@ if not is_edit_mode:
 
         if add_tests_col.button("Add/Edit tests"):
             if len(task_ids) == 1:
+                reset_tests()
                 edit_tests_for_task(task_ids[0])
             else:
                 st.error("Please select only one task to edit tests for.")
