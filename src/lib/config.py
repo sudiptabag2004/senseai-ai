@@ -1,10 +1,11 @@
 import os
 from os.path import exists
+
 # from lib.utils import save_json
 
 if exists("/appdata"):
     data_root_dir = "/appdata"
-    root_dir = '/demo'
+    root_dir = "/demo"
 else:
     data_root_dir = "./db"
     root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,5 +19,6 @@ else:
 sqlite_db_path = f"{data_root_dir}/db.sqlite"
 chat_history_table_name = "chat_history"
 tasks_table_name = "tasks"
+tests_table_name = "tests"
 
-coding_languages_supported = ['HTML', 'CSS', 'Javascript', 'NodeJS', 'Python']
+coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python"]
