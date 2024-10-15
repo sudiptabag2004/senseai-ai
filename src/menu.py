@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def default_menu():
     st.sidebar.page_link(
         "home.py",
@@ -21,10 +22,5 @@ def menu():
     if st.session_state.email:
         st.sidebar.divider()
         authenticated_menu()
-        
-        st.sidebar.markdown('#')
-        st.sidebar.markdown('#')
-        st.sidebar.markdown('#')
 
         # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)
-        
