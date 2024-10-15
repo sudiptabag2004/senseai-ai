@@ -3,14 +3,66 @@ from os.path import exists
 import sqlite3
 from typing import List, Any, Tuple, Dict
 from datetime import datetime, timezone, timedelta
+import pandas as pd
 from lib.config import (
     sqlite_db_path,
     chat_history_table_name,
     tasks_table_name,
     tests_table_name,
+    cohorts_table_name,
+    groups_table_name,
+    user_groups_table_name,
+    group_role_learner,
+    group_role_mentor,
 )
 from lib.utils import get_date_from_str
 import json
+
+
+def create_tests_table(cursor):
+    cursor.execute(
+        f"""
+            CREATE TABLE IF NOT EXISTS {tests_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
+                output TEXT NOT NULL,
+                description TEXT,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+            )
+            """
+    )
+
+
+def create_cohort_tables(cursor):
+    # Create a table to store cohorts
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {cohorts_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL
+            )"""
+    )
+
+    # Create a table to store groups
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {groups_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cohort_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+            )"""
+    )
+
+    # Create a table to store user_groups
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name} (
+                user_id TEXT NOT NULL,
+                group_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                learner_id TEXT,
+                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
+            )"""
+    )
 
 
 def check_and_update_chat_history_table():
@@ -42,21 +94,6 @@ def check_and_update_chat_history_table():
             pass
 
     conn.close()
-
-
-def create_tests_table(cursor):
-    cursor.execute(
-        f"""
-            CREATE TABLE IF NOT EXISTS {tests_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
-                output TEXT NOT NULL,
-                description TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
-            )
-            """
-    )
 
 
 def check_and_update_tasks_table():
@@ -101,6 +138,15 @@ def check_and_update_tasks_table():
     conn.close()
 
 
+def check_table_exists(table_name: str, cursor):
+    cursor.execute(
+        f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+    )
+    table_exists = cursor.fetchone()
+
+    return table_exists is not None
+
+
 def init_db():
     # Ensure the database folder exists
     db_folder = os.path.dirname(sqlite_db_path)
@@ -111,15 +157,12 @@ def init_db():
     cursor = conn.cursor()
 
     if exists(sqlite_db_path):
-        # Check if the tests table exists
-        cursor.execute(
-            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{tests_table_name}'"
-        )
-        table_exists = cursor.fetchone()
-
-        if not table_exists:
-            # Create the tests table if it doesn't exist
+        if not check_table_exists(tests_table_name, cursor):
             create_tests_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(cohorts_table_name, cursor):
+            create_cohort_tables(cursor)
             conn.commit()
 
         # Apply any necessary schema changes
@@ -165,6 +208,8 @@ def init_db():
 
         # Create a table to store tests
         create_tests_table(cursor)
+
+        create_cohort_tables(cursor)
 
         # Commit the changes and close the connection
         conn.commit()
@@ -803,5 +848,192 @@ def drop_tests_table():
     except Exception as e:
         conn.rollback()
         raise e
+    finally:
+        conn.close()
+
+
+def delete_all_cohort_info():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"""DELETE FROM {user_groups_table_name}""")
+    cursor.execute(f"""DELETE FROM {groups_table_name}""")
+    cursor.execute(f"""DELETE FROM {cohorts_table_name}""")
+
+    conn.commit()
+    conn.close()
+
+
+def drop_cohorts_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DROP TABLE IF EXISTS {cohorts_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {groups_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {user_groups_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def create_cohort(name: str, df: pd.DataFrame):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Create cohort
+        cursor.execute(
+            f"""
+            INSERT INTO {cohorts_table_name} (name)
+            VALUES (?)
+            """,
+            (name,),
+        )
+        cohort_id = cursor.lastrowid
+
+        # Create groups and user_group entries
+        for group_name, group_df in df.groupby("Group Name"):
+            # Create group
+            cursor.execute(
+                f"""
+                INSERT INTO {groups_table_name} (cohort_id, name)
+                VALUES (?, ?)
+                """,
+                (cohort_id, group_name),
+            )
+            group_id = cursor.lastrowid
+
+            # Create user_group entries for learners
+            for _, row in group_df.iterrows():
+                cursor.execute(
+                    f"""
+                    INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        row["Learner Email"],
+                        group_id,
+                        group_role_learner,
+                        row["Learner ID"],
+                    ),
+                )
+
+            # Create user_group entry for mentor
+            mentor_email = group_df["Mentor Email"].iloc[0]
+            cursor.execute(
+                f"""
+                INSERT INTO {user_groups_table_name} (user_id, group_id, role)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    mentor_email,
+                    group_id,
+                    group_role_mentor,
+                ),
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def get_all_cohorts():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"""
+            SELECT c.id, c.name,
+                   COUNT(DISTINCT g.id) AS num_batches,
+                   COUNT(DISTINCT CASE WHEN ug.role = '{group_role_learner}' THEN ug.user_id END) AS num_learners,
+                   COUNT(DISTINCT CASE WHEN ug.role = '{group_role_mentor}' THEN ug.user_id END) AS num_mentors
+            FROM {cohorts_table_name} c
+            LEFT JOIN {groups_table_name} g ON c.id = g.cohort_id
+            LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
+            GROUP BY c.id, c.name
+            ORDER BY c.id DESC
+            """
+        )
+
+        cohorts = cursor.fetchall()
+
+        cohorts_list = []
+        for row in cohorts:
+            cohorts_list.append(
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "num_batches": row[2],
+                    "num_learners": row[3],
+                    "num_mentors": row[4],
+                }
+            )
+
+        return cohorts_list
+    except Exception as e:
+        print(f"Error fetching cohorts: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_cohort_by_id(cohort_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Fetch cohort details
+        cursor.execute(
+            f"""SELECT * FROM {cohorts_table_name} WHERE id = ?""", (cohort_id,)
+        )
+        cohort = cursor.fetchone()
+
+        if not cohort:
+            return None
+
+        # Fetch groups and their members
+        cursor.execute(
+            f"""
+            SELECT g.id, g.name,
+                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN ug.user_id END) AS learner_emails,
+                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN ug.learner_id END) AS learner_ids,
+                   MAX(CASE WHEN ug.role = '{group_role_mentor}' THEN ug.user_id END) AS mentor_email
+            FROM {groups_table_name} g
+            LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
+            WHERE g.cohort_id = ?
+            GROUP BY g.id, g.name
+        """,
+            (cohort_id,),
+        )
+
+        groups = cursor.fetchall()
+
+        cohort_data = {
+            "id": cohort[0],
+            "name": cohort[1],
+            "groups": [
+                {
+                    "id": group[0],
+                    "name": group[1],
+                    "learner_emails": group[2].split(",") if group[2] else [],
+                    "learner_ids": group[3].split(",") if group[3] else [],
+                    "mentor_email": group[4],
+                }
+                for group in groups
+            ],
+        }
+
+        return cohort_data
+    except Exception as e:
+        print(f"Error fetching cohort details: {e}")
+        return None
     finally:
         conn.close()
