@@ -3,6 +3,7 @@ import random
 import streamlit as st
 from datetime import datetime, timedelta
 from lib.db import get_user_streak
+from .base import set_box_style, show_box_header
 
 
 def display_day_level_streak(user_streak: List[datetime]):
@@ -61,15 +62,17 @@ def display_day_level_streak(user_streak: List[datetime]):
 def show_streak():
     user_streak = get_user_streak(st.session_state.email)
     streak_count = len(user_streak)
-    cols = st.columns(2)
 
-    with cols[0].container(border=True):
+    set_box_style()
+
+    with st.container(border=True):
         energizing_emojis = ["🚀", "💪", "🔥", "⚡", "🌟", "🏆", "💯", "🎉"]
         streak_text = f"{streak_count} {'day' if streak_count == 1 else 'days'}"
 
         if streak_count > 0:
             streak_text = f" {random.choice(energizing_emojis)} " + streak_text
 
-        st.markdown(f"**Your Learning Streak: {streak_text}**\n\n----------")
+        show_box_header("Your Learning Streak")
+        st.markdown(f"**{streak_text}**")
 
         display_day_level_streak(user_streak)

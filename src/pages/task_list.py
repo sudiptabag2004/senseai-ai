@@ -18,7 +18,9 @@ if "email" not in st.query_params:
 
 st.session_state.email = st.query_params["email"]
 
-show_streak()
+cols = st.columns(2)
+with cols[0]:
+    show_streak()
 
 st.write("## Tasks")
 st.write("Select a task by clicking beside the index of the task")
