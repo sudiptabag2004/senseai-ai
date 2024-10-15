@@ -2,7 +2,7 @@ import os
 from os.path import exists
 import sqlite3
 from typing import List, Any, Tuple, Dict
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from lib.config import (
     sqlite_db_path,
     chat_history_table_name,
@@ -670,10 +670,12 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     if not user_usage_dates:
         return []
 
-    today = datetime.now().date()
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
     current_streak = []
 
-    user_usage_dates = [get_date_from_str(date_str) for date_str in user_usage_dates]
+    user_usage_dates = [
+        get_date_from_str(date_str, "IST") for date_str in user_usage_dates
+    ]
 
     for i, date in enumerate(user_usage_dates):
         if i == 0 and (today - date).days > 1:
@@ -694,10 +696,10 @@ def get_user_streak(user_id: str):
     # Get the user's interactions, ordered by timestamp
     cursor.execute(
         f"""
-    SELECT MAX(timestamp) as timestamp
+    SELECT MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
     FROM {chat_history_table_name}
     WHERE user_id = ?
-    GROUP BY DATE(timestamp)
+    GROUP BY DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
     ORDER BY timestamp DESC
     """,
         (user_id,),
@@ -720,9 +722,9 @@ def get_streaks():
         f"""
     SELECT user_id, GROUP_CONCAT(timestamp) as timestamps
     FROM (
-        SELECT user_id, MAX(timestamp) as timestamp
+        SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
-        GROUP BY user_id, DATE(timestamp)
+        GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
     )
     GROUP BY user_id
