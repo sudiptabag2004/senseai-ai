@@ -1,13 +1,13 @@
 from typing import List, Dict, Literal
 import itertools
 import traceback
+import time
 import asyncio
 from functools import partial
 import numpy as np
 import streamlit as st
-import json
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 from copy import deepcopy
 import pandas as pd
@@ -32,6 +32,9 @@ from lib.db import (
     update_task as update_task_in_db,
     update_column_for_task_ids,
     update_tests_for_task,
+    create_cohort,
+    get_all_cohorts,
+    get_cohort_by_id,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json
@@ -45,8 +48,15 @@ def refresh_tasks():
     st.session_state.tasks = get_all_tasks()
 
 
+def refresh_cohorts():
+    st.session_state.cohorts = get_all_cohorts()
+
+
 if "tasks" not in st.session_state:
     refresh_tasks()
+
+if "cohorts" not in st.session_state:
+    refresh_cohorts()
 
 
 def reset_tests():
@@ -85,7 +95,7 @@ def show_toast():
 
 show_toast()
 
-model = st.selectbox(
+model = st.sidebar.selectbox(
     "Model",
     [
         {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},
@@ -381,7 +391,7 @@ def update_tests_for_task_in_db(task_id, tests, toast_message: str = None):
 
 
 @st.dialog("Edit tests for task")
-def edit_tests_for_task(task_id):
+def edit_tests_for_task(df, task_id):
     task_details = df[df["id"] == task_id].iloc[0]
     if not st.session_state.tests:
         st.session_state.tests = deepcopy(task_details["tests"])
@@ -515,18 +525,6 @@ def show_task_form():
         st.rerun()
 
 
-single_task_col, bulk_upload_tasks_col, _, _ = st.columns([1, 3, 2, 2])
-
-add_task = single_task_col.button("Add a new task")
-bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
-
-if add_task:
-    reset_tests()
-    st.session_state.ai_answer = ""
-    st.session_state.final_answer = ""
-    show_task_form()
-
-
 async def generate_answer_for_bulk_task(task_id, task_name, task_description):
     answer = await generate_answer_for_task(task_name, task_description)
     return task_id, answer
@@ -549,9 +547,6 @@ async def generate_answers_for_tasks(tasks_df):
         0, text=f"Generating answers for tasks... (0/{num_tasks})"
     )
 
-    # for i, answer in enumerate(await tqdm_asyncio.gather(*coroutines)):
-    #     print(i, answer)
-
     count = 0
 
     tasks_df["Answer"] = [None] * num_tasks
@@ -564,7 +559,6 @@ async def generate_answers_for_tasks(tasks_df):
         update_progress_bar(
             progress_bar, count, num_tasks, "Generating answers for tasks..."
         )
-        # print('done', result)
 
     progress_bar.empty()
 
@@ -591,6 +585,7 @@ def show_bulk_upload_tasks_form():
     uploaded_file = st.file_uploader(
         "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags`, `Answer` (optional)",
         type="csv",
+        key="bulk_upload_tasks",
     )
 
     if uploaded_file:
@@ -598,12 +593,6 @@ def show_bulk_upload_tasks_form():
 
         if "Answer" not in tasks_df.columns:
             tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
-
-            # st.write(row)
-            # my_bar.progress(index + 1, text="Generating answers for tasks... ({}/{})".format(index + 1, len(tasks_df)))
-            # time.sleep(0.1)
-
-        # st.dataframe(tasks_df)
 
         for _, row in tasks_df.iterrows():
             store_task_to_db(
@@ -617,20 +606,8 @@ def show_bulk_upload_tasks_form():
                 False,
             )
 
-        # st.success("Answers generated successfully. Select 'Verify Mode', go through the unverified answers and verify them for learners to access them.")
-
         refresh_tasks()
         st.rerun()
-
-        # if st.button("Got it!"):
-        #     st.rerun()
-
-        # st.write(dataframe)
-        # st.success("File uploaded successfully")
-
-
-if bulk_upload_tasks:
-    show_bulk_upload_tasks_form()
 
 
 def delete_tasks_from_list(task_ids):
@@ -640,7 +617,7 @@ def delete_tasks_from_list(task_ids):
 
 
 @st.dialog("Delete tasks")
-def show_delete_confirmation(task_ids):
+def show_tasks_delete_confirmation(task_ids):
     st.write("Are you sure you want to delete the selected tasks?")
 
     confirm_col, cancel_col, _, _ = st.columns([1, 1, 2, 2])
@@ -685,137 +662,318 @@ def show_task_edit_dialog(task_ids):
         st.rerun()
 
 
-tasks_heading = "## Tasks"
+tasks_heading = "Tasks"
 tasks_description = ""
 
 num_tasks = len(st.session_state.tasks)
 
 if num_tasks > 0:
-    tasks_heading = f"## Tasks ({num_tasks})"
-    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, whether to show code preview, coding language)\n\nYou can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`."
+    tasks_heading = f"Tasks ({num_tasks})"
+    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, whether to show code preview, coding language)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time"
 
-st.write(tasks_heading)
-with st.expander("Learn more"):
+cohorts_heading = "Cohorts"
+num_cohorts = len(st.session_state.cohorts)
+
+if num_cohorts > 0:
+    cohorts_heading = f"Cohorts ({num_cohorts})"
+
+tab_names = [tasks_heading, cohorts_heading]
+tabs = st.tabs(tab_names)
+
+
+@st.fragment
+def show_tasks_tab():
+    single_task_col, bulk_upload_tasks_col, _ = st.columns([1, 3, 2])
+    add_task = single_task_col.button("Add a new task")
+    bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
+
+    if add_task:
+        reset_tests()
+        st.session_state.ai_answer = ""
+        st.session_state.final_answer = ""
+        show_task_form()
+
+    if bulk_upload_tasks:
+        show_bulk_upload_tasks_form()
+
     st.write(tasks_description)
 
-edit_mode_col, save_col, _, _, _ = st.columns([2, 3, 1, 1, 1])
+    st.divider()
 
-is_edit_mode = edit_mode_col.checkbox(
-    "Edit Mode",
-    value=False,
-    help="Select this to go through the unverified answers and verify them for learners to access them or make any other changes to the tasks.",
-)
+    if not st.session_state.tasks:
+        st.error("No tasks added yet")
+        st.stop()
 
-if not st.session_state.tasks:
-    st.error("No tasks added yet")
-    st.stop()
+    df = pd.DataFrame(st.session_state.tasks)
+    df["coding_language"] = df["coding_language"].apply(
+        lambda x: x.split(",") if isinstance(x, str) else x
+    )
+    df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
-df = pd.DataFrame(st.session_state.tasks)
-df["coding_language"] = df["coding_language"].apply(
-    lambda x: x.split(",") if isinstance(x, str) else x
-)
-df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
+    cols = st.columns(4)
+    all_tags = np.unique(
+        list(itertools.chain(*[tags for tags in df["tags"].tolist()]))
+    ).tolist()
+    filter_tags = cols[0].multiselect("Filter by tags", all_tags)
 
-all_tags = np.unique(
-    list(itertools.chain(*[tags for tags in df["tags"].tolist()]))
-).tolist()
-filter_tags = st.multiselect("Filter by tags", all_tags)
+    if filter_tags:
+        df = df[df["tags"].apply(lambda x: any(tag in x for tag in filter_tags))]
 
-if filter_tags:
-    df = df[df["tags"].apply(lambda x: any(tag in x for tag in filter_tags))]
+    verified_filter = cols[1].radio(
+        "Filter by verification status",
+        ["All", "Verified", "Unverified"],
+        horizontal=True,
+    )
 
-column_config = {
-    # 'id': None
-    "description": st.column_config.TextColumn(width="medium"),
-    "answer": st.column_config.TextColumn(width="medium"),
-}
+    if verified_filter != "All":
+        df = df[df["verified"] == (verified_filter == "Verified")]
 
-column_order = [
-    "id",
-    "verified",
-    "num_tests",
-    "name",
-    "description",
-    "answer",
-    "tags",
-    "type",
-    "coding_language",
-    "generation_model",
-    "timestamp",
-]
+    type_filter = cols[2].radio(
+        "Filter by task type",
+        ["All", "Coding", "Text"],
+        horizontal=True,
+    )
 
+    if type_filter != "All":
+        df = df[df["type"] == type_filter.lower()]
 
-def save_changes_in_edit_mode(edited_df):
-    # identify the rows that have been changed
-    # and update the db with the new values
-    # import ipdb; ipdb.set_trace()
-    changed_rows = edited_df[(df != edited_df).any(axis=1)]
+    coding_languages_filter = cols[3].multiselect(
+        "Filter by coding language",
+        coding_languages_supported,
+        help="Select one or more coding languages to filter tasks",
+    )
 
-    print(f"Changed rows: {len(changed_rows)}", flush=True)
+    if coding_languages_filter:
+        df = df[
+            df["coding_language"].apply(
+                lambda x: (
+                    any(lang in x for lang in coding_languages_filter)
+                    if isinstance(x, list)
+                    else False
+                )
+            )
+        ]
 
-    for _, row in changed_rows.iterrows():
-        task_id = row["id"]
-        # print(task_id)
-        update_task_in_db(
-            task_id,
-            row["name"],
-            row["description"],
-            row["answer"],
-            row["tags"],
-            row["type"],
-            row["coding_language"],
-            row["generation_model"],
-            row["verified"],
+    (
+        edit_mode_col,
+        _,
+        save_col,
+    ) = st.columns([1.25, 7.5, 1])
+
+    is_edit_mode = edit_mode_col.checkbox(
+        "Edit Mode",
+        value=False,
+        help="Select this to go through the unverified answers and verify them for learners to access them or make any other changes to the tasks.",
+    )
+
+    column_config = {
+        # 'id': None
+        "description": st.column_config.TextColumn(width="medium"),
+        "answer": st.column_config.TextColumn(width="medium"),
+    }
+
+    column_order = [
+        "id",
+        "verified",
+        "num_tests",
+        "name",
+        "description",
+        "answer",
+        "tags",
+        "type",
+        "coding_language",
+        "generation_model",
+        "timestamp",
+    ]
+
+    def save_changes_in_edit_mode(edited_df):
+        # identify the rows that have been changed
+        # and update the db with the new values
+        # import ipdb; ipdb.set_trace()
+        changed_rows = edited_df[(df != edited_df).any(axis=1)]
+
+        print(f"Changed rows: {len(changed_rows)}", flush=True)
+
+        for _, row in changed_rows.iterrows():
+            task_id = row["id"]
+            # print(task_id)
+            update_task_in_db(
+                task_id,
+                row["name"],
+                row["description"],
+                row["answer"],
+                row["tags"],
+                row["type"],
+                row["coding_language"],
+                row["generation_model"],
+                row["verified"],
+            )
+
+        # Refresh the tasks in the session state
+        refresh_tasks()
+        st.toast("Changes saved successfully!")
+        # st.rerun()
+
+    if not is_edit_mode:
+        delete_col, edit_col, add_tests_col, _ = st.columns([1.5, 2, 4, 7])
+
+        event = st.dataframe(
+            df,
+            on_select="rerun",
+            selection_mode="multi-row",
+            hide_index=True,
+            use_container_width=True,
+            column_config=column_config,
+            column_order=column_order,
         )
 
-    # Refresh the tasks in the session state
-    refresh_tasks()
-    st.toast("Changes saved successfully!")
-    # st.rerun()
+        if len(event.selection["rows"]):
+            task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
+            if delete_col.button("Delete tasks"):
+                # import ipdb; ipdb.set_trace()
+                show_tasks_delete_confirmation(task_ids)
+
+            if edit_col.button("Edit task attributes"):
+                # import ipdb; ipdb.set_trace()
+                show_task_edit_dialog(task_ids)
+
+            if add_tests_col.button("Add/Edit tests"):
+                if len(task_ids) == 1:
+                    reset_tests()
+                    edit_tests_for_task(df, task_ids[0])
+                else:
+                    st.error("Please select only one task to edit tests for.")
+
+    else:
+        edited_df = st.data_editor(
+            df,
+            hide_index=True,
+            column_config=column_config,
+            column_order=column_order,
+            use_container_width=True,
+            disabled=["id", "num_tests", "type", "generation_model", "timestamp"],
+        )
+
+        if not df.equals(edited_df):
+            save_col.button(
+                "Save changes",
+                type="primary",
+                on_click=partial(save_changes_in_edit_mode, edited_df),
+            )
 
 
-if not is_edit_mode:
-    delete_col, edit_col, add_tests_col, _ = st.columns([1.5, 2, 4, 7])
+with tabs[0]:
+    show_tasks_tab()
 
-    event = st.dataframe(
-        df,
-        on_select="rerun",
-        selection_mode="multi-row",
-        hide_index=True,
-        use_container_width=True,
-        column_config=column_config,
-        column_order=column_order,
+if "cohort_uploader_key" not in st.session_state:
+    st.session_state.cohort_uploader_key = 0
+
+
+def update_cohort_uploader_key():
+    st.session_state.cohort_uploader_key += 1
+
+
+@st.dialog("Create Cohort")
+def show_create_cohort_dialog():
+    st.markdown("Hit `Enter` after entering the cohort name")
+    cohort_name = st.text_input("Enter cohort name")
+
+    columns = ["Group Name", "Learner Email", "Learner ID", "Mentor Email"]
+    uploaded_file = st.file_uploader(
+        f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])}",
+        type="csv",
+        key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
     )
 
-    if len(event.selection["rows"]):
-        task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
-        if delete_col.button("Delete tasks"):
-            # import ipdb; ipdb.set_trace()
-            show_delete_confirmation(task_ids)
+    if uploaded_file:
+        cohort_df = pd.read_csv(uploaded_file)
+        if cohort_df.columns.tolist() != columns:
+            st.error("The uploaded file does not have the correct columns.")
+            st.stop()
 
-        if edit_col.button("Edit task attributes"):
-            # import ipdb; ipdb.set_trace()
-            show_task_edit_dialog(task_ids)
+        st.dataframe(cohort_df, use_container_width=True)
 
-        if add_tests_col.button("Add/Edit tests"):
-            if len(task_ids) == 1:
-                reset_tests()
-                edit_tests_for_task(task_ids[0])
-            else:
-                st.error("Please select only one task to edit tests for.")
-
-else:
-    edited_df = st.data_editor(
-        df,
-        hide_index=True,
-        column_config=column_config,
-        column_order=column_order,
-        use_container_width=True,
-    )
-
-    if not df.equals(edited_df):
-        save_col.button(
-            "Save changes",
+        is_create_disabled = not cohort_name
+        if st.button(
+            "Create",
             type="primary",
-            on_click=partial(save_changes_in_edit_mode, edited_df),
-        )
+            disabled=is_create_disabled,
+            help="Enter a cohort name" if is_create_disabled else None,
+        ):
+            create_cohort(cohort_name, cohort_df)
+            refresh_cohorts()
+            set_toast(f"Cohort `{cohort_name}` created successfully!")
+            st.rerun()
+
+
+@st.fragment
+def show_cohorts_tab():
+    create_cohort_col, _ = st.columns([2, 8])
+    st.session_state.bulk_upload_cohort = None
+    if create_cohort_col.button("Create Cohort"):
+        update_cohort_uploader_key()
+        show_create_cohort_dialog()
+
+    if not len(st.session_state.cohorts):
+        st.error("No cohorts added yet")
+        st.stop()
+
+    cols = st.columns(4)
+    selected_cohort = cols[0].selectbox(
+        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
+    )
+
+    cohort_info = get_cohort_by_id(selected_cohort["id"])
+    cohort_groups = [{"name": "All", "id": None}] + cohort_info["groups"]
+
+    selected_group = cols[1].selectbox(
+        "Select a group", cohort_groups, format_func=lambda group: group["name"]
+    )
+
+    st.divider()
+
+    if selected_group["name"] == "All":
+        # Create a list to store all group data
+        all_group_data = []
+
+        # Iterate through all groups in the cohort
+        for group in cohort_info["groups"]:
+            # For each learner in the group, create a row
+            for learner_email, learner_id in zip(
+                group["learner_emails"], group["learner_ids"]
+            ):
+                all_group_data.append(
+                    {
+                        "Group Name": group["name"],
+                        "Mentor Email": group["mentor_email"],
+                        "Learner Email": learner_email,
+                        "Learner ID": learner_id,
+                    }
+                )
+
+        # Create DataFrame from the collected data
+        df = pd.DataFrame(all_group_data)
+
+        # Display the DataFrame
+        st.subheader("Cohort Overview")
+        st.dataframe(df, hide_index=True, use_container_width=True)
+
+    else:
+        # Display mentor email
+        st.subheader("Mentor")
+        st.text(selected_group["mentor_email"])
+
+        # Create DataFrame of learner IDs and emails
+        learners_data = {
+            "Learner ID": selected_group["learner_ids"],
+            "Learner Email": selected_group["learner_emails"],
+        }
+        learners_df = pd.DataFrame(learners_data)
+
+        # Display the DataFrame
+        st.subheader("Learners")
+        st.dataframe(learners_df, hide_index=True, use_container_width=True)
+
+
+with tabs[1]:
+    show_cohorts_tab()
