@@ -6,6 +6,7 @@ from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from lib.init import init_db
 from components.streak import show_streak
+from components.leaderboard import show_leaderboard
 
 # init_auth_from_cookies()
 
@@ -68,24 +69,20 @@ def login():
             login()
 
     else:
-        show_streak()
-        st.markdown(f"Welcome `{st.session_state.email}`!")
-        st.markdown(
-            "Select one of the options from the sidebar on the left to get started.\n\nLet's begin learning! 🚀"
-        )
+        cols = st.columns([4, 3])
+        with cols[0]:
+            st.markdown(f"Welcome `{st.session_state.email}`! Let's begin learning! 🚀")
+            st.link_button(
+                "👨‍💻👩‍💻 Start solving tasks",
+                f"/task_list?email={st.session_state.email}",
+            )
+
+        with cols[1]:
+            show_streak()
+            show_leaderboard()
 
 
 login()
-
-st.container(height=20, border=False)
-
-st.divider()
-
-st.text("Built with ❤️ by HyperVerge Academy")
-
-if st.session_state.email:
-    if st.button("Logout"):
-        clear_auth()
 
 menu()
 
@@ -126,6 +123,19 @@ if st.sidebar.checkbox(
     args=("is_hv_learner",),
 ):
     show_links()
+
+
+def show_footer():
+    st.sidebar.divider()
+
+    st.sidebar.text("Built with ❤️ by HyperVerge Academy")
+
+    if st.session_state.email:
+        if st.sidebar.button("Logout"):
+            clear_auth()
+
+
+show_footer()
 
 if not st.query_params:
     st.query_params.clear()
