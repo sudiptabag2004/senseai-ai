@@ -105,6 +105,9 @@ if "is_solved" not in st.session_state:
         and st.session_state.chat_history[-2]["is_solved"]
     )
 
+if "is_ai_running" not in st.session_state:
+    st.session_state.is_ai_running = False
+
 task_name_container_background_color = None
 task_name_container_text_color = None
 if st.session_state.is_solved:
@@ -215,6 +218,7 @@ def display_user_message(user_response: str, message_index: int):
             "Delete",
             on_click=partial(delete_user_chat_message, index_to_delete=message_index),
             key=delete_button_key,
+            disabled=st.session_state.is_ai_running,
         )
 
 
@@ -409,6 +413,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     st.session_state.chat_history.append(new_ai_message)
 
     # retain_code()
+    st.session_state.is_ai_running = False
 
     st.rerun()
 
@@ -520,6 +525,10 @@ def toggle_show_code_output():
     retain_code()
 
 
+def set_ai_running():
+    st.session_state.is_ai_running = True
+
+
 if task["type"] == "coding":
     with code_column:
         for lang in supported_language_keys:
@@ -550,7 +559,11 @@ if task["type"] == "coding":
                 tab_names.append(lang_name_to_tab_name[lang])
 
             with st.form("Code"):
-                st.form_submit_button("Run Code", on_click=toggle_show_code_output)
+                st.form_submit_button(
+                    "Run Code",
+                    on_click=toggle_show_code_output,
+                    disabled=st.session_state.is_ai_running,
+                )
 
                 tabs = st.tabs(tab_names)
                 for index, tab in enumerate(tabs):
@@ -678,7 +691,12 @@ if task["type"] == "coding":
                 "Back to Editor", on_click=toggle_show_code_output
             )
 
-            if submit_button_col.button("Submit Code", type="primary"):
+            if submit_button_col.button(
+                "Submit Code",
+                type="primary",
+                disabled=st.session_state.is_ai_running,
+                on_click=set_ai_running,
+            ):
                 get_ai_feedback_on_code()
 
 user_response_placeholder = "Your response"
@@ -695,7 +713,9 @@ else:
 
 
 def show_and_handle_chat_input():
-    if user_response := st.chat_input(user_response_placeholder):
+    if user_response := st.chat_input(
+        user_response_placeholder, on_submit=set_ai_running
+    ):
         get_ai_feedback(user_response, "text")
 
 
