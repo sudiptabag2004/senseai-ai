@@ -29,7 +29,7 @@ To learn more about making a contribution to SensAI, please see our [Contributin
 - Install `virtualenv`
 - Create a new virtual environment (choose Python3.8+)
   ```
-  virtualenv -p python3.8 venv
+  virtualenv -p python3.10 venv
   ```
 - Activate the virtual environment
   ```
