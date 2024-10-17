@@ -1096,7 +1096,7 @@ def show_milestones_tab():
 
     if not st.session_state.milestones:
         st.info("No milestones added yet")
-        st.stop()
+        return
 
     num_layout_cols = 3
     layout_cols = st.columns(num_layout_cols)
@@ -1179,7 +1179,7 @@ def show_tags_tab():
 
     if not st.session_state.tags:
         st.info("No tags added yet")
-        st.stop()
+        return
 
     num_layout_cols = 3
     layout_cols = st.columns(num_layout_cols)
