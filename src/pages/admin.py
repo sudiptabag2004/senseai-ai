@@ -757,7 +757,7 @@ def show_tasks_tab():
 
     if not st.session_state.tasks:
         st.error("No tasks added yet")
-        st.stop()
+        return
 
     df = pd.DataFrame(st.session_state.tasks)
     df["coding_language"] = df["coding_language"].apply(
@@ -952,7 +952,7 @@ def show_create_cohort_dialog():
         cohort_df = pd.read_csv(uploaded_file)
         if cohort_df.columns.tolist() != columns:
             st.error("The uploaded file does not have the correct columns.")
-            st.stop()
+            return
 
         st.dataframe(cohort_df, use_container_width=True)
 
@@ -979,7 +979,7 @@ def show_cohorts_tab():
 
     if not len(st.session_state.cohorts):
         st.error("No cohorts added yet")
-        st.stop()
+        return
 
     cols = st.columns(4)
     selected_cohort = cols[0].selectbox(
@@ -1130,7 +1130,6 @@ def add_tag(new_tag):
 
     if new_tag in st.session_state.tags:
         st.toast("Tag already exists")
-        # st.stop()
         return
 
     # since we show the tags in reverse order, we need to save them in reverse order
