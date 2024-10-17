@@ -73,6 +73,6 @@ def show_streak():
             streak_text = f" {random.choice(energizing_emojis)} " + streak_text
 
         show_box_header("Your Learning Streak")
-        st.markdown(f"**{streak_text}**")
+        st.markdown(f"<strong>{streak_text}</strong>", unsafe_allow_html=True)
 
         display_day_level_streak(user_streak)
