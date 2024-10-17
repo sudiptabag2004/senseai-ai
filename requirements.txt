@@ -3,7 +3,6 @@ langchain-core==0.2.37
 langchain-openai==0.1.23
 langchain-community==0.2.15
 streamlit==1.38.0
-streamlit-cookies-manager==0.2.0
 email_validator==2.2.0
 python-dotenv==1.0.1
 pydantic==2.8.2

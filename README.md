@@ -37,7 +37,7 @@ To learn more about making a contribution to SensAI, please see our [Contributin
   ```
 - Install packages
   ```
-  pip install -r app/requirements.txt
+  pip install -r requirements.txt
   ```
 - Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials.
 
