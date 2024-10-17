@@ -35,10 +35,13 @@ from lib.db import (
     create_cohort,
     get_all_cohorts,
     get_cohort_by_id,
+    get_all_milestones,
+    insert_milestone as insert_milestone_to_db,
+    delete_milestone as delete_milestone_from_db,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json
-from lib.config import coding_languages_supported
+from lib.config import coding_languages_supported, tags_list_path
 
 init_env_vars()
 init_db()
@@ -52,11 +55,25 @@ def refresh_cohorts():
     st.session_state.cohorts = get_all_cohorts()
 
 
+def refresh_milestones():
+    st.session_state.milestones = get_all_milestones()
+
+
+def refresh_tags():
+    st.session_state.tags = load_json(tags_list_path)[::-1]
+
+
 if "tasks" not in st.session_state:
     refresh_tasks()
 
 if "cohorts" not in st.session_state:
     refresh_cohorts()
+
+if "milestones" not in st.session_state:
+    refresh_milestones()
+
+if "tags" not in st.session_state:
+    refresh_tags()
 
 
 def reset_tests():
@@ -152,10 +169,6 @@ def generate_answer_for_form_task():
             st.session_state.task_name, st.session_state.task_description
         )
     )
-
-
-tag_list_path = "./lib/tags.json"
-tag_list = load_json(tag_list_path)
 
 
 def get_task_type(is_code_editor_enabled: bool):
@@ -265,12 +278,13 @@ def add_verified_task_to_list(final_answer):
         st.session_state.task_name,
         st.session_state.task_description,
         final_answer,
-        st.session_state.tags,
+        st.session_state.task_tags,
         task_type,
         st.session_state.coding_languages,
         model["version"],
         True,
         st.session_state.tests,  # Add this line to include the tests
+        st.session_state.milestone["id"] if st.session_state.milestone else None,
     )
     refresh_tasks()
 
@@ -431,64 +445,81 @@ def edit_tests_for_task(df, task_id):
             st.rerun()
 
 
-@st.dialog("Add a new task")
-def show_task_form():
-    st.text_input("Name", key="task_name", value="Greet function")
-    st.text_area(
-        "Description",
-        key="task_description",
-        value="""Write a python code to take user input and display it.""",
+def milestone_selector():
+    return st.selectbox(
+        "Milestone",
+        st.session_state.milestones,
+        key="milestone",
+        format_func=lambda row: row["name"],
+        index=None,
+        help="If you don't see the milestone you want, you can create a new one from the `Milestones` tab",
     )
 
-    st.multiselect(
-        "Tags", tag_list, key="tags", default=[tag_list[tag_list.index("Python")]]
-    )
 
-    with st.expander("Add new tags"):
-        cols = st.columns([3, 1])
-        cols[0].text_input("New tag", key="new_tag")
-        cols[1].markdown("###")
-        if cols[1].button("Add Tag"):
-            if st.session_state.new_tag in tag_list:
-                st.error("Tag already exists")
-            else:
-                tag_list.append(st.session_state.new_tag)
-                save_json(tag_list_path, tag_list)
-                st.rerun()
-
-    cols = st.columns(2)
-
-    if cols[0].checkbox(
+def task_type_selector():
+    return st.checkbox(
         admin_show_code_editor_label,
         value=True,
         help=admin_show_code_editor_help,
         key="show_code_editor",
-    ):
+    )
+
+
+def coding_language_selector():
+    return st.multiselect(
+        admin_code_editor_language_label,
+        coding_languages_supported,
+        help=admin_code_editor_language_help,
+        key="coding_languages",
+        default=["Python"],
+    )
+
+
+@st.dialog("Add a new task")
+def show_task_form():
+    st.text_input("*Name", key="task_name", value="Greet function")
+    st.text_area(
+        "*Description",
+        key="task_description",
+        value="""Write a python code to take user input and display it.""",
+    )
+
+    cols = st.columns(2)
+    cols[0].multiselect(
+        "Tags",
+        st.session_state.tags,
+        key="task_tags",
+        default=(
+            [st.session_state.tags[st.session_state.tags.index("Python")]]
+            if "Python" in st.session_state.tags
+            else None
+        ),
+        help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
+    )
+
+    with cols[1]:
+        milestone_selector()
+
+    if task_type_selector():
         if (
             "coding_languages" in st.session_state
             and st.session_state.coding_languages is None
         ):
             st.session_state.coding_languages = []
-        st.multiselect(
-            admin_code_editor_language_label,
-            coding_languages_supported,
-            help=admin_code_editor_language_help,
-            key="coding_languages",
-            default=["Python"],
-        )
-        # st.session_state.coding_languages
+
+        coding_language_selector()
     else:
         st.session_state.coding_languages = None
 
     # test cases
-    if st.session_state.show_code_editor and st.checkbox("I want to add tests", True):
+    if st.session_state.show_code_editor and st.checkbox("I want to add tests", False):
         add_tests_to_task(
             st.session_state.task_name,
             st.session_state.task_description,
             mode="add",
         )
 
-    st.subheader("Answer")
+    st.subheader("*Answer")
     cols = st.columns([3.5, 1])
 
     if cols[-1].button(
@@ -513,16 +544,29 @@ def show_task_form():
     if not final_answer and st.session_state.ai_answer:
         final_answer = st.session_state.ai_answer
 
+    disabled_help_text = ""
+    if not st.session_state.task_name:
+        disabled_help_text = "Please enter a task name"
+    elif not st.session_state.task_description:
+        disabled_help_text = "Please enter a task description"
+    elif not final_answer:
+        disabled_help_text = "Please enter an answer"
+    is_submit_disabled = disabled_help_text != ""
+
     if final_answer and st.button(
         "Verify and Add",
         on_click=add_verified_task_to_list,
         args=(final_answer,),
         use_container_width=True,
         type="primary",
+        disabled=is_submit_disabled,
+        help=disabled_help_text,
     ):
         # st.session_state.vote = {"item": item, "reason": reason}
         reset_tests()
         st.rerun()
+
+    st.info("**Note:** Fields marked with an asterisk (*) are required")
 
 
 async def generate_answer_for_bulk_task(task_id, task_name, task_description):
@@ -567,20 +611,15 @@ async def generate_answers_for_tasks(tasks_df):
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-    show_code_editor = st.checkbox(
-        admin_show_code_editor_label, value=True, help=admin_show_code_editor_help
-    )
+    show_code_editor = task_type_selector()
     coding_languages = None
 
     if show_code_editor:
-        coding_languages = st.multiselect(
-            admin_code_editor_language_label,
-            coding_languages_supported,
-            help=admin_code_editor_language_help,
-            key="coding_languages",
-        )
+        coding_languages = coding_language_selector()
 
     task_type = get_task_type(show_code_editor)
+
+    milestone = milestone_selector()
 
     uploaded_file = st.file_uploader(
         "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags`, `Answer` (optional)",
@@ -604,6 +643,8 @@ def show_bulk_upload_tasks_form():
                 coding_languages,
                 model["version"],
                 False,
+                [],
+                milestone["id"] if milestone else None,
             )
 
         refresh_tasks()
@@ -640,22 +681,36 @@ def update_tasks_with_new_value(
 @st.dialog("Edit tasks")
 def show_task_edit_dialog(task_ids):
     column_to_update = st.selectbox(
-        "Select a column to update", ["type", "coding_language"]
+        "Select a column to update", ["type", "coding_language", "milestone"]
     )
+    kwargs = {}
+    db_column = None
     if column_to_update == "type":
         option_component = st.selectbox
         options = ["text", "coding"]
+    elif column_to_update == "milestone":
+        option_component = st.selectbox
+        options = st.session_state.milestones
+        kwargs["format_func"] = lambda row: row["name"]
+        value_key = "id"
+        db_column = "milestone_id"
     else:
         option_component = st.multiselect
         options = coding_languages_supported
 
-    new_value = option_component("Select the new value", options)
+    new_value = option_component("Select the new value", options, **kwargs)
 
     st.write("Are you sure you want to update the selected tasks?")
 
     confirm_col, cancel_col, _, _ = st.columns([1, 1, 2, 2])
     if confirm_col.button("Yes", use_container_width=True):
-        update_tasks_with_new_value(task_ids, column_to_update, new_value)
+        if option_component == st.selectbox and isinstance(new_value, dict):
+            new_value = new_value[value_key]
+
+        if db_column is None:
+            db_column = column_to_update
+
+        update_tasks_with_new_value(task_ids, db_column, new_value)
         st.rerun()
 
     if cancel_col.button("No", use_container_width=True, type="primary"):
@@ -677,7 +732,7 @@ num_cohorts = len(st.session_state.cohorts)
 if num_cohorts > 0:
     cohorts_heading = f"Cohorts ({num_cohorts})"
 
-tab_names = [tasks_heading, cohorts_heading]
+tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags"]
 tabs = st.tabs(tab_names)
 
 
@@ -780,6 +835,7 @@ def show_tasks_tab():
         "description",
         "answer",
         "tags",
+        "milestone",
         "type",
         "coding_language",
         "generation_model",
@@ -851,7 +907,14 @@ def show_tasks_tab():
             column_config=column_config,
             column_order=column_order,
             use_container_width=True,
-            disabled=["id", "num_tests", "type", "generation_model", "timestamp"],
+            disabled=[
+                "id",
+                "num_tests",
+                "type",
+                "generation_model",
+                "timestamp",
+                "milestone",
+            ],
         )
 
         if not df.equals(edited_df):
@@ -977,3 +1040,162 @@ def show_cohorts_tab():
 
 with tabs[1]:
     show_cohorts_tab()
+
+
+def add_milestone(new_milestone):
+    if not new_milestone:
+        st.toast("Enter a milestone name")
+        return
+
+    if new_milestone in [
+        milestone["name"] for milestone in st.session_state.milestones
+    ]:
+        st.toast("Milestone already exists")
+        return
+
+    insert_milestone_to_db(new_milestone)
+    st.toast("New milestone added")
+    refresh_milestones()
+
+    st.session_state.new_milestone = ""
+
+
+def delete_milestone(milestone):
+    delete_milestone_from_db(milestone["id"])
+    set_toast("Milestone deleted")
+    refresh_milestones()
+
+
+@st.dialog("Delete Milestone")
+def show_milestone_delete_confirmation_dialog(milestone):
+    st.markdown(f"Are you sure you want to delete `{milestone['name']}`?")
+    (
+        confirm_col,
+        cancel_col,
+        _,
+    ) = st.columns([1, 2, 4])
+
+    if confirm_col.button("Yes", type="primary"):
+        delete_milestone(milestone)
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
+def show_milestones_tab():
+    cols = st.columns(4)
+    new_milestone = cols[0].text_input("Enter Milestone", key="new_milestone")
+    cols[1].container(height=10, border=False)
+    cols[1].button(
+        "Add",
+        on_click=add_milestone,
+        args=(new_milestone,),
+        key="add_milestone",
+    )
+
+    if not st.session_state.milestones:
+        st.info("No milestones added yet")
+        st.stop()
+
+    num_layout_cols = 3
+    layout_cols = st.columns(num_layout_cols)
+    for i, milestone in enumerate(st.session_state.milestones):
+        with layout_cols[i % num_layout_cols].container(
+            border=True,
+        ):
+            cols = st.columns([3, 1])
+            cols[0].write(milestone["name"])
+            cols[-1].button(
+                "Delete",
+                on_click=show_milestone_delete_confirmation_dialog,
+                args=(milestone,),
+                key=f"delete_milestone_{i}",
+            )
+
+
+with tabs[2]:
+    show_milestones_tab()
+
+
+def save_tags():
+    # since we show the tags in reverse order, we need to save them in reverse order
+    save_json(tags_list_path, st.session_state.tags[::-1])
+
+
+def add_tag(new_tag):
+    if not new_tag:
+        st.toast("Enter a tag name")
+        return
+
+    if new_tag in st.session_state.tags:
+        st.toast("Tag already exists")
+        # st.stop()
+        return
+
+    # since we show the tags in reverse order, we need to save them in reverse order
+    st.session_state.tags = [new_tag] + st.session_state.tags
+    save_tags()
+    st.toast("New tag added")
+    refresh_tags()
+
+    st.session_state.new_tag = ""
+
+
+def delete_tag(tag):
+    st.session_state.tags.remove(tag)
+    save_tags()
+    set_toast("Tag deleted")
+    refresh_tags()
+
+
+@st.dialog("Delete Tag")
+def show_tag_delete_confirmation_dialog(tag):
+    st.markdown(f"Are you sure you want to delete `{tag}`?")
+    (
+        confirm_col,
+        cancel_col,
+        _,
+    ) = st.columns([1, 2, 4])
+
+    if confirm_col.button("Yes", type="primary"):
+        delete_tag(tag)
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
+def show_tags_tab():
+    cols = st.columns(4)
+    new_tag = cols[0].text_input("Enter Tag", key="new_tag")
+    cols[1].container(height=10, border=False)
+    cols[1].button(
+        "Add",
+        on_click=add_tag,
+        args=(new_tag,),
+        key="add_tag",
+    )
+
+    if not st.session_state.tags:
+        st.info("No tags added yet")
+        st.stop()
+
+    num_layout_cols = 3
+    layout_cols = st.columns(num_layout_cols)
+    for i, tag in enumerate(st.session_state.tags):
+        with layout_cols[i % num_layout_cols].container(
+            border=True,
+        ):
+            cols = st.columns([3, 1])
+            cols[0].write(tag)
+            cols[-1].button(
+                "Delete",
+                on_click=show_tag_delete_confirmation_dialog,
+                args=(tag,),
+                key=f"delete_tag_{i}",
+            )
+
+
+with tabs[3]:
+    show_tags_tab()
