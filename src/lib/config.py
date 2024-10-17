@@ -7,6 +7,8 @@ if exists("/appdata"):
     root_dir = "/demo"
 else:
     data_root_dir = "./db"
+    if not exists(data_root_dir):
+        os.makedirs(data_root_dir)
     root_dir = os.path.dirname(os.path.abspath(__file__))
 
 
