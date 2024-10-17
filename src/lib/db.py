@@ -14,6 +14,7 @@ from lib.config import (
     user_groups_table_name,
     group_role_learner,
     group_role_mentor,
+    milestones_table_name,
 )
 from lib.utils import get_date_from_str
 import json
@@ -61,6 +62,15 @@ def create_cohort_tables(cursor):
                 role TEXT NOT NULL,
                 learner_id TEXT,
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
+            )"""
+    )
+
+
+def create_milestones_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {milestones_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL
             )"""
     )
 
@@ -135,6 +145,16 @@ def check_and_update_tasks_table():
             # ignore the error
             pass
 
+    if "milestone_id" not in columns:
+        try:
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN milestone_id INTEGER REFERENCES {milestones_table_name}(id)"
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            # ignore the error
+            pass
+
     conn.close()
 
 
@@ -157,6 +177,10 @@ def init_db():
     cursor = conn.cursor()
 
     if exists(sqlite_db_path):
+        if not check_table_exists(milestones_table_name, cursor):
+            create_milestones_table(cursor)
+            conn.commit()
+
         if not check_table_exists(tests_table_name, cursor):
             create_tests_table(cursor)
             conn.commit()
@@ -173,6 +197,8 @@ def init_db():
         return
 
     try:
+        create_milestones_table(cursor)
+
         # Create a table to store tasks
         cursor.execute(
             f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
@@ -186,6 +212,7 @@ def init_db():
                     generation_model TEXT NOT NULL,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    milestone_id INTEGER REFERENCES {milestones_table_name}(id),
                 )"""
         )
 
@@ -254,6 +281,7 @@ def store_task(
     generation_model: str,
     verified: bool,
     tests: List[dict],
+    milestone_id: int,
 ):
     tags_str = serialise_list_to_str(tags)
     coding_language_str = serialise_list_to_str(coding_languages)
@@ -264,8 +292,8 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified, milestone_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
@@ -276,6 +304,7 @@ def store_task(
                 coding_language_str,
                 generation_model,
                 verified,
+                milestone_id,
             ),
         )
 
@@ -377,8 +406,10 @@ def get_all_tasks():
 
     cursor.execute(
         f"""
-    SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name}
-    ORDER BY timestamp ASC
+    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.name as milestone_name
+    FROM {tasks_table_name} t
+    LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
+    ORDER BY t.timestamp ASC
     """
     )
 
@@ -407,9 +438,10 @@ def get_all_tasks():
                 "tags": deserialise_list_from_str(row[4]),
                 "type": row[5],
                 "coding_language": deserialise_list_from_str(row[6]),
-                "generation_model": row[-3],
-                "verified": bool(row[-2]),
-                "timestamp": row[-1],
+                "generation_model": row[7],
+                "verified": bool(row[8]),
+                "timestamp": row[9],
+                "milestone": row[10],
                 "tests": tests,
             }
         )
@@ -425,7 +457,10 @@ def get_task_by_id(task_id: int):
 
     cursor.execute(
         f"""
-    SELECT id, name, description, answer, tags, type, coding_language, generation_model, verified, timestamp FROM {tasks_table_name} WHERE id = ?
+    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.name as milestone_name
+    FROM {tasks_table_name} t
+    LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
+    WHERE t.id = ?
     """,
         (task_id,),
     )
@@ -456,9 +491,10 @@ def get_task_by_id(task_id: int):
         "tags": deserialise_list_from_str(task[4]),
         "type": task[5],
         "coding_language": deserialise_list_from_str(task[6]),
-        "generation_model": task[-3],
-        "verified": bool(task[-2]),
-        "timestamp": task[-1],
+        "generation_model": task[7],
+        "verified": bool(task[8]),
+        "timestamp": task[9],
+        "milestone": task[10],
         "tests": tests,
     }
 
@@ -1037,3 +1073,34 @@ def get_cohort_by_id(cohort_id: int):
         return None
     finally:
         conn.close()
+
+
+def get_all_milestones():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {milestones_table_name}")
+    milestones = cursor.fetchall()
+
+    conn.close()
+
+    # Convert the fetched data into a list of dictionaries
+    return [{"id": milestone[0], "name": milestone[1]} for milestone in milestones]
+
+
+def insert_milestone(name: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"INSERT INTO {milestones_table_name} (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+
+
+def delete_milestone(milestone_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {milestones_table_name} WHERE id = ?", (milestone_id,))
+    conn.commit()
+    conn.close()
