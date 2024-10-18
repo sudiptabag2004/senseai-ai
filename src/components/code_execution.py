@@ -68,7 +68,7 @@ def replace_inputs_in_code(
 ):
     offset = 0
     for i, (start, end) in enumerate(user_input_instances):
-        replacement = f"'{inputs[i]}'"
+        replacement = f"{repr(inputs[i])}"
         code = code[: start + offset] + replacement + code[end + offset :]
         offset += len(replacement) - (end - start)
 
