@@ -8,6 +8,8 @@ You can contribute to SensAI in many ways:
 6. Give us feedback on how we can do better, in general.
 7. Learning engineering: SensAI generates a lot of data on how learners are learning and growing in their journey. Analysing this data and uncovering insights will help us improve SensAI to better support our learners and teachers. If you are interested in this, do reach out to us on the WhatsApp community and we'll be happy to discuss this with you.
 
+To help you get started with contributing code, we have prepared a few code walkthrough videos. You can find them [here](https://www.loom.com/share/46c9089c05ae45feb12c34afdd5b9bca?sid=2a4ca169-902a-415f-9f15-6ece25bcf059) (part 1) and [here](https://www.loom.com/share/f85aaa4c53574243ad7a7ad55379fb95?sid=cbf15065-973a-46bf-8792-7364b961553b) (part 2).
+
 ## Code of Conduct
 We abide by the principles of openness, respect, and consideration of others of the Python Software Foundation: https://www.python.org/psf/codeofconduct/.
 

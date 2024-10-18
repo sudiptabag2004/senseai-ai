@@ -1,24 +1,28 @@
 # SensAI - A Socratic AI Tutor
 
-**For Teachers** (`http://localhost:8501/admin`)
-- Add a task, use AI to generate the answer and verify it. A task is the same as a question.
-- Bulk upload tasks instead of feeding tasks one by one. 
-  - Just add a CSV file with the following columns: `Name`, `Description`, `Tags`
-  - Once the answers are generated, select `Verify Mode` to verify the answers and save your verification.
-- Get the entire chat history. Make a GET request to `http://localhost:8001/chat_history`. You can connect this with Google Sheets using AppScript to view the entire chat history on Sheets.
-- Select one or more tasks and delete them if you want to.
+We are building an AI tutor to help students learn and assist teachers in creating lessons, evaluating student responses and keeping their students motivated.
+We are HyperVerge Academy, the non-profit arm of HyperVerge, where we support learners from low-income backgrounds get jobs in tech by bringing together industry mentors and motivated learners. Because of this, SensAI is being tailor-made for learning and teaching programming but it can be used for any subject. If you are using SensAI and have any feedback for us, please consider joining the community (details below) or contacting us at `aman dot d at hyperverge dot org`.
 
-**For learners** (`http://localhost:8501/`)
-- See the list of verified tasks that you can work on by visiting `http://localhost:8501/task_list`
-- Click on one of the tasks and start attempting it. The AI tutor will help guide the learner with any doubts they might have and assess their responses. Students will receive personalized feedback on their answers and guidance tailored to their needs.
+If you want to contribute to SensAI, please look at the `Contributing` section below.
 
-Many more things to come soon, for both learners and teachers.
-
-Watch the demo below to understand more:
-<div>
-  <a href="https://www.loom.com/share/a763d6c5cd4c4bb38e74f1f72c4aa48c">
-    <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/a763d6c5cd4c4bb38e74f1f72c4aa48c-ba42b26917ee9648-full-play.gif">
-  </a>
+Watch the demo videos below to understand the features we currently offer for teachers and students:
+<div style="display: flex; justify-content: space-between;">
+  <div style="flex: 1;">
+    <a href="https://www.loom.com/share/e23690f3b0a146d38a618fde09d6afdd">
+      <p>SensAI demo (learner) - 18/10/24 - Watch Video</p>
+    </a>
+    <a href="https://www.loom.com/share/e23690f3b0a146d38a618fde09d6afdd">
+      <img style="max-width:500px;" src="https://cdn.loom.com/sessions/thumbnails/e23690f3b0a146d38a618fde09d6afdd-0ef8650439c37e3c-full-play.gif">
+    </a>
+  </div>
+  <div style="flex: 1;">
+    <a href="https://www.loom.com/share/f1c19c3c34fc41fab727bdc9a5bfccf4">
+      <p>SensAI demo (admin) - 18/10/24 - Watch Video</p>
+    </a>
+    <a href="https://www.loom.com/share/f1c19c3c34fc41fab727bdc9a5bfccf4">
+      <img style="max-width:500px;" src="https://cdn.loom.com/sessions/thumbnails/f1c19c3c34fc41fab727bdc9a5bfccf4-9f67bb11ad04c53d-full-play.gif">
+    </a>
+  </div>
 </div>
 
 ## Contributing
@@ -93,36 +97,3 @@ We are building a community of creators, builders, teachers, learners, parents, 
 
 Our thinking on how AI can impact Education is summarized in the mindmap below:
 ![ai + education thesis](./images/thesis.png)
-
-## What's New
-**2024-09-22**
-- Fixed a bug where an error was thrown upon toggling the "Show Code Editor" button while creating a task.
-- Updated the list of tags that can be used while creating a task.
-- Removed LangChain for streaming JSON responses. Using Instructor and a much simpler approach overall to stream JSON responses.
-- Improved the system prompt to not give away the answer, to maintain formatting and diversity in the feedback while also including an emojis in the feedback from time to time.
-- Fixed the widget duplication error being thrown on the task page when rendering the chat UI.
-
-**2024-09-21**
-- Added support for a dev container to test new features before pushing to prod.
-- Fixed the bug where adding code to the code editor kept refreshing the entire page making for a page experience. Instead of automatically updating the session state variables where the code for each language is stored as one is typing, the variables are now set only after the learner manually clicks the "Run Code" button.
-- Updated the Task UI to give more space to the code editor and restrict the learner's chat input to the chat section of the page.
-- Removed the `Show Code Preview` button from the task creator page and converted `coding_language` to a list of languages so that we avoid hardcoding which languages to show in the code editor and everything is clearly specified by the task creator.
-
-**2024-09-16**
-- Fixed the bug where only one email was being used globally across all users. Used a hack for storing the email in the session state and using the query params in the URL to set it.
-- @shekhar32 [fixed](https://gitlab.com/hvacademy/sensai-ai/-/merge_requests/4) the bug where status was being set for all tasks without checking if tasks exist
-- Added support for filtering tasks by tags for admin
-- Added support for bulk updating task attributes by the admin
-- Code editor for coding questions has been added along with an option to show code preview for the code (supports HTML, CSS, JS for now)
-- Layout has been set to wide mode for each page
-- Adjusted the sticky container's theme to match the theme of the app
-
-**2024-09-15**
-- Added support for fetching all tasks
-- Added LICENSE
-- Added Contributing guidelines
-
-**2024-09-13**
-- AI response returned as a JSON with the keys `feedback` and `is_solved`. The feedback is streamed to the user. `is_solved` indicates if the question has been solved.
-- The task title/description is now inside a sticky container that remains fixed on the top of the task page. If the task has been solved, a green tick mark appears next to the task name.
-- In the list of all tasks for a learner, the solved tasks are marked as a green row with a tick mark.
