@@ -88,7 +88,7 @@ def create_tasks_table(cursor):
                     generation_model TEXT NOT NULL,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    milestone_id INTEGER REFERENCES {milestones_table_name}(id),
+                    milestone_id INTEGER REFERENCES {milestones_table_name}(id)
                 )"""
         )
 
