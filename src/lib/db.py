@@ -75,6 +75,40 @@ def create_milestones_table(cursor):
     )
 
 
+def create_tasks_table(cursor):
+   cursor.execute(
+            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    tags TEXT,  -- Stored as comma-separated values
+                    type TEXT NOT NULL DEFAULT 'text',
+                    coding_language TEXT,
+                    generation_model TEXT NOT NULL,
+                    verified BOOLEAN NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    milestone_id INTEGER REFERENCES {milestones_table_name}(id),
+                )"""
+        )
+
+def create_chat_history_table(cursor):
+    cursor.execute(
+         f"""
+                CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    task_id INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    is_solved BOOLEAN NOT NULL DEFAULT 0,
+                    response_type TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                )
+                """
+    )
+
 def check_and_update_chat_history_table():
     conn = sqlite3.connect(sqlite_db_path)
     cursor = conn.cursor()
@@ -188,6 +222,14 @@ def init_db():
         if not check_table_exists(cohorts_table_name, cursor):
             create_cohort_tables(cursor)
             conn.commit()
+        
+        if not check_table_exists(tasks_table_name, cursor):
+            create_tasks_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(chat_history_table_name, cursor):
+            create_chat_history_table(cursor)
+            conn.commit()
 
         # Apply any necessary schema changes
         check_and_update_chat_history_table()
@@ -200,38 +242,10 @@ def init_db():
         create_milestones_table(cursor)
 
         # Create a table to store tasks
-        cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    tags TEXT,  -- Stored as comma-separated values
-                    type TEXT NOT NULL DEFAULT 'text',
-                    coding_language TEXT,
-                    generation_model TEXT NOT NULL,
-                    verified BOOLEAN NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    milestone_id INTEGER REFERENCES {milestones_table_name}(id),
-                )"""
-        )
+        create_tasks_table(cursor)
 
         # Create a table to store chat history
-        cursor.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                task_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                is_solved BOOLEAN NOT NULL DEFAULT 0,
-                response_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
-            )
-            """
-        )
+        create_chat_history_table(cursor)
 
         # Create a table to store tests
         create_tests_table(cursor)
