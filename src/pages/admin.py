@@ -1098,11 +1098,13 @@ def show_milestones_tab():
         "Enter milestone and press `Enter`", key="new_milestone"
     )
 
+    if "new_milestone_color" not in st.session_state:
+        st.session_state.new_milestone_color = generate_random_color()
+
     if new_milestone:
         cols[1].container(height=10, border=False)
         milestone_color = cols[1].color_picker(
             "Pick A Color",
-            generate_random_color(),
             key="new_milestone_color",
             label_visibility="collapsed",
         )
