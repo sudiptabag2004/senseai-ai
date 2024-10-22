@@ -16,7 +16,7 @@ from lib.config import (
     group_role_mentor,
     milestones_table_name,
 )
-from lib.utils import get_date_from_str
+from lib.utils import get_date_from_str, generate_random_color
 import json
 
 
@@ -125,6 +125,8 @@ def check_and_update_milestones_table():
         try:
             cursor.execute(f"ALTER TABLE {milestones_table_name} ADD COLUMN color TEXT")
             conn.commit()
+
+            set_colors_for_existing_milestones(cursor)
         except sqlite3.OperationalError:
             # ignore the error
             pass
@@ -1068,6 +1070,15 @@ def update_milestone_color(milestone_id: int, color: str):
     conn.close()
 
 
+def set_colors_for_existing_milestones():
+    all_milestones = get_all_milestones()
+
+    for milestone in all_milestones:
+        milestone_id = milestone["id"]
+        color = generate_random_color()
+        update_milestone_color(milestone_id, color)
+
+
 def delete_milestone(milestone_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1077,39 +1088,49 @@ def delete_milestone(milestone_id: int):
     conn.close()
 
 
-# def get_all_milestone_progress(user_id: str):
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
+def get_all_milestone_progress(user_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-#     query = f"""
-#     SELECT 
-#         m.id AS milestone_id,
-#         m.name AS milestone_name,
-#         m.color AS milestone_color,
-#         COUNT(DISTINCT t.id) AS total_tasks,
-#         SUM(CASE WHEN ch.user_id = ? AND ch.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks
-#     FROM 
-#         {milestones_table_name} m
-#     LEFT JOIN 
-#         {tasks_table_name} t ON m.id = t.milestone_id
-#     LEFT JOIN 
-#         {chat_history_table_name} ch ON t.id = ch.task_id AND ch.user_id = ?
-#     GROUP BY 
-#         m.id, m.name, m.color
-#     """
+    query = f"""
+    SELECT 
+        m.id AS milestone_id,
+        m.name AS milestone_name,
+        m.color AS milestone_color,
+        COUNT(DISTINCT t.id) AS total_tasks,
+        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks
+    FROM 
+        {milestones_table_name} m
+    LEFT JOIN 
+        {tasks_table_name} t ON m.id = t.milestone_id
+    LEFT JOIN (
+        SELECT 
+            task_id, 
+            user_id, 
+            MAX(CASE WHEN is_solved = 1 THEN 1 ELSE 0 END) AS is_solved
+        FROM 
+            {chat_history_table_name}
+        WHERE 
+            user_id = ?
+        GROUP BY 
+            task_id, user_id
+    ) task_solved ON t.id = task_solved.task_id
+    GROUP BY 
+        m.id, m.name, m.color
+    """
 
-#     cursor.execute(query, (user_id, user_id))
-#     results = cursor.fetchall()
+    cursor.execute(query, (user_id,))
+    results = cursor.fetchall()
 
-#     conn.close()
+    conn.close()
 
-#     return [
-#         {
-#             "milestone_id": row[0],
-#             "milestone_name": row[1],
-#             "milestone_color": row[2],
-#             "total_tasks": row[3],
-#             "completed_tasks": row[4],
-#         }
-#         for row in results
-#     ]
+    return [
+        {
+            "milestone_id": row[0],
+            "milestone_name": row[1],
+            "milestone_color": row[2],
+            "total_tasks": row[3],
+            "completed_tasks": row[4],
+        }
+        for row in results
+    ]
