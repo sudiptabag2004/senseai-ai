@@ -126,7 +126,7 @@ def check_and_update_milestones_table():
             cursor.execute(f"ALTER TABLE {milestones_table_name} ADD COLUMN color TEXT")
             conn.commit()
 
-            set_colors_for_existing_milestones(cursor)
+            set_colors_for_existing_milestones()
         except sqlite3.OperationalError:
             # ignore the error
             pass
@@ -1117,6 +1117,8 @@ def get_all_milestone_progress(user_id: str):
     ) task_solved ON t.id = task_solved.task_id
     GROUP BY 
         m.id, m.name, m.color
+    HAVING 
+        COUNT(DISTINCT t.id) > 0
     """
 
     cursor.execute(query, (user_id,))

@@ -5,8 +5,10 @@ st.set_page_config(layout="wide")
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from lib.init import init_db
+from lib.db import get_all_milestone_progress
 from components.streak import show_streak
 from components.leaderboard import show_leaderboard
+from components.progress_report import show_progress_report_for_milestone
 
 # init_auth_from_cookies()
 
@@ -34,6 +36,20 @@ def clear_auth():
 
 
 st.container(height=20, border=False)
+
+
+def show_progress_report():
+    all_milestone_progress = get_all_milestone_progress(st.session_state.email)
+    for milestone_progress in all_milestone_progress:
+        show_progress_report_for_milestone(
+            {
+                "id": milestone_progress["milestone_id"],
+                "name": milestone_progress["milestone_name"],
+                "color": milestone_progress["milestone_color"],
+            },
+            milestone_progress["completed_tasks"],
+            milestone_progress["total_tasks"],
+        )
 
 
 def login():
@@ -69,15 +85,16 @@ def login():
             login()
 
     else:
-        cols = st.columns([4, 3])
+        cols = st.columns([4, 0.1, 3])
         with cols[0]:
             st.markdown(f"Welcome `{st.session_state.email}`! Let's begin learning! 🚀")
             st.link_button(
                 "👨‍💻👩‍💻 Start solving tasks",
                 f"/task_list?email={st.session_state.email}",
             )
+            show_progress_report()
 
-        with cols[1]:
+        with cols[-1]:
             show_streak()
             show_leaderboard()
 
