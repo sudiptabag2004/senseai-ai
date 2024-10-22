@@ -38,9 +38,10 @@ from lib.db import (
     get_all_milestones,
     insert_milestone as insert_milestone_to_db,
     delete_milestone as delete_milestone_from_db,
+    update_milestone_color as update_milestone_color_in_db,
 )
 from lib.strings import *
-from lib.utils import load_json, save_json
+from lib.utils import load_json, save_json, generate_random_color
 from lib.config import coding_languages_supported, tags_list_path
 
 init_env_vars()
@@ -1044,7 +1045,7 @@ with tabs[1]:
     show_cohorts_tab()
 
 
-def add_milestone(new_milestone):
+def add_milestone(new_milestone, milestone_color):
     if not new_milestone:
         st.toast("Enter a milestone name")
         return
@@ -1055,7 +1056,7 @@ def add_milestone(new_milestone):
         st.toast("Milestone already exists")
         return
 
-    insert_milestone_to_db(new_milestone)
+    insert_milestone_to_db(new_milestone, milestone_color)
     st.toast("New milestone added")
     refresh_milestones()
 
@@ -1085,16 +1086,36 @@ def show_milestone_delete_confirmation_dialog(milestone):
         st.rerun()
 
 
+def update_milestone_color(milestone_id, milestone_color):
+    update_milestone_color_in_db(milestone_id, milestone_color)
+    st.toast("Milestone color updated")
+    refresh_milestones()
+
+
 def show_milestones_tab():
-    cols = st.columns(4)
-    new_milestone = cols[0].text_input("Enter Milestone", key="new_milestone")
-    cols[1].container(height=10, border=False)
-    cols[1].button(
-        "Add",
-        on_click=add_milestone,
-        args=(new_milestone,),
-        key="add_milestone",
+    cols = st.columns([1, 0.15, 1, 1])
+    new_milestone = cols[0].text_input(
+        "Enter milestone and press `Enter`", key="new_milestone"
     )
+
+    if new_milestone:
+        cols[1].container(height=10, border=False)
+        milestone_color = cols[1].color_picker(
+            "Pick A Color",
+            generate_random_color(),
+            key="new_milestone_color",
+            label_visibility="collapsed",
+        )
+        cols[2].container(height=10, border=False)
+        cols[2].button(
+            "Add Milestone",
+            on_click=add_milestone,
+            args=(
+                new_milestone,
+                milestone_color,
+            ),
+            key="add_milestone",
+        )
 
     if not st.session_state.milestones:
         st.info("No milestones added yet")
@@ -1106,8 +1127,26 @@ def show_milestones_tab():
         with layout_cols[i % num_layout_cols].container(
             border=True,
         ):
-            cols = st.columns([3, 1])
-            cols[0].write(milestone["name"])
+            cols = st.columns([1, 2.5, 1.5, 1.5])
+            milestone_name = f'<div style="margin-top: 0px;">{milestone["name"]}</div>'
+            milestone_color = cols[0].color_picker(
+                "Pick A Color",
+                milestone["color"],
+                key=f'color_picker_{milestone["id"]}',
+                label_visibility="collapsed",
+                # disabled=True,
+            )
+            cols[1].markdown(milestone_name, unsafe_allow_html=True)
+
+            if milestone_color != milestone["color"]:
+                cols[2].button(
+                    "Update",
+                    on_click=update_milestone_color,
+                    args=(milestone["id"], milestone_color),
+                    key=f"update_milestone_color_{i}",
+                    type="primary",
+                )
+
             cols[-1].button(
                 "Delete",
                 on_click=show_milestone_delete_confirmation_dialog,

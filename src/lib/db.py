@@ -70,14 +70,15 @@ def create_milestones_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {milestones_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
+                color TEXT
             )"""
     )
 
 
 def create_tasks_table(cursor):
-   cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
@@ -90,11 +91,12 @@ def create_tasks_table(cursor):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     milestone_id INTEGER REFERENCES {milestones_table_name}(id)
                 )"""
-        )
+    )
+
 
 def create_chat_history_table(cursor):
     cursor.execute(
-         f"""
+        f"""
                 CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
@@ -109,81 +111,19 @@ def create_chat_history_table(cursor):
                 """
     )
 
-def check_and_update_chat_history_table():
+
+def check_and_update_milestones_table():
     conn = sqlite3.connect(sqlite_db_path)
     cursor = conn.cursor()
 
     # check if a column exists in a table
-    cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
-    columns = [column[1] for column in cursor.fetchall()]
-
-    if "is_solved" not in columns:
-        try:
-            cursor.execute(
-                f"ALTER TABLE {chat_history_table_name} ADD COLUMN is_solved BOOLEAN NOT NULL DEFAULT 0"
-            )
-            conn.commit()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    if "response_type" not in columns:
-        try:
-            cursor.execute(
-                f"ALTER TABLE {chat_history_table_name} ADD COLUMN response_type TEXT"
-            )
-            conn.commit()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    conn.close()
-
-
-def check_and_update_tasks_table():
-    conn = sqlite3.connect(sqlite_db_path)
-    cursor = conn.cursor()
-
-    # check if a column exists in a table
-    cursor.execute(f"PRAGMA table_info({tasks_table_name})")
+    cursor.execute(f"PRAGMA table_info({milestones_table_name})")
     columns_info = cursor.fetchall()
     columns = [column[1] for column in columns_info]
 
-    if "type" not in columns:
+    if "color" not in columns:
         try:
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN type TEXT NOT NULL DEFAULT 'text'"
-            )
-            conn.commit()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    if "show_code_preview" in columns:
-        try:
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name} DROP COLUMN show_code_preview"
-            )
-            conn.commit()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    if "coding_language" not in columns:
-        try:
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN coding_language TEXT"
-            )
-            conn.commit()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    if "milestone_id" not in columns:
-        try:
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN milestone_id INTEGER REFERENCES {milestones_table_name}(id)"
-            )
+            cursor.execute(f"ALTER TABLE {milestones_table_name} ADD COLUMN color TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             # ignore the error
@@ -222,7 +162,7 @@ def init_db():
         if not check_table_exists(cohorts_table_name, cursor):
             create_cohort_tables(cursor)
             conn.commit()
-        
+
         if not check_table_exists(tasks_table_name, cursor):
             create_tasks_table(cursor)
             conn.commit()
@@ -232,8 +172,7 @@ def init_db():
             conn.commit()
 
         # Apply any necessary schema changes
-        check_and_update_chat_history_table()
-        check_and_update_tasks_table()
+        check_and_update_milestones_table()
 
         conn.close()
         return
@@ -1099,14 +1038,32 @@ def get_all_milestones():
     conn.close()
 
     # Convert the fetched data into a list of dictionaries
-    return [{"id": milestone[0], "name": milestone[1]} for milestone in milestones]
+    return [
+        {"id": milestone[0], "name": milestone[1], "color": milestone[2]}
+        for milestone in milestones
+    ]
 
 
-def insert_milestone(name: str):
+def insert_milestone(name: str, color: str):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"INSERT INTO {milestones_table_name} (name) VALUES (?)", (name,))
+    cursor.execute(
+        f"INSERT INTO {milestones_table_name} (name, color) VALUES (?, ?)",
+        (name, color),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_milestone_color(milestone_id: int, color: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {milestones_table_name} SET color = ? WHERE id = ?",
+        (color, milestone_id),
+    )
     conn.commit()
     conn.close()
 
@@ -1118,3 +1075,41 @@ def delete_milestone(milestone_id: int):
     cursor.execute(f"DELETE FROM {milestones_table_name} WHERE id = ?", (milestone_id,))
     conn.commit()
     conn.close()
+
+
+# def get_all_milestone_progress(user_id: str):
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+
+#     query = f"""
+#     SELECT 
+#         m.id AS milestone_id,
+#         m.name AS milestone_name,
+#         m.color AS milestone_color,
+#         COUNT(DISTINCT t.id) AS total_tasks,
+#         SUM(CASE WHEN ch.user_id = ? AND ch.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks
+#     FROM 
+#         {milestones_table_name} m
+#     LEFT JOIN 
+#         {tasks_table_name} t ON m.id = t.milestone_id
+#     LEFT JOIN 
+#         {chat_history_table_name} ch ON t.id = ch.task_id AND ch.user_id = ?
+#     GROUP BY 
+#         m.id, m.name, m.color
+#     """
+
+#     cursor.execute(query, (user_id, user_id))
+#     results = cursor.fetchall()
+
+#     conn.close()
+
+#     return [
+#         {
+#             "milestone_id": row[0],
+#             "milestone_name": row[1],
+#             "milestone_color": row[2],
+#             "total_tasks": row[3],
+#             "completed_tasks": row[4],
+#         }
+#         for row in results
+#     ]
