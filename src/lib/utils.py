@@ -1,4 +1,6 @@
 import json
+import random
+import colorsys
 from datetime import datetime, timezone, timedelta
 
 
@@ -22,4 +24,19 @@ def get_date_from_str(date_str: str, source_timezone: str) -> datetime.date:
         .replace(tzinfo=timezone.utc)  # first convert from utc to ist
         .astimezone(timezone(timedelta(hours=5, minutes=30)))
         .date()  # then get the date
+    )
+
+
+def generate_random_color() -> str:
+    # Generate a random hue
+    hue = random.random()
+
+    # Create two colors with the same hue but different lightness
+    saturation = random.uniform(0.3, 0.9)
+    value = random.uniform(0.4, 1.0)
+    color = colorsys.hsv_to_rgb(hue, saturation, value)
+
+    # Convert RGB values to hex
+    return "#{:02x}{:02x}{:02x}".format(
+        int(color[0] * 255), int(color[1] * 255), int(color[2] * 255)
     )
