@@ -786,14 +786,25 @@ def show_tasks_tab():
     if verified_filter != "All":
         df = df[df["verified"] == (verified_filter == "Verified")]
 
-    type_filter = cols[2].radio(
-        "Filter by task type",
-        ["All", "Coding", "Text"],
-        horizontal=True,
+    # type_filter = cols[2].radio(
+    #     "Filter by task type",
+    #     ["All", "Coding", "Text"],
+    #     horizontal=True,
+    # )
+
+    # if type_filter != "All":
+    #     df = df[df["type"] == type_filter.lower()]
+
+    # milestones = [milestone["id"] for milestone in st.session_state.milestones]
+    filtered_milestones = cols[2].multiselect(
+        "Filter by milestone",
+        st.session_state.milestones,
+        format_func=lambda x: x["name"],
     )
 
-    if type_filter != "All":
-        df = df[df["type"] == type_filter.lower()]
+    if filtered_milestones:
+        filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
+        df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
     coding_languages_filter = cols[3].multiselect(
         "Filter by coding language",

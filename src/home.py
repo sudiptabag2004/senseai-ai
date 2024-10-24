@@ -5,7 +5,11 @@ st.set_page_config(layout="wide")
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from lib.init import init_db
-from lib.db import get_all_milestone_progress, get_all_tasks, get_solved_tasks_for_user
+from lib.db import (
+    get_all_milestone_progress,
+    get_all_verified_tasks,
+    get_solved_tasks_for_user,
+)
 from components.streak import show_streak
 from components.leaderboard import show_leaderboard
 from components.milestone_learner_view import show_milestone_card
@@ -39,7 +43,7 @@ st.container(height=20, border=False)
 
 
 def show_roadmap():
-    all_tasks = get_all_tasks()
+    all_tasks = get_all_verified_tasks()
     solved_task_ids = get_solved_tasks_for_user(st.session_state.email)
     for task in all_tasks:
         if task["id"] in solved_task_ids:

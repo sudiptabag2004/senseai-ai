@@ -407,6 +407,11 @@ def get_all_tasks():
     return tasks_dicts
 
 
+def get_all_verified_tasks():
+    tasks = get_all_tasks()
+    return [task for task in tasks if task["verified"]]
+
+
 def get_task_by_id(task_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1117,6 +1122,8 @@ def get_all_milestone_progress(user_id: str):
         GROUP BY 
             task_id, user_id
     ) task_solved ON t.id = task_solved.task_id
+    WHERE 
+        t.verified = 1
     GROUP BY 
         m.id, m.name, m.color
     HAVING 
