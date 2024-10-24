@@ -1,5 +1,6 @@
 import streamlit as st
 import colorsys
+import html
 from typing import Dict, List
 
 
@@ -33,9 +34,11 @@ def get_task_view(task: Dict):
 
     task_url = f"/task?id={task['id']}&email={st.session_state.email}"
 
-    print(task_url)
+    # Escape HTML characters in task name and description
+    task_name = html.escape(task["name"].strip())
+    task_description = html.escape(task["description"].strip())
 
-    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-name">{task['name']}</div>\n\t\t<div class="task-description">\n\t\t\t{task.get('description', 'No description available.')}\n\t\t</div>\n\t\t<a href="{task_url}" class="open-task-btn">Open Task</a>\n\t</div>\n</div>"""
+    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-name">{task_name}</div>\n\t\t<div class="task-description">\n\t\t\t{task_description}\n\t\t</div>\n\t\t<a href="{task_url}" class="open-task-btn">Open Task</a>\n\t</div>\n</div>"""
 
 
 def show_milestone_card(
