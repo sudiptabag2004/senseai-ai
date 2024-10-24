@@ -5,10 +5,10 @@ st.set_page_config(layout="wide")
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from lib.init import init_db
-from lib.db import get_all_milestone_progress
+from lib.db import get_all_milestone_progress, get_all_tasks, get_solved_tasks_for_user
 from components.streak import show_streak
 from components.leaderboard import show_leaderboard
-from components.progress_report import show_progress_report_for_milestone
+from components.milestone_learner_view import show_milestone_card
 
 # init_auth_from_cookies()
 
@@ -20,7 +20,7 @@ if "email" in st.query_params:
 if "is_hv_learner" in st.query_params:
     st.session_state.is_hv_learner = int(st.query_params["is_hv_learner"])
 
-st.title("SensAI - your personal AI tutor")
+st.sidebar.subheader("SensAI - your personal AI tutor")
 
 if "email" not in st.session_state:
     st.session_state.email = None
@@ -38,17 +38,34 @@ def clear_auth():
 st.container(height=20, border=False)
 
 
-def show_progress_report():
-    all_milestone_progress = get_all_milestone_progress(st.session_state.email)
-    for milestone_progress in all_milestone_progress:
-        show_progress_report_for_milestone(
+def show_roadmap():
+    all_tasks = get_all_tasks()
+    solved_task_ids = get_solved_tasks_for_user(st.session_state.email)
+    for task in all_tasks:
+        if task["id"] in solved_task_ids:
+            task["completed"] = True
+        else:
+            task["completed"] = False
+
+    all_milestone_data = get_all_milestone_progress(st.session_state.email)
+    for milestone_data in all_milestone_data:
+        milestone_tasks = [
+            task
+            for task in all_tasks
+            if task["milestone_id"] == milestone_data["milestone_id"]
+        ]
+
+        milestone_tasks = sorted(milestone_tasks, key=lambda x: x["completed"])
+
+        show_milestone_card(
             {
-                "id": milestone_progress["milestone_id"],
-                "name": milestone_progress["milestone_name"],
-                "color": milestone_progress["milestone_color"],
+                "id": milestone_data["milestone_id"],
+                "name": milestone_data["milestone_name"],
+                "color": milestone_data["milestone_color"],
             },
-            milestone_progress["completed_tasks"],
-            milestone_progress["total_tasks"],
+            milestone_data["completed_tasks"],
+            milestone_data["total_tasks"],
+            milestone_tasks,
         )
 
 
@@ -88,11 +105,11 @@ def login():
         cols = st.columns([4, 0.1, 3])
         with cols[0]:
             st.markdown(f"Welcome `{st.session_state.email}`! Let's begin learning! 🚀")
-            st.link_button(
-                "👨‍💻👩‍💻 Start solving tasks",
-                f"/task_list?email={st.session_state.email}",
-            )
-            show_progress_report()
+            # st.link_button(
+            #     "👨‍💻👩‍💻 Start solving tasks",
+            #     f"/task_list?email={st.session_state.email}",
+            # )
+            show_roadmap()
 
         with cols[-1]:
             show_streak()

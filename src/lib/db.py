@@ -361,7 +361,7 @@ def get_all_tasks():
 
     cursor.execute(
         f"""
-    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.name as milestone_name
+    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     ORDER BY t.timestamp ASC
@@ -396,7 +396,8 @@ def get_all_tasks():
                 "generation_model": row[7],
                 "verified": bool(row[8]),
                 "timestamp": row[9],
-                "milestone": row[10],
+                "milestone_id": row[10],
+                "milestone_name": row[11],
                 "tests": tests,
             }
         )
@@ -587,7 +588,7 @@ def get_all_chat_history():
         f"""
     SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type 
     FROM {chat_history_table_name} message
-    LEFT JOIN {tasks_table_name} task ON message.task_id = task.id
+    INNER JOIN {tasks_table_name} task ON message.task_id = task.id
     ORDER BY message.timestamp ASC
     """
     )
@@ -1098,7 +1099,8 @@ def get_all_milestone_progress(user_id: str):
         m.name AS milestone_name,
         m.color AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
-        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks
+        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
+        COUNT(DISTINCT t.id) - SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
     FROM 
         {milestones_table_name} m
     LEFT JOIN 
@@ -1119,6 +1121,8 @@ def get_all_milestone_progress(user_id: str):
         m.id, m.name, m.color
     HAVING 
         COUNT(DISTINCT t.id) > 0
+    ORDER BY 
+        incomplete_tasks DESC
     """
 
     cursor.execute(query, (user_id,))

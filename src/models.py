@@ -34,7 +34,8 @@ class Task(BaseModel):
     generation_model: str
     verified: bool
     timestamp: str
-    milestone: Optional[str]
+    milestone_id: Optional[int]
+    milestone_name: Optional[str]
 
 
 Streaks = Dict[str, int]

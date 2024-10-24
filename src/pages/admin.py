@@ -828,6 +828,7 @@ def show_tasks_tab():
         # 'id': None
         "description": st.column_config.TextColumn(width="medium"),
         "answer": st.column_config.TextColumn(width="medium"),
+        "milestone_name": st.column_config.TextColumn(label="milestone"),
     }
 
     column_order = [
@@ -838,7 +839,7 @@ def show_tasks_tab():
         "description",
         "answer",
         "tags",
-        "milestone",
+        "milestone_name",
         "type",
         "coding_language",
         "generation_model",
@@ -916,7 +917,7 @@ def show_tasks_tab():
                 "type",
                 "generation_model",
                 "timestamp",
-                "milestone",
+                "milestone_name",
             ],
         )
 
