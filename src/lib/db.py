@@ -679,6 +679,21 @@ def delete_message(message_id: int):
     conn.close()
 
 
+def update_message_timestamp(message_id: int, new_timestamp: datetime):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+    UPDATE {chat_history_table_name} SET timestamp = ? WHERE id = ?
+    """,
+        (new_timestamp, message_id),
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def delete_user_chat_history_for_task(task_id: int, user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
