@@ -6,7 +6,7 @@ from lib.db import get_user_streak, get_user_activity_last_n_days
 from .base import set_box_style, show_box_header
 
 
-def display_day_level_streak(user_streak: List[datetime]):
+def display_day_level_streak(user_activity: List[datetime]):
     # Custom CSS for the boxes
     st.markdown(
         """
@@ -51,7 +51,7 @@ def display_day_level_streak(user_streak: List[datetime]):
     # Create columns for each day
     cols = st.columns(7)
 
-    active_days = [date.day for date in user_streak]
+    active_days = [date.day for date in user_activity]
 
     # Display the boxes
     for i, day in enumerate(days):
