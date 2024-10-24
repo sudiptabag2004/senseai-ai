@@ -2,7 +2,7 @@ from typing import List
 import random
 import streamlit as st
 from datetime import datetime, timedelta
-from lib.db import get_user_streak
+from lib.db import get_user_streak, get_user_activity_last_n_days
 from .base import set_box_style, show_box_header
 
 
@@ -61,6 +61,10 @@ def display_day_level_streak(user_streak: List[datetime]):
 
 def show_streak():
     user_streak = get_user_streak(st.session_state.email)
+    # Get the user's activity for the last 3 days as we are displaying a week's activity
+    # with the current day in the center
+    user_week_activity = get_user_activity_last_n_days(st.session_state.email, 3)
+
     streak_count = len(user_streak)
 
     set_box_style()
@@ -75,4 +79,4 @@ def show_streak():
         show_box_header("Your Learning Streak")
         st.markdown(f"<strong>{streak_text}</strong>", unsafe_allow_html=True)
 
-        display_day_level_streak(user_streak)
+        display_day_level_streak(user_week_activity)

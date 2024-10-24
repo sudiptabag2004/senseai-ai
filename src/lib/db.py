@@ -746,6 +746,34 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     return current_streak
 
 
+def get_user_activity_last_n_days(user_id: str, n: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get the user's interactions for the last n days, ordered by date
+    cursor.execute(
+        f"""
+    SELECT DATE(datetime(timestamp, '+5 hours', '+30 minutes')), COUNT(*)
+    FROM {chat_history_table_name}
+    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days')
+    GROUP BY DATE(timestamp)
+    ORDER BY DATE(timestamp)
+    """,
+        (user_id,),
+    )
+
+    activity_per_day = cursor.fetchall()
+    conn.close()
+
+    active_days = []
+
+    for date, count in activity_per_day:
+        if count > 0:
+            active_days.append(datetime.strptime(date, "%Y-%m-%d"))
+
+    return active_days
+
+
 def get_user_streak(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
