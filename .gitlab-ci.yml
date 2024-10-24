@@ -9,6 +9,7 @@ build:
   services:
     - docker:dind
   script:
+    - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export OPENAI_API_KEY=$DEV_OPENAI_API_KEY; else export OPENAI_API_KEY=$PROD_OPENAI_API_KEY; fi
     - docker build --build-arg OPENAI_API_KEY=$OPENAI_API_KEY --build-arg OPENAI_ORG_ID=$OPENAI_ORG_ID --platform linux/amd64 -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
