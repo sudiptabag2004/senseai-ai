@@ -1,7 +1,7 @@
 from typing import List
 import random
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from lib.db import get_user_streak, get_user_activity_last_n_days
 from .base import set_box_style, show_box_header
 
@@ -41,8 +41,9 @@ def display_day_level_streak(user_activity: List[datetime]):
         class_name = "active" if is_active else "inactive"
         return f'<div class="day-box {class_name}">{day}</div>'
 
-    # Get the current date
-    today = datetime.now().date()
+    # Get the current date in IST
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    print(datetime.now(timezone(timedelta(hours=5, minutes=30))))
 
     # Generate the list of day numbers with the current day at the center
     today_index = 3  # Index of today in the 7-day list (0-based)
