@@ -1,6 +1,7 @@
 import streamlit as st
+import pandas as pd
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
@@ -24,6 +25,11 @@ if "email" in st.query_params:
 if "is_hv_learner" in st.query_params:
     st.session_state.is_hv_learner = int(st.query_params["is_hv_learner"])
 
+if "view" in st.query_params:
+    st.session_state.view = st.query_params["view"]
+else:
+    st.session_state.view = "milestone"
+
 st.sidebar.subheader("SensAI - your personal AI tutor")
 
 if "email" not in st.session_state:
@@ -42,15 +48,59 @@ def clear_auth():
 st.container(height=20, border=False)
 
 
-def show_roadmap():
-    all_tasks = get_all_verified_tasks()
-    solved_task_ids = get_solved_tasks_for_user(st.session_state.email)
-    for task in all_tasks:
-        if task["id"] in solved_task_ids:
-            task["completed"] = True
-        else:
-            task["completed"] = False
+def show_roadmap_as_list(tasks):
+    st.write("Select a task by clicking beside the index of the task")
 
+    df = pd.DataFrame(tasks)
+
+    if not len(df):
+        st.error(
+            "No tasks added yet. Ask you mentors/teachers to add tasks for you to solve."
+        )
+        st.stop()
+
+    df["status"] = df.apply(lambda x: "✅" if x["completed"] else "", axis=1)
+
+    filtered_df = df[df["verified"]][["status", "id", "name", "description", "tags"]]
+
+    if not len(filtered_df):
+        st.error(
+            "No tasks added yet. Ask you mentors/teachers to add tasks for you to solve."
+        )
+        st.stop()
+
+    df_actions = st.container(border=True)
+
+    event = st.dataframe(
+        filtered_df.style.map(
+            lambda _: "background-color: #62B670;",
+            subset=(filtered_df[filtered_df["status"] != ""].index, slice(None)),
+        ),
+        on_select="rerun",
+        selection_mode="single-row",
+        use_container_width=True,
+        hide_index=True,
+        column_order=["id", "status", "tags", "name", "description"],
+        column_config={
+            # 'description': st.column_config.TextColumn(
+            #     width='large',
+            #     help='Description of the task'
+            # ),
+            # 'id': None
+        },
+    )
+
+    if len(event.selection["rows"]):
+        df_actions.write("Do you want to work on this task?")
+        task_id = filtered_df.iloc[event.selection["rows"][0]]["id"]
+        df_actions.link_button(
+            "Yes", f"/task?id={task_id}&email={st.session_state.email}"
+        )
+        # print()
+        # delete_tasks(event.selection['rows'])
+
+
+def show_roadmap_by_milestone(all_tasks):
     all_milestone_data = get_all_milestone_progress(st.session_state.email)
     for milestone_data in all_milestone_data:
         milestone_tasks = [
@@ -71,6 +121,33 @@ def show_roadmap():
             milestone_data["total_tasks"],
             milestone_tasks,
         )
+
+
+def update_view(all_tasks):
+    st.query_params.view = "list" if st.session_state.show_list_view else "milestone"
+
+
+def show_roadmap():
+    all_tasks = get_all_verified_tasks()
+    solved_task_ids = get_solved_tasks_for_user(st.session_state.email)
+    for task in all_tasks:
+        if task["id"] in solved_task_ids:
+            task["completed"] = True
+        else:
+            task["completed"] = False
+
+    st.toggle(
+        "Show List View",
+        key="show_list_view",
+        value=st.session_state.view == "list",
+        on_change=update_view,
+        args=(all_tasks,),
+    )
+
+    if st.session_state.show_list_view:
+        show_roadmap_as_list(all_tasks)
+    else:
+        show_roadmap_by_milestone(all_tasks)
 
 
 def login():

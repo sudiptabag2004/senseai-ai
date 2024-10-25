@@ -43,7 +43,6 @@ def display_day_level_streak(user_activity: List[datetime]):
 
     # Get the current date in IST
     today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
-    print(datetime.now(timezone(timedelta(hours=5, minutes=30))))
 
     # Generate the list of day numbers with the current day at the center
     today_index = 3  # Index of today in the 7-day list (0-based)
