@@ -44,6 +44,7 @@ def create_users_table(cursor):
                 first_name TEXT,
                 middle_name TEXT,
                 last_name TEXT,
+                default_dp_color TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )"""
     )
@@ -886,6 +887,21 @@ def drop_tests_table():
         conn.close()
 
 
+def drop_users_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {users_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {users_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
 def delete_all_cohort_info():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1186,6 +1202,57 @@ def get_all_milestone_progress(user_id: str):
     ]
 
 
+def upsert_user(email: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Use UPSERT command to insert or update the user record
+    color = generate_random_color()
+    cursor.execute(
+        f"""
+        INSERT INTO {users_table_name} (email, first_name, middle_name, last_name, default_dp_color)
+        VALUES (?, '', '', '', ?)
+        ON CONFLICT(email) DO NOTHING
+    """,
+        (email, color),
+    )
+
+    conn.commit()
+    conn.close()
+
+    return email
+
+
+def update_user(
+    user_id: str,
+    first_name: str,
+    middle_name: str,
+    last_name: str,
+    default_dp_color: str,
+):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {users_table_name} SET first_name = ?, middle_name = ?, last_name = ?, default_dp_color = ? WHERE id = ?",
+        (first_name, middle_name, last_name, default_dp_color, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def convert_user_db_to_dict(user: Tuple) -> Dict:
+    return {
+        "id": user[0],
+        "email": user[1],
+        "first_name": user[2],
+        "middle_name": user[3],
+        "last_name": user[4],
+        "default_dp_color": user[5],
+        "created_at": user[6],
+    }
+
+
 def get_all_users():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1195,37 +1262,30 @@ def get_all_users():
 
     conn.close()
 
-    return [
-        {
-            "id": user[0],
-            "email": user[1],
-            "first_name": user[2],
-            "middle_name": user[3],
-            "last_name": user[4],
-            "created_at": user[5],
-        }
-        for user in users
-    ]
+    return [convert_user_db_to_dict(user) for user in users]
 
 
-def upsert_user(email: str):
+def get_user_by_email(email: str) -> Dict:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Use UPSERT command to insert or update the user record
-    cursor.execute(
-        f"""
-        INSERT INTO {users_table_name} (email, first_name, middle_name, last_name)
-        VALUES (?, '', '', '')
-        ON CONFLICT(email) DO NOTHING
-    """,
-        (email,),
-    )
+    cursor.execute(f"SELECT * FROM {users_table_name} WHERE email = ?", (email,))
+    user = cursor.fetchone()
 
-    conn.commit()
-    conn.close()
+    if not user:
+        return None
 
-    return email
+    return convert_user_db_to_dict(user)
+
+
+def get_user_by_id(user_id: str) -> Dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {users_table_name} WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+
+    return convert_user_db_to_dict(user)
 
 
 def seed_users_table_with_existing_users():
@@ -1249,9 +1309,10 @@ def seed_users_table_with_existing_users():
 
     # Insert new users into the users table
     for user_id in new_user_ids:
+        random_color = generate_random_color()
         cursor.execute(
-            f"INSERT INTO {users_table_name} (email, first_name, middle_name, last_name) VALUES (?, ?, ?, ?)",
-            (user_id, "", "", ""),
+            f"INSERT INTO {users_table_name} (email, first_name, middle_name, last_name, default_dp_color) VALUES (?, ?, ?, ?, ?)",
+            (user_id, "", "", "", random_color),
         )
 
     conn.commit()
