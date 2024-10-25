@@ -1,4 +1,5 @@
 import streamlit as st
+from typing import Dict
 
 
 def default_menu():
@@ -8,19 +9,17 @@ def default_menu():
     )
 
 
-# def authenticated_menu():
-#     with st.sidebar:
-#         st.link_button(
-#             "👨‍💻👩‍💻 Start solving tasks",
-#             f"/task_list?email={st.session_state.email}",
-#         )
-#     pass
+def authenticated_menu(logged_in_user: Dict):
+    with st.sidebar:
+        st.link_button(
+            "Your Profile",
+            f"/profile?id={logged_in_user['id']}",
+        )
 
 
-def menu():
+def menu(logged_in_user: Dict):
     default_menu()
-    # if st.session_state.email:
-    #     st.sidebar.divider()
-    #     authenticated_menu()
+    if logged_in_user:
+        authenticated_menu(logged_in_user)
 
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

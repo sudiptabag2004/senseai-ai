@@ -5,7 +5,7 @@ st.set_page_config(layout="wide")
 
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
-from auth import login_or_signup_user
+from auth import login_or_signup_user, get_logged_in_user
 from lib.init import init_db
 from lib.db import (
     get_all_milestone_progress,
@@ -152,8 +152,11 @@ def show_roadmap():
         show_roadmap_by_milestone(all_tasks)
 
 
+logged_in_user = get_logged_in_user()
+
+
 def login():
-    if not st.session_state.email:
+    if not logged_in_user:
         logged_in = False
 
         placeholder = st.empty()
@@ -201,7 +204,7 @@ def login():
 
 login()
 
-menu()
+menu(logged_in_user)
 
 
 def show_links():
