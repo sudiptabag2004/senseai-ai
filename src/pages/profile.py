@@ -53,7 +53,7 @@ def profile_header(user: Dict):
         user_name = get_user_name(user)
         if user_name:
             st.header(user_name)
-        st.markdown(user["email"])
+        st.text(user["email"])
 
 
 # Assuming the user ID is passed in the query params
