@@ -156,6 +156,7 @@ logged_in_user = get_logged_in_user()
 
 
 def login():
+    global logged_in_user
     if not logged_in_user:
         logged_in = False
 
@@ -177,6 +178,7 @@ def login():
                     st.query_params.email = st.session_state.email
                     # st.rerun()
                     logged_in = True
+                    logged_in_user = get_logged_in_user()
 
                 except EmailNotValidError as e:
                     # The exception message is human-readable explanation of why it's
