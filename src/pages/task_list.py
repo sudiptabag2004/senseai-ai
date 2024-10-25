@@ -16,10 +16,9 @@ if "email" not in st.query_params:
     time.sleep(2)
     st.switch_page("./home.py")
 
-st.session_state.email = st.query_params["email"]
-
+user_email = st.query_params["email"]
 st.markdown(
-    f'This page has been moved. Go back to <a href="./?email={st.session_state.email}">home</a>!',
+    f'This page has been moved. Go back to <a href="./?email={user_email}">home</a>!',
     unsafe_allow_html=True,
 )
 
