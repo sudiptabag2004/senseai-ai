@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide")
 
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
+from auth import login_or_signup_user
 from lib.init import init_db
 from lib.db import (
     get_all_milestone_progress,
@@ -19,8 +20,9 @@ from components.milestone_learner_view import show_milestone_card
 
 init_db()
 
+
 if "email" in st.query_params:
-    st.session_state.email = st.query_params["email"]
+    login_or_signup_user(st.query_params["email"])
 
 if "is_hv_learner" in st.query_params:
     st.session_state.is_hv_learner = int(st.query_params["is_hv_learner"])
@@ -168,7 +170,7 @@ def login():
 
                     # After this point, use only the normalized form of the email address,
                     # especially before going to a database query.
-                    st.session_state.email = emailinfo.normalized
+                    login_or_signup_user(emailinfo.normalized)
                     st.query_params.email = st.session_state.email
                     # st.rerun()
                     logged_in = True

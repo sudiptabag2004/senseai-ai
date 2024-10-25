@@ -15,6 +15,7 @@ from lib.config import (
     group_role_learner,
     group_role_mentor,
     milestones_table_name,
+    users_table_name,
 )
 from lib.utils import get_date_from_str, generate_random_color
 import json
@@ -32,6 +33,19 @@ def create_tests_table(cursor):
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
             )
             """
+    )
+
+
+def create_users_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {users_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                first_name TEXT,
+                middle_name TEXT,
+                last_name TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"""
     )
 
 
@@ -112,28 +126,6 @@ def create_chat_history_table(cursor):
     )
 
 
-def check_and_update_milestones_table():
-    conn = sqlite3.connect(sqlite_db_path)
-    cursor = conn.cursor()
-
-    # check if a column exists in a table
-    cursor.execute(f"PRAGMA table_info({milestones_table_name})")
-    columns_info = cursor.fetchall()
-    columns = [column[1] for column in columns_info]
-
-    if "color" not in columns:
-        try:
-            cursor.execute(f"ALTER TABLE {milestones_table_name} ADD COLUMN color TEXT")
-            conn.commit()
-
-            set_colors_for_existing_milestones()
-        except sqlite3.OperationalError:
-            # ignore the error
-            pass
-
-    conn.close()
-
-
 def check_table_exists(table_name: str, cursor):
     cursor.execute(
         f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
@@ -143,13 +135,18 @@ def check_table_exists(table_name: str, cursor):
     return table_exists is not None
 
 
+def get_db_connection():
+    # print(sqlite_db_path)
+    return sqlite3.connect(sqlite_db_path)
+
+
 def init_db():
     # Ensure the database folder exists
     db_folder = os.path.dirname(sqlite_db_path)
     if not os.path.exists(db_folder):
         os.makedirs(db_folder)
 
-    conn = sqlite3.connect(sqlite_db_path)
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     if exists(sqlite_db_path):
@@ -157,8 +154,8 @@ def init_db():
             create_milestones_table(cursor)
             conn.commit()
 
-        if not check_table_exists(tests_table_name, cursor):
-            create_tests_table(cursor)
+        if not check_table_exists(users_table_name, cursor):
+            create_users_table(cursor)
             conn.commit()
 
         if not check_table_exists(cohorts_table_name, cursor):
@@ -169,18 +166,21 @@ def init_db():
             create_tasks_table(cursor)
             conn.commit()
 
+        if not check_table_exists(tests_table_name, cursor):
+            create_tests_table(cursor)
+            conn.commit()
+
         if not check_table_exists(chat_history_table_name, cursor):
             create_chat_history_table(cursor)
             conn.commit()
-
-        # Apply any necessary schema changes
-        check_and_update_milestones_table()
 
         conn.close()
         return
 
     try:
         create_milestones_table(cursor)
+
+        create_users_table(cursor)
 
         # Create a table to store tasks
         create_tasks_table(cursor)
@@ -204,12 +204,6 @@ def init_db():
 
     finally:
         conn.close()
-
-
-# @st.cache_resource
-def get_db_connection():
-    # print(sqlite_db_path)
-    return sqlite3.connect(sqlite_db_path)
 
 
 def serialise_list_to_str(list_to_serialise: List[str]):
@@ -1190,3 +1184,77 @@ def get_all_milestone_progress(user_id: str):
         }
         for row in results
     ]
+
+
+def get_all_users():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {users_table_name}")
+    users = cursor.fetchall()
+
+    conn.close()
+
+    return [
+        {
+            "id": user[0],
+            "email": user[1],
+            "first_name": user[2],
+            "middle_name": user[3],
+            "last_name": user[4],
+            "created_at": user[5],
+        }
+        for user in users
+    ]
+
+
+def upsert_user(email: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Use UPSERT command to insert or update the user record
+    cursor.execute(
+        f"""
+        INSERT INTO {users_table_name} (email, first_name, middle_name, last_name)
+        VALUES (?, '', '', '')
+        ON CONFLICT(email) DO NOTHING
+    """,
+        (email,),
+    )
+
+    conn.commit()
+    conn.close()
+
+    return email
+
+
+def seed_users_table_with_existing_users():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all unique user ids from chat history table
+    cursor.execute(f"SELECT DISTINCT user_id FROM {chat_history_table_name}")
+    existing_chat_user_emails = [row[0] for row in cursor.fetchall()]
+
+    # Get all existing user emails from users table
+    cursor.execute(f"SELECT email FROM {users_table_name}")
+    existing_user_emails = set([row[0] for row in cursor.fetchall()])
+
+    # Find user ids that are not in the users table
+    new_user_ids = [
+        user_id
+        for user_id in existing_chat_user_emails
+        if user_id not in existing_user_emails
+    ]
+
+    # Insert new users into the users table
+    for user_id in new_user_ids:
+        cursor.execute(
+            f"INSERT INTO {users_table_name} (email, first_name, middle_name, last_name) VALUES (?, ?, ?, ?)",
+            (user_id, "", "", ""),
+        )
+
+    conn.commit()
+    conn.close()
+
+    print(f"Added {len(new_user_ids)} new users to the users table.")

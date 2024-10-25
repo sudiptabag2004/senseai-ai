@@ -28,6 +28,7 @@ from streamlit_ace import st_ace, THEMES
 
 # from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
 from components.sticky_container import sticky_container
+from auth import login_or_signup_user
 from lib.config import coding_languages_supported
 from lib.db import (
     get_task_by_id,
@@ -65,7 +66,7 @@ if "email" not in st.query_params:
     time.sleep(2)
     st.switch_page("./home.py")
 
-st.session_state.email = st.query_params["email"]
+login_or_signup_user(st.query_params["email"])
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
