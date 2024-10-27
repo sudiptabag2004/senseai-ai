@@ -17,7 +17,7 @@ RUN pip install -r requirements.txt
 COPY src /src
 
 # Remove the /src/lib/.env file if it exists
-RUN rm -f /src/lib/.env
+RUN test -f /src/lib/.env && rm -f /src/lib/.env || true
 
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001
