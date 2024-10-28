@@ -27,6 +27,7 @@ groups_table_name = "groups"
 user_groups_table_name = "user_groups"
 milestones_table_name = "milestones"
 users_table_name = "users"
+badges_table_name = "badges"
 
 group_role_learner = "learner"
 group_role_mentor = "mentor"

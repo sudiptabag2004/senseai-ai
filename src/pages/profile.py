@@ -6,7 +6,12 @@ st.set_page_config(layout="wide")
 from typing import Dict
 
 from lib.db import get_user_by_id, update_user as update_user_in_db
-
+from lib.db import get_badges_by_user_id
+from components.badge import (
+    show_badge,
+    show_share_badge_prompt,
+    show_download_badge_button,
+)
 
 if "id" not in st.query_params:
     st.error("Not authorized. Redirecting to home page...")
@@ -64,7 +69,14 @@ def refresh_user():
     st.session_state.user = get_user_by_id(user_id)
 
 
+def refresh_badges():
+    st.session_state.badges = get_badges_by_user_id(user_id)
+
+
 refresh_user()
+
+if "badges" not in st.session_state:
+    refresh_badges()
 
 if not st.session_state.user:
     st.error("User not found")
@@ -74,7 +86,7 @@ profile_header(st.session_state.user)
 
 st.container(height=20, border=False)
 
-tab_names = ["Account"]
+tab_names = ["Account", "Badges"]
 tabs = st.tabs(tab_names)
 
 
@@ -130,3 +142,37 @@ with tabs[0]:
         if submit_button:
             update_account_details(first_name, middle_name, last_name, profile_color)
             st.rerun()
+
+
+def show_badges_tab():
+    if not st.session_state.badges:
+        st.info(
+            "🚀 You haven't earned any badges yet. Solve tasks regularly to build streaks and complete milestones to earn badges."
+        )
+        return
+
+    show_share_badge_prompt()
+
+    num_cols = 4
+    grid = st.columns(num_cols)
+    for index, badge in enumerate(st.session_state.badges):
+        with grid[index % num_cols]:
+            badge_params = {
+                "image_path": badge["image_path"],
+                "bg_color": badge["bg_color"],
+            }
+            show_badge(
+                badge["value"],
+                badge["type"],
+                "learner",
+                badge_params,
+                width=300,
+                height=300,
+            )
+            show_download_badge_button(
+                badge["value"], badge["type"], badge_params, key=badge["id"]
+            )
+
+
+with tabs[1]:
+    show_badges_tab()
