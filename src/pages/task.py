@@ -35,10 +35,16 @@ from lib.db import (
     store_message as store_message_to_db,
     get_task_chat_history_for_user,
     delete_message as delete_message_from_db,
+    get_user_streak,
+    get_badge_by_type_and_user_id,
 )
+from components.badge import create_badge
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
+from lib.utils import get_current_time_in_ist
+from auth import get_logged_in_user
 from components.code_execution import execute_code, run_tests
+from components.badge import show_badge_dialog, show_multiple_badges_dialog
 
 init_env_vars()
 init_db()
@@ -94,6 +100,8 @@ if not task["verified"]:
     )
     st.stop()
 
+if "user" not in st.session_state:
+    st.session_state.user = get_logged_in_user()
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(
@@ -108,6 +116,23 @@ if "is_solved" not in st.session_state:
 
 if "is_ai_running" not in st.session_state:
     st.session_state.is_ai_running = False
+
+
+def refresh_streak():
+    st.session_state.user_streak = get_user_streak(st.session_state.email)
+
+
+refresh_streak()
+
+if "badges_to_show" not in st.session_state:
+    st.session_state.badges_to_show = []
+
+if st.session_state.badges_to_show:
+    if len(st.session_state.badges_to_show) == 1:
+        show_badge_dialog(st.session_state.badges_to_show[0])
+    else:
+        show_multiple_badges_dialog(st.session_state.badges_to_show)
+    st.session_state.badges_to_show = []
 
 task_name_container_background_color = None
 task_name_container_text_color = None
@@ -203,6 +228,8 @@ def delete_user_chat_message(index_to_delete: int):
     st.session_state.chat_history = updated_chat_history
     st.session_state.ai_chat_history.clear()
     st.session_state.ai_chat_history.add_messages(updated_ai_chat_history)
+
+    refresh_streak()
 
 
 def display_user_message(user_response: str, message_index: int):
@@ -350,13 +377,60 @@ def display_waiting_indicator():
     )
 
 
+def check_for_badges_unlocked():
+    # scenarios:
+    # 1. streak does not exist - nothing to check in this case
+    # 2. streak exists and now 1 more day is added to it
+    #   a) if the check below does not pass: it means the streak for current day is already accounted for
+    #   b) if the check below passes:
+    #       i) it makes the current streak equal to the existing current streak badge value (e.g. if user deleted all messages for today and added new messages, then the streak will remain the same). Nothing to do in this case.
+    #       ii) it makes the current streak greater than the existing current streak badge value. In this case, we need to update the current streak badge
+    #           1. this current streak is the only streak the user ever had, nothing to do in this case
+    #           2. this current streak is a new streak with a previously larger streak in history:
+    #               a) if there is no longest streak badge, then, create a new longest streak badge with the older streak value
+    #               b) if there is a longest streak badge, then, compare the current streak with the longest streak badge value and update the longest streak badge if the current streak is greater than the longest streak badge value and show it as a badge
+    if st.session_state.user_streak:
+        # if a streak already exists (of one or more days of continuous usage)
+        today = get_current_time_in_ist().date()
+        streak_last_date = st.session_state.user_streak[0]
+
+        if (today - streak_last_date).days == 1:
+            current_streak = len(st.session_state.user_streak) + 1
+
+            streak_badge_id = create_badge(
+                st.session_state.email,
+                str(current_streak),
+                "streak",
+            )
+
+            if streak_badge_id is not None:
+
+                st.session_state.badges_to_show.append(streak_badge_id)
+
+                longest_streak_badge = get_badge_by_type_and_user_id(
+                    st.session_state.user["id"], "longest_streak"
+                )
+
+                # if no longest streak badge exists, then, the current streak is the first and longest streak
+                # no need to do anything in this case
+                # but if the longest streak badge exists, then, we need to compare the current streak with the longest streak
+                # if the current streak is greater than the longest streak, then, we need to update the longest streak badge
+                if longest_streak_badge is not None and current_streak > int(
+                    longest_streak_badge["value"]
+                ):
+
+                    longest_streak_badge_id = create_badge(
+                        st.session_state.email, str(current_streak), "longest_streak"
+                    )
+                    st.session_state.badges_to_show.append(longest_streak_badge_id)
+
+
 def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     # import ipdb; ipdb.set_trace()
     display_user_message(user_response, len(st.session_state.chat_history))
 
     user_message = {"role": "user", "content": user_response}
     st.session_state.chat_history.append(user_message)
-    # st.session_state.ai_chat_history.add_user_message(transform_user_message_for_ai_history(user_message))
 
     # ipdb.set_trace()
 
@@ -388,6 +462,9 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
                     time.sleep(2)
 
         # st.write(ai_response)
+
+    check_for_badges_unlocked()
+    refresh_streak()
 
     st.session_state.ai_chat_history.add_ai_message(ai_response)
 

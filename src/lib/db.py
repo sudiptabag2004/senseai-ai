@@ -16,6 +16,7 @@ from lib.config import (
     group_role_mentor,
     milestones_table_name,
     users_table_name,
+    badges_table_name,
 )
 from lib.utils import get_date_from_str, generate_random_color
 import json
@@ -46,6 +47,20 @@ def create_users_table(cursor):
                 last_name TEXT,
                 default_dp_color TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"""
+    )
+
+
+def create_badges_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {badges_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                value TEXT NOT NULL,
+                type TEXT NOT NULL,
+                image_path TEXT NOT NULL,
+                bg_color TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )"""
     )
 
@@ -159,6 +174,10 @@ def init_db():
             create_users_table(cursor)
             conn.commit()
 
+        if not check_table_exists(badges_table_name, cursor):
+            create_badges_table(cursor)
+            conn.commit()
+
         if not check_table_exists(cohorts_table_name, cursor):
             create_cohort_tables(cursor)
             conn.commit()
@@ -182,6 +201,8 @@ def init_db():
         create_milestones_table(cursor)
 
         create_users_table(cursor)
+
+        create_badges_table(cursor)
 
         # Create a table to store tasks
         create_tasks_table(cursor)
@@ -1319,3 +1340,124 @@ def seed_users_table_with_existing_users():
     conn.close()
 
     print(f"Added {len(new_user_ids)} new users to the users table.")
+
+
+def create_badge_for_user(
+    user_id: int, value: str, badge_type: str, image_path: str, bg_color: str
+) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"INSERT INTO {badges_table_name} (user_id, value, type, image_path, bg_color) VALUES (?, ?, ?, ?, ?)",
+        (user_id, value, badge_type, image_path, bg_color),
+    )
+
+    cursor.execute("SELECT last_insert_rowid()")
+    badge_id = cursor.fetchone()[0]
+    conn.commit()
+    conn.close()
+
+    return badge_id
+
+
+def update_badge(
+    badge_id: int, value: str, badge_type: str, image_path: str, bg_color: str
+):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {badges_table_name} SET value = ?, type = ?, image_path = ?, bg_color = ? WHERE id = ?",
+        (value, badge_type, image_path, bg_color, badge_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def convert_badge_db_to_dict(badge: Tuple):
+    if badge is None:
+        return None
+
+    return {
+        "id": badge[0],
+        "user_id": badge[1],
+        "value": badge[2],
+        "type": badge[3],
+        "image_path": badge[4],
+        "bg_color": badge[5],
+    }
+
+
+def get_badge_by_id(badge_id: int) -> Dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {badges_table_name} WHERE id = ?", (badge_id,))
+    badge = cursor.fetchone()
+
+    return convert_badge_db_to_dict(badge)
+
+
+def get_badges_by_user_id(user_id: int) -> List[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"SELECT * FROM {badges_table_name} WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    )
+    badges = cursor.fetchall()
+
+    return [convert_badge_db_to_dict(badge) for badge in badges]
+
+
+def get_badge_by_type_and_user_id(user_id: int, badge_type: str) -> Dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"SELECT * FROM {badges_table_name} WHERE user_id = ? AND type = ?",
+        (user_id, badge_type),
+    )
+    badge = cursor.fetchone()
+
+    return convert_badge_db_to_dict(badge)
+
+
+def delete_badge_by_id(badge_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {badges_table_name} WHERE id = ?", (badge_id,))
+    conn.commit()
+    conn.close()
+
+
+def clear_badges_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {badges_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def drop_badges_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {badges_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {badges_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

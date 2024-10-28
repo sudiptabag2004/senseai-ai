@@ -40,3 +40,7 @@ def generate_random_color() -> str:
     return "#{:02x}{:02x}{:02x}".format(
         int(color[0] * 255), int(color[1] * 255), int(color[2] * 255)
     )
+
+
+def get_current_time_in_ist() -> datetime:
+    return datetime.now(timezone(timedelta(hours=5, minutes=30)))
