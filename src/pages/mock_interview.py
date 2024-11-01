@@ -117,7 +117,7 @@ def give_feedback_on_audio_input():
 
     class Output(BaseModel):
         feedback: List[Feedback] = Field(
-            description="Holistic feedback on the student's response"
+            description="Holistic feedback on the mentee's response"
         )
 
     parser = PydanticOutputParser(pydantic_object=Output)
@@ -137,7 +137,7 @@ def give_feedback_on_audio_input():
     # )
     # \n\nHere are a few examples of desirable feedback:\n{examples_for_prompt}\n\n=========
 
-    system_prompt = f"""f"You are an expert, helpful, encouraging and empathetic {selected_role} coach who is helping your mentee improve their interviewing skills.\n\nYou will be given an interview question and the conversation history between you and the student.\n\nYou need to give feedback on the student's response on what part of their answer stood out, what pieces were missing, what they did well, and what could they have done differently, in light of best practices for interviews, including tense consistency, clarity, precision, sentence structure, clarity of speech and confidence.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into individual topics so that it is easy to process for the student.\n- You must be very specific about exactly what part of the student's response you are suggesting any improvement for by quoting directly from their response along with a clear example of how it could be improved. The example for the improvement must be given as if the student had said it themselves.\n\nAvoid demotivating the student. Only provide critique where it is clearly necessary and praise them for the parts of their response that are good.\n- Some mandatory topics for the feedback are: tense consistency, clarity, precision, sentence structure, clarity of speech and confidence. Add more topics as you deem fit.\n\n{format_instructions}"""
+    system_prompt = f"""f"You are an expert, helpful, encouraging and empathetic {selected_role} coach who is helping your mentee improve their interviewing skills.\n\nYou will be given an interview question and the conversation history between you and the mentee.\n\nYou need to give feedback on the mentee's response on what part of their answer stood out, what pieces were missing, what they did well, and what could they have done differently, in light of best practices for interviews, including tense consistency, clarity, precision, sentence structure, clarity of speech and confidence.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into individual topics so that it is easy to process for the mentee.\n- You must be very specific about exactly what part of the mentee's response you are suggesting any improvement for by quoting directly from their response along with a clear example of how it could be improved. The example for the improvement must be given as if the mentee had said it themselves.\n\nAvoid demotivating the mentee. Only provide critique where it is clearly necessary and praise them for the parts of their response that are good.\n- Some mandatory topics for the feedback are: tense consistency, clarity, precision, sentence structure, clarity of speech and confidence. Add more topics as you deem fit.\n\n{format_instructions}"""
 
     client = instructor.from_openai(OpenAI())
 
@@ -161,6 +161,7 @@ def give_feedback_on_audio_input():
         model=model,
         messages=ai_chat_history,
         response_model=Output,
+        max_completion_tokens=2048,
         stream=True,
         temperature=0,
         top_p=1,

@@ -6,13 +6,6 @@ from typing import Dict, List
 from pathlib import Path
 from streamlit_extras.let_it_rain import rain
 
-from .image import (
-    get_image_embed_for_html,
-    convert_html_to_image,
-    standardize_image_size,
-)
-from .emoji import generate_emoji
-
 from lib.db import (
     get_user_by_email,
     create_badge_for_user,
@@ -21,6 +14,12 @@ from lib.db import (
     get_badge_by_type_and_user_id,
     delete_badge_by_id,
 )
+from lib.image import (
+    get_image_embed_for_html,
+    convert_html_to_image,
+    standardize_image_size,
+)
+from lib.emoji import generate_emoji
 
 root_dir = "./lib"
 
