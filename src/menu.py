@@ -27,15 +27,25 @@ def authenticated_menu(logged_in_user: Dict):
             label="👔 Your Profile",
         )
         st.divider()
-        st.subheader("Placement Prep")
+
+        st.markdown(
+            """
+            <div style="display: flex; align-items: flex-start; gap: 4px;">
+                <h3 style="margin: 0;">Placement Prep</h3>
+                <span style="background-color: #ffd700; padding: 1px 6px; border-radius: 4px; font-size: 0.6em; position: relative; top: 2px;">BETA</span>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
         st.link_button(
             "Mock Interview",
             f"/mock_interview?id={logged_in_user['id']}",
         )
-        # st.link_button(
-        #     "CV Interview",
-        #     f"/cv_review?id={logged_in_user['id']}",
-        # )
+        st.link_button(
+            "CV Interview",
+            f"/cv_review?id={logged_in_user['id']}",
+        )
 
 
 def menu(logged_in_user: Dict):

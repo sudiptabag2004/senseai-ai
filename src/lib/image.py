@@ -1,4 +1,6 @@
 import base64
+from io import BytesIO
+from typing import List
 from PIL import Image, ImageOps
 import imgkit
 import tempfile
@@ -96,3 +98,17 @@ def convert_html_to_image(html: str, resolution: int = 300) -> Image:
             image = Image.open(temp_image_file.name)
             # return image.crop((0, 0, image_dims[0], image_dims[1]))
             return image
+
+
+def get_base64_image(image: Image) -> str:
+    """base64 encode the given image"""
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG")
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def get_base64_images(
+    raw_images: List[Image.Image],
+) -> List[str]:
+    """Convert the raw images to base64 encoded images"""
+    return [get_base64_image(image) for image in raw_images]

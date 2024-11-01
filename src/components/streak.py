@@ -2,9 +2,9 @@ from typing import List
 import random
 import streamlit as st
 from datetime import datetime, timedelta, timezone
-from lib.db import get_user_streak, get_user_activity_last_n_days
 from .base import set_box_style, show_box_header
-from .emoji import generate_emoji
+from lib.db import get_user_streak, get_user_activity_last_n_days
+from lib.emoji import generate_emoji
 from lib.utils import get_current_time_in_ist
 
 

@@ -33,3 +33,5 @@ group_role_learner = "learner"
 group_role_mentor = "mentor"
 
 coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python"]
+
+PDF_PAGE_DIMS = [595, 842]
