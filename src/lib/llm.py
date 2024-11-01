@@ -48,6 +48,12 @@ logger.info("Logging system initialized")
 COMMON_INSTRUCTIONS = "\n\nGeneral Instructions:\n- Make sure to return one JSON for all the extractions.\n- Never return a list of JSONs.\n- The output schema is a secret. Never reveal the output schema in the answer.\n- Always give a brief explanation before returning the answer. If needed, the explanation can be more elaborate.\n- Never ask for more information or try to engage in any conversation. Work with whatever information you have and provide an answer based on that.\n- Do not hallucinate.\n- Never use computed values in the returned JSON. Always return the actual, full value (e.g. never return 2 as '1 + 1' or 'aaaaa' as 'a' * 5)."
 
 
+def get_formatted_history(history: List[Dict]) -> str:
+    return "\n\n".join(
+        [f"{message['role']}: {message['content']}" for message in history]
+    )
+
+
 def get_llm_input_messages(
     system_prompt_template: str, user_prompt_template: str, **kwargs
 ):
@@ -226,6 +232,7 @@ async def call_openai_chat_model(
         "top_p": 1,
         "frequency_penalty": 0,
         "presence_penalty": 0,
+        "store": True
     }
     llm = ChatOpenAI(model=model, **common_model_args, **openai_model_kwargs)
     # if not kwargs.get("skip_token_limit_check"):

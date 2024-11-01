@@ -1,7 +1,7 @@
 import time
 import streamlit as st
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Profile | SensAI", layout="wide")
 
 from typing import Dict
 

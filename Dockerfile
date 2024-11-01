@@ -41,6 +41,8 @@ RUN pip install -r requirements.txt
 
 COPY src /src
 
+COPY src/.streamlit/config.prod.toml /src/.streamlit/config.toml
+
 # Remove the /src/lib/.env file if it exists
 RUN test -f /src/lib/.env && rm -f /src/lib/.env || true
 
@@ -54,7 +56,9 @@ ARG OPENAI_API_KEY
 
 ARG OPENAI_ORG_ID
 
-RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID" >> /src/lib/.env
+ARG APP_URL
+
+RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL" >> /src/lib/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*

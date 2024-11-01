@@ -22,11 +22,11 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 import streamlit as st
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Task | SensAI", layout="wide")
 
 from streamlit_ace import st_ace, THEMES
 
-# from lib.llm  import get_llm_input_messages,call_llm_and_parse_output
+from lib.llm import logger, get_formatted_history
 from components.sticky_container import sticky_container
 from auth import login_or_signup_user
 from lib.config import coding_languages_supported
@@ -38,6 +38,7 @@ from lib.db import (
     get_user_streak,
     get_badge_by_type_and_user_id,
 )
+from lib.ui import display_waiting_indicator
 from components.badge import create_badge
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
@@ -337,43 +338,7 @@ def get_ai_response(user_message: str):
         stream=True,
         frequency_penalty=0,
         presence_penalty=0,
-    )
-
-
-def display_waiting_indicator():
-    st.markdown(
-        """
-        <style>
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            height: 20px;
-        }
-        .typing-indicator span {
-            display: inline-block;
-            width: 5px;
-            height: 5px;
-            margin: 0 2px;
-            background: #999;
-            border-radius: 50%;
-            animation: bounce 1s infinite alternate;
-        }
-        .typing-indicator span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .typing-indicator span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes bounce {
-            from { transform: translateY(0); }
-            to { transform: translateY(-15px); }
-        }
-        </style>
-        <div class="typing-indicator">
-            <span></span><span></span><span></span>
-        </div>
-    """,
-        unsafe_allow_html=True,
+        store=True,
     )
 
 
@@ -467,6 +432,8 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     refresh_streak()
 
     st.session_state.ai_chat_history.add_ai_message(ai_response)
+
+    logger.info(get_formatted_history(st.session_state.ai_chat_history.messages))
 
     # st.session_state.chat_history.append(ai_response)
     # Add user message to chat history [store to db only if ai response has been completely fetched]

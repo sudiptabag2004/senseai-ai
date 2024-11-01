@@ -1,8 +1,10 @@
-langchain==0.2.15
-langchain-core==0.2.37
-langchain-openai==0.1.23
-langchain-community==0.2.15
-streamlit==1.38.0
+langchain==0.3.6
+langchain-community==0.3.4
+langchain-core==0.3.15
+langchain-openai==0.2.5
+langchain-text-splitters==0.3.1
+openai==1.53.0
+streamlit==1.39.0
 email_validator==2.2.0
 python-dotenv==1.0.1
 pydantic==2.8.2
@@ -13,5 +15,5 @@ uvicorn==0.30.6
 streamlit-ace==0.1.1
 streamlit-extras==0.5.0
 st-theme==1.2.3
-instructor==1.4.3
+instructor==1.6.3
 imgkit==1.2.3
