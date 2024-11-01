@@ -17,3 +17,4 @@ streamlit-extras==0.5.0
 st-theme==1.2.3
 instructor==1.6.3
 imgkit==1.2.3
+pydub==0.25.1
