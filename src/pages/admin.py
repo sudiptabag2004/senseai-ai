@@ -7,7 +7,7 @@ from functools import partial
 import numpy as np
 import streamlit as st
 
-st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed")
 
 from copy import deepcopy
 import pandas as pd

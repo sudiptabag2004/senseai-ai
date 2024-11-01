@@ -6,7 +6,7 @@ st.set_page_config(layout="wide")
 from email_validator import validate_email, EmailNotValidError
 from menu import menu
 from auth import login_or_signup_user, get_logged_in_user
-from lib.init import init_db
+from lib.init import init_app
 from lib.db import (
     get_all_milestone_progress,
     get_all_verified_tasks,
@@ -18,7 +18,7 @@ from components.milestone_learner_view import show_milestone_card
 
 # init_auth_from_cookies()
 
-init_db()
+init_app()
 
 
 if "email" in st.query_params:
@@ -31,8 +31,6 @@ if "view" in st.query_params:
     st.session_state.view = st.query_params["view"]
 else:
     st.session_state.view = "milestone"
-
-st.sidebar.subheader("SensAI - your personal AI tutor")
 
 if "email" not in st.session_state:
     st.session_state.email = None
