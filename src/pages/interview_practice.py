@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 
-st.set_page_config(page_title="Mock Interview | SensAI", layout="wide")
+st.set_page_config(page_title="Interview Practice | SensAI", layout="wide")
 
 from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
