@@ -83,14 +83,14 @@ def authenticated_menu(logged_in_user: Dict):
         )
 
         st.page_link(
-            f"{os.environ.get('APP_URL')}/mock_interview?id={logged_in_user['id']}",
-            label="AI Mock Interview",
+            f"{os.environ.get('APP_URL')}/interview_practice?id={logged_in_user['id']}",
+            label="Practice for Interviews with AI",
             icon="🎙️",
         )
 
         st.page_link(
             f"{os.environ.get('APP_URL')}/cv_review?id={logged_in_user['id']}",
-            label="AI CV Review",
+            label="Polish your CV with AI",
             icon="📄",
         )
 
