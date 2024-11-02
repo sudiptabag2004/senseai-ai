@@ -573,6 +573,7 @@ def toggle_show_code_output():
 
 def set_ai_running():
     st.session_state.is_ai_running = True
+    retain_code()
 
 
 if task["type"] == "coding":
