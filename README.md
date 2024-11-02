@@ -26,10 +26,10 @@ Watch the demo videos below to understand the features we currently offer for te
 </div>
 
 ## Contributing
-To learn more about making a contribution to SensAI, please see our [Contributing guide](./CONTRIBUTING.md).
+To learn more about making a contribution to SensAI, please see our [Contributing guide](./docs/CONTRIBUTING.md).
 
 ## Installation
-Refer to the [INSTALL.md](./INSTALL.md) file for instructions on how to install and run the app locally.
+Refer to the [INSTALL.md](./docs/INSTALL.md) file for instructions on how to install and run the app locally.
 
 ## Deployment
 Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD).
