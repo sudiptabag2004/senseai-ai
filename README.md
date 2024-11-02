@@ -28,40 +28,8 @@ Watch the demo videos below to understand the features we currently offer for te
 ## Contributing
 To learn more about making a contribution to SensAI, please see our [Contributing guide](./CONTRIBUTING.md).
 
-## Local Setup
-
-- Install `virtualenv`
-- Create a new virtual environment (choose Python3.8+)
-  ```
-  virtualenv -p python3.10 venv
-  ```
-- Activate the virtual environment
-  ```
-  source venv/bin/activate
-  ```
-- Install packages
-  ```
-  pip install -r requirements.txt
-  ```
-- Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials.
-
-### Running the app locally
-
-```
-cd src; streamlit run home.py
-```
-
-The app will be hosted on http://localhost:8501.
-
-### Running the API locally
-
-```
-cd src; uvicorn api:app --reload --port 8001
-```
-
-The app will be hosted on http://localhost:8001.
-The docs will be available on http://localhost:8001/docs
-
+## Installation
+Refer to the [INSTALL.md](./INSTALL.md) file for instructions on how to install and run the app locally.
 
 ## Deployment
 Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD).
