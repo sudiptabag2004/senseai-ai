@@ -142,7 +142,6 @@ if st.session_state.is_solved:
     task_name_container_text_color = "white"
 
 with sticky_container(
-    mode="top",
     border=True,
     background_color=task_name_container_background_color,
     text_color=task_name_container_text_color,
@@ -154,20 +153,31 @@ with sticky_container(
         heading += " ✅"
     st.write(heading)
 
-    with st.expander("Task description", expanded=False):
-        st.text(task["description"].replace("\n", "\n\n"))
+    # st.container(height=10, border=False)
+
 
 # st.session_state
 # st.session_state['code']
 
 if task["type"] == "coding":
-    chat_column, code_column = st.columns([5, 5])
-    chat_container = chat_column.container(height=450)
-    chat_input_container = chat_column.container(height=100, border=False)
+    chat_column, code_column = st.columns(2)
+    description_container = chat_column.container(height=200)
+    chat_container = chat_column.container(height=375)
+
+    code_input_container = code_column.container(height=525, border=False)
+    chat_input_container = code_column.container(height=100, border=False)
 else:
     # chat_column = st.columns(1)[0]
-    chat_container = st.container()
+    description_col, chat_col = st.columns(2)
+
+    description_container = description_col.container(border=True)
+    chat_container = chat_col.container(border=True)
+
     chat_input_container = None
+
+
+with description_container:
+    st.text(task["description"].replace("\n", "\n\n"))
 
 
 def transform_user_message_for_ai_history(message: dict):
@@ -577,7 +587,7 @@ def set_ai_running():
 
 
 if task["type"] == "coding":
-    with code_column:
+    with code_input_container:
         for lang in supported_language_keys:
             if lang not in st.session_state:
                 st.session_state[lang] = ""
@@ -626,6 +636,7 @@ if task["type"] == "coding":
                             auto_update=True,
                             value=st.session_state[f"{tab_name}_code"],
                             placeholder=f"Write your {language} code here...",
+                            height=330,
                         )
 
         else:
