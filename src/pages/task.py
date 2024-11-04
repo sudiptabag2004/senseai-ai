@@ -177,7 +177,7 @@ else:
 
 
 with description_container:
-    st.text(task["description"].replace("\n", "\n\n"))
+    st.markdown(task["description"].replace("\n", "\n\n"))
 
 
 def transform_user_message_for_ai_history(message: dict):
