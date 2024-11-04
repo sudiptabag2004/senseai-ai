@@ -2,11 +2,8 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-import pandas as pd
 import time
-from lib.db import get_all_tasks, get_solved_tasks_for_user
 from lib.init import init_env_vars, init_db
-from components.streak import show_streak
 
 init_env_vars()
 init_db()

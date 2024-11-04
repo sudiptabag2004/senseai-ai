@@ -18,6 +18,7 @@ from lib.config import (
     users_table_name,
     badges_table_name,
 )
+from lib.types import LeaderboardViewType
 from lib.utils import get_date_from_str, generate_random_color
 import json
 
@@ -666,16 +667,42 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
     return chat_history_dicts
 
 
-def get_solved_tasks_for_user(user_id: str):
+def get_solved_tasks_for_user(
+    user_id: str, view_type: LeaderboardViewType = LeaderboardViewType.ALL_TIME
+):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"""
-    SELECT DISTINCT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
-    """,
-        (user_id,),
-    )
+    if view_type == LeaderboardViewType.ALL_TIME:
+        cursor.execute(
+            f"""
+        SELECT DISTINCT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
+        """,
+            (user_id,),
+        )
+    else:
+        ist = timezone(timedelta(hours=5, minutes=30))
+        now = datetime.now(ist)
+        if view_type == LeaderboardViewType.WEEKLY:
+            start_date = now - timedelta(days=now.weekday())
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:  # MONTHLY
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        cursor.execute(
+            f"""
+        WITH FirstSolved AS (
+            SELECT task_id, MIN(datetime(timestamp, '+5 hours', '+30 minutes')) as first_solved_time
+            FROM {chat_history_table_name}
+            WHERE user_id = ? AND is_solved = 1
+            GROUP BY task_id
+        )
+        SELECT DISTINCT task_id 
+        FROM FirstSolved
+        WHERE first_solved_time >= ?
+        """,
+            (user_id, start_date),
+        )
 
     return [task[0] for task in cursor.fetchall()]
 
@@ -814,9 +841,16 @@ def get_user_streak(user_id: str):
     )
 
 
-def get_streaks():
+def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Build date filter based on duration
+    date_filter = ""
+    if view == LeaderboardViewType.WEEKLY:
+        date_filter = "AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) > DATE('now', 'weekday 0', '-7 days')"
+    elif view == LeaderboardViewType.MONTHLY:
+        date_filter = "AND strftime('%Y-%m', datetime(timestamp, '+5 hours', '+30 minutes')) = strftime('%Y-%m', 'now')"
 
     # Get all user interactions, ordered by user and timestamp
     cursor.execute(
@@ -825,6 +859,7 @@ def get_streaks():
     FROM (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
+        WHERE 1=1 {date_filter}
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
     )

@@ -1,6 +1,7 @@
 import os
 from os.path import exists
 from lib.utils import save_json
+from lib.types import LeaderboardViewType
 
 if exists("/appdata"):
     data_root_dir = "/appdata"
@@ -33,5 +34,10 @@ group_role_learner = "learner"
 group_role_mentor = "mentor"
 
 coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python"]
+leaderboard_view_types = [
+    str(LeaderboardViewType.ALL_TIME),
+    str(LeaderboardViewType.WEEKLY),
+    str(LeaderboardViewType.MONTHLY),
+]
 
 PDF_PAGE_DIMS = [595, 842]

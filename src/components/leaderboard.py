@@ -1,5 +1,8 @@
+from typing import Literal, TypeVar
 import streamlit as st
 from lib.db import get_streaks, get_user_streak, get_solved_tasks_for_user
+from lib.config import leaderboard_view_types
+from lib.types import LeaderboardViewType
 from .base import set_box_style, show_box_header
 
 
@@ -27,56 +30,85 @@ def show_user_info(email, streak, tasks, rank, show_separator=False):
         )
 
 
-def show_leaderboard():
-    streaks = get_streaks()
-    user_email = st.session_state.email
+def get_top_performers(view_type: LeaderboardViewType):
+    if view_type not in leaderboard_view_types:
+        raise ValueError(f"Invalid view type: {view_type}")
 
+    streaks = get_streaks(view_type)
+
+    users_data = []
+    for email, streak_count in streaks.items():
+        if not streak_count:
+            continue
+        solved_tasks = get_solved_tasks_for_user(email, view_type)
+        tasks_completed = len(solved_tasks)
+        users_data.append((email, streak_count, tasks_completed))
+
+    sorted_users = sorted(users_data, key=lambda x: (x[1], x[2]), reverse=True)
+
+    top_performers = {}
+    previous_streak = None
+    previous_tasks_completed = None
+    rank = 0
+
+    for email, streak_count, tasks_completed in sorted_users:
+        if (
+            previous_streak is None
+            or tasks_completed is None
+            or streak_count != previous_streak
+            or tasks_completed != previous_tasks_completed
+        ):
+            rank += 1
+            previous_streak = streak_count
+            tasks_completed = tasks_completed
+
+        if rank > 3:
+            break
+
+        top_performers[email] = (streak_count, tasks_completed, rank)
+
+    return top_performers
+
+
+def show_leaderboard():
     set_box_style()
 
     with st.container(border=True):
         show_box_header("Top Performers")
 
-        users_data = []
-        for email, streak_count in streaks.items():
-            if not streak_count:
-                continue
-            solved_tasks = get_solved_tasks_for_user(email)
-            tasks_completed = len(solved_tasks)
-            users_data.append((email, streak_count, tasks_completed))
+        tabs = st.tabs(leaderboard_view_types)
 
-        sorted_users = sorted(users_data, key=lambda x: (x[1], x[2]), reverse=True)
+        for index, tab in enumerate(tabs):
+            with tab:
+                top_performers = get_top_performers(leaderboard_view_types[index])
 
-        top_performers = set()
-        previous_streak = None
-        previous_tasks_completed = None
-        rank = 0
+                for index, (email, leaderboard_data) in enumerate(
+                    top_performers.items()
+                ):
+                    streak_count, tasks_completed, rank = leaderboard_data
+                    show_user_info(
+                        email,
+                        streak_count,
+                        tasks_completed,
+                        rank,
+                        show_separator=index != 0,
+                    )
 
-        for email, streak_count, tasks_completed in sorted_users:
-            if (
-                previous_streak is None
-                or tasks_completed is None
-                or streak_count != previous_streak
-                or tasks_completed != previous_tasks_completed
-            ):
-                rank += 1
-                previous_streak = streak_count
-                tasks_completed = tasks_completed
-
-            if rank > 3:
-                break
-
-            show_separator = len(top_performers) > 0
-            top_performers.add(email)
-            show_user_info(email, streak_count, tasks_completed, rank, show_separator)
-
-        if user_email not in top_performers:
-            streak_count = len(get_user_streak(user_email)) or 0
-            tasks_completed = len(get_solved_tasks_for_user(user_email)) or 0
-            show_separator = len(top_performers) > 0
-            show_user_info(
-                user_email,
-                streak_count,
-                tasks_completed,
-                rank=4,
-                show_separator=show_separator,
-            )
+                if st.session_state.email not in top_performers:
+                    streak_count = len(get_user_streak(st.session_state.email)) or 0
+                    tasks_completed = (
+                        len(
+                            get_solved_tasks_for_user(
+                                st.session_state.email, leaderboard_view_types[index]
+                            ),
+                        )
+                        or 0
+                    )
+                    show_separator = len(top_performers) > 0
+                    show_user_info(
+                        st.session_state.email,
+                        streak_count,
+                        tasks_completed,
+                        rank=4,
+                        show_separator=show_separator,
+                    )
