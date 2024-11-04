@@ -672,7 +672,7 @@ def get_solved_tasks_for_user(user_id: str):
 
     cursor.execute(
         f"""
-    SELECT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
+    SELECT DISTINCT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
     """,
         (user_id,),
     )
