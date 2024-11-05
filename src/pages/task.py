@@ -4,7 +4,7 @@ import os
 import time
 import json
 from functools import partial
-import asyncio
+import html
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -269,7 +269,7 @@ for index, message in enumerate(st.session_state.chat_history):
         display_user_message(message["content"], message_index=index)
     else:
         with chat_container.chat_message(message["role"]):
-            st.markdown(message["content"], unsafe_allow_html=True)
+            st.markdown(html.escape(message["content"]), unsafe_allow_html=True)
 
 
 def get_session_history():
