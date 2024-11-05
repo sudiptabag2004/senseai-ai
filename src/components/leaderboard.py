@@ -78,9 +78,9 @@ def show_leaderboard():
 
         tabs = st.tabs(leaderboard_view_types)
 
-        for index, tab in enumerate(tabs):
+        for tab_index, tab in enumerate(tabs):
             with tab:
-                top_performers = get_top_performers(leaderboard_view_types[index])
+                top_performers = get_top_performers(leaderboard_view_types[tab_index])
 
                 for index, (email, leaderboard_data) in enumerate(
                     top_performers.items()
@@ -99,7 +99,8 @@ def show_leaderboard():
                     tasks_completed = (
                         len(
                             get_solved_tasks_for_user(
-                                st.session_state.email, leaderboard_view_types[index]
+                                st.session_state.email,
+                                leaderboard_view_types[tab_index],
                             ),
                         )
                         or 0
