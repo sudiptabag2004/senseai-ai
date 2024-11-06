@@ -2,7 +2,7 @@ from typing import Literal, TypeVar
 import streamlit as st
 from lib.db import get_streaks, get_user_streak, get_solved_tasks_for_user
 from lib.config import leaderboard_view_types
-from lib.types import LeaderboardViewType
+from models import LeaderboardViewType
 from .base import set_box_style, show_box_header
 
 

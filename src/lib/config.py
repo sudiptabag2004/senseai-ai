@@ -1,7 +1,7 @@
 import os
 from os.path import exists
 from lib.utils import save_json
-from lib.types import LeaderboardViewType
+from models import LeaderboardViewType
 
 if exists("/appdata"):
     data_root_dir = "/appdata"

@@ -18,7 +18,7 @@ from lib.config import (
     users_table_name,
     badges_table_name,
 )
-from lib.types import LeaderboardViewType
+from models import LeaderboardViewType
 from lib.utils import get_date_from_str, generate_random_color
 import json
 

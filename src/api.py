@@ -1,10 +1,13 @@
-import os
-from os.path import exists, dirname
-from typing import List
+from typing import List, Optional
 from fastapi import FastAPI
 
-from models import ChatMessage, Task, Streaks
-from lib.db import get_all_chat_history, get_all_tasks, get_streaks
+from models import ChatMessage, Task, Streaks, LeaderboardViewType
+from lib.db import (
+    get_all_chat_history,
+    get_all_tasks,
+    get_streaks,
+    get_solved_tasks_for_user,
+)
 
 app = FastAPI()
 
@@ -29,5 +32,18 @@ async def get_tasks() -> List[Task]:
     "/streaks",
     response_model=Streaks,
 )
-async def get_all_streaks() -> Streaks:
-    return get_streaks()
+async def get_all_streaks(
+    view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
+) -> Streaks:
+    return get_streaks(view=view)
+
+
+@app.get(
+    "/tasks_completed_for_user",
+    response_model=List[int],
+)
+async def get_tasks_completed_for_user(
+    email: str,
+    view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
+) -> List[int]:
+    return get_solved_tasks_for_user(email, view)
