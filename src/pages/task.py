@@ -104,9 +104,20 @@ if not task["verified"]:
 if "user" not in st.session_state:
     st.session_state.user = get_logged_in_user()
 
+task_user_email = (
+    st.query_params["learner"]
+    if "learner" in st.query_params
+    else st.session_state.email
+)
+
+if "mode" in st.query_params and st.query_params["mode"] == "review":
+    st.session_state.is_review_mode = True
+else:
+    st.session_state.is_review_mode = False
+
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(
-        task_id, st.session_state.email
+        task_id, task_user_email
     )
 
 if "is_solved" not in st.session_state:
@@ -120,7 +131,7 @@ if "is_ai_running" not in st.session_state:
 
 
 def refresh_streak():
-    st.session_state.user_streak = get_user_streak(st.session_state.email)
+    st.session_state.user_streak = get_user_streak(task_user_email)
 
 
 refresh_streak()
@@ -159,7 +170,7 @@ with sticky_container(
 # st.session_state
 # st.session_state['code']
 
-if task["type"] == "coding":
+if task["type"] == "coding" and not st.session_state.is_review_mode:
     chat_column, code_column = st.columns(2)
     description_container = chat_column.container(height=200)
     chat_container = chat_column.container(height=375)
@@ -251,6 +262,9 @@ def display_user_message(user_response: str, message_index: int):
     with chat_container.chat_message("user"):
         user_answer_cols = st.columns([5, 1])
         user_answer_cols[0].markdown(user_response, unsafe_allow_html=True)
+        if st.session_state.is_review_mode:
+            return
+
         user_answer_cols[1].button(
             "Delete",
             on_click=partial(delete_user_chat_message, index_to_delete=message_index),
@@ -374,7 +388,7 @@ def check_for_badges_unlocked():
             current_streak = len(st.session_state.user_streak) + 1
 
             streak_badge_id = create_badge(
-                st.session_state.email,
+                task_user_email,
                 str(current_streak),
                 "streak",
             )
@@ -396,7 +410,7 @@ def check_for_badges_unlocked():
                 ):
 
                     longest_streak_badge_id = create_badge(
-                        st.session_state.email, str(current_streak), "longest_streak"
+                        task_user_email, str(current_streak), "longest_streak"
                     )
                     st.session_state.badges_to_show.append(longest_streak_badge_id)
 
@@ -449,7 +463,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     # st.session_state.chat_history.append(ai_response)
     # Add user message to chat history [store to db only if ai response has been completely fetched]
     new_user_message = store_message_to_db(
-        st.session_state.email,
+        task_user_email,
         task_id,
         "user",
         user_response,
@@ -460,7 +474,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
 
     # Add assistant response to chat history
     new_ai_message = store_message_to_db(
-        st.session_state.email,
+        task_user_email,
         task_id,
         "assistant",
         ai_response,
@@ -585,8 +599,7 @@ def set_ai_running():
     st.session_state.is_ai_running = True
     retain_code()
 
-
-if task["type"] == "coding":
+if task["type"] == "coding" and not st.session_state.is_review_mode:
     with code_input_container:
         for lang in supported_language_keys:
             if lang not in st.session_state:
@@ -771,6 +784,9 @@ else:
 
 
 def show_and_handle_chat_input():
+    if st.session_state.is_review_mode:
+        return
+
     if user_response := st.chat_input(
         user_response_placeholder, on_submit=set_ai_running
     ):
