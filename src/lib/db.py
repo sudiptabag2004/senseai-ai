@@ -424,9 +424,12 @@ def get_all_tasks():
     return tasks_dicts
 
 
-def get_all_verified_tasks():
+def get_all_verified_tasks(milestone_id: int):
     tasks = get_all_tasks()
-    return [task for task in tasks if task["verified"]]
+    verified_tasks = [task for task in tasks if task["verified"]]
+    if milestone_id:
+        return [task for task in verified_tasks if task["milestone_id"] == milestone_id]
+    return verified_tasks
 
 
 def get_task_by_id(task_id: int):
@@ -1050,6 +1053,18 @@ def create_cohort(name: str, df: pd.DataFrame):
         conn.close()
 
 
+def add_user_to_cohort_group(user_id: int, group_id: int, role: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"INSERT INTO {user_groups_table_name} (user_id, group_id, role) VALUES (?, ?, ?)",
+        (user_id, group_id, role),
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_all_cohorts():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1143,6 +1158,19 @@ def get_cohort_by_id(cohort_id: int):
         return None
     finally:
         conn.close()
+
+
+def get_cohort_group_learners(group_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"SELECT * FROM {user_groups_table_name} WHERE group_id = ? AND role = 'learner'",
+        (group_id),
+    )
+    learners = cursor.fetchall()
+
+    return [learner[0] for learner in learners]
 
 
 def get_all_milestones():
@@ -1342,6 +1370,39 @@ def get_user_by_id(user_id: str) -> Dict:
     user = cursor.fetchone()
 
     return convert_user_db_to_dict(user)
+
+
+def get_user_cohorts(user_id: str) -> List[Dict]:
+    """Get all cohorts (and the groups in each cohort) that the user is a part of along with their role in each group"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all cohorts and groups the user is a member of
+    cursor.execute(
+        f"""
+        SELECT c.id, c.name, g.id, g.name, ug.role 
+        FROM {cohorts_table_name} c
+        JOIN {groups_table_name} g ON g.cohort_id = c.id
+        JOIN {user_groups_table_name} ug ON ug.group_id = g.id
+        WHERE ug.user_id = ?
+    """,
+        (user_id,),
+    )
+
+    results = cursor.fetchall()
+    conn.close()
+
+    # Convert results into nested dict structure
+    cohorts = {}
+    for cohort_id, cohort_name, group_id, group_name, role in results:
+        if cohort_id not in cohorts:
+            cohorts[cohort_id] = {"id": cohort_id, "name": cohort_name, "groups": []}
+
+        cohorts[cohort_id]["groups"].append(
+            {"id": group_id, "name": group_name, "role": role}
+        )
+
+    return list(cohorts.values())
 
 
 def seed_users_table_with_existing_users():

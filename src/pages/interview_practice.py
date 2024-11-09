@@ -11,21 +11,39 @@ redirect_if_not_logged_in(key="id")
 
 questions = [
     "Tell me about yourself",
-    "What are your strengths?",
-    "What are your weaknesses?",
+    "Why do you want to join our company?",
+    "What are you short term and long term goals?",
+    "Why did you apply for this role?",
+    "Tell us your strengths and weakness",
+    "Why do you have a career gap?",
+    "Do you have any questions for us?",
 ]
 
 if "interview_started" not in st.session_state:
     st.session_state["interview_started"] = False
 
-cols = st.columns([2, 3, 1])
+with st.expander("Learn more"):
+    st.warning(
+        "This is still a work in progress. Please share any feedback that you might have!"
+    )
+    st.subheader("Goal")
+    st.markdown(
+        "You can improve your interviewing skills by getting feedback on your responses to standard interview questions."
+    )
+    st.subheader("How it works")
+    st.markdown(
+        "1. Enter the name of the role you want to submit your CV for and press `Enter`.\n\n2. Select one of the standard interview questions and press `Start Interview`.\n\n3. Send your audio response as you would if the question was asked in an interview.\n\n4. SensAI will analyze your response and give feedback on how you can improve it.\n\n5. Reload the page and practice your answer again."
+    )
+
+cols = st.columns([3, 3, 1])
 with cols[0]:
-    selected_role = st.selectbox(
-        "Select the role you want to interview for",
-        ["Software Developer"],
-        index=None,
+    selected_role = st.text_input(
+        "Enter the name of the role you want to interview for (e.g. Software Developer)",
         disabled=st.session_state["interview_started"],
     )
+
+if not selected_role:
+    st.stop()
 
 with cols[1]:
     selected_question = st.selectbox(

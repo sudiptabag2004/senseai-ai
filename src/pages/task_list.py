@@ -2,16 +2,9 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-import time
-from lib.init import init_env_vars, init_db
+from auth import redirect_if_not_logged_in
 
-init_env_vars()
-init_db()
-
-if "email" not in st.query_params:
-    st.error("Not authorized. Redirecting to home page...")
-    time.sleep(2)
-    st.switch_page("./home.py")
+redirect_if_not_logged_in()
 
 user_email = st.query_params["email"]
 st.markdown(

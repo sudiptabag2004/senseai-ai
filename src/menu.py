@@ -1,6 +1,7 @@
 import streamlit as st
 from typing import Dict
 import os
+from lib.url import update_query_params
 
 
 def menu_header():
@@ -45,22 +46,37 @@ def show_links():
         )
 
 
-def update_query_params(
-    key,
-):
-    st.query_params[key] = int(st.session_state[key])
+def clear_auth():
+    st.query_params.clear()
+    st.session_state.email = None
+    st.rerun()
 
 
-def menu_footer():
+def menu_footer(is_mentor: bool):
     st.sidebar.divider()
 
-    if st.sidebar.checkbox(
-        "I am a HyperVerge Academy learner",
-        key="is_hv_learner",
-        on_change=update_query_params,
-        args=("is_hv_learner",),
-    ):
-        show_links()
+    if not is_mentor:
+        if "is_hv_learner" in st.query_params:
+            st.session_state.is_hv_learner = int(st.query_params["is_hv_learner"])
+
+        if "is_hv_learner" not in st.session_state:
+            st.session_state.is_hv_learner = False
+
+        if st.sidebar.checkbox(
+            "I am a HyperVerge Academy learner",
+            key="is_hv_learner",
+            on_change=update_query_params,
+            args=("is_hv_learner", int),
+        ):
+            show_links()
+
+        st.sidebar.divider()
+
+    st.sidebar.text("Built with ❤️ by HyperVerge Academy")
+
+    if st.session_state.email:
+        if st.sidebar.button("Logout"):
+            clear_auth()
 
 
 def authenticated_menu(logged_in_user: Dict):
@@ -95,10 +111,12 @@ def authenticated_menu(logged_in_user: Dict):
         )
 
 
-def menu(logged_in_user: Dict):
+def menu(logged_in_user: Dict, is_mentor: bool):
     menu_header()
-    if logged_in_user:
-        authenticated_menu(logged_in_user)
+    if logged_in_user and not is_mentor:
+        authenticated_menu(
+            logged_in_user,
+        )
 
-    menu_footer()
+    menu_footer(is_mentor)
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)
