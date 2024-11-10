@@ -44,7 +44,7 @@ from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
 from lib.utils import get_current_time_in_ist
 from auth import get_logged_in_user
-from components.code_execution import execute_code, run_tests
+from components.code_execution import execute_code, run_tests, react_default_code
 from components.badge import show_badge_dialog, show_multiple_badges_dialog
 
 init_env_vars()
@@ -500,6 +500,7 @@ supported_language_keys = [
     "js_code",
     "nodejs_code",
     "python_code",
+    "react_code",
 ]
 
 
@@ -516,6 +517,7 @@ def is_any_code_present():
         or st.session_state.get("js_code", "")
         or st.session_state.get("nodejs_code", "")
         or st.session_state.get("python_code", "")
+        or st.session_state.get("react_code", "")
     )
 
 
@@ -572,6 +574,10 @@ def get_code_for_ai_feedback():
         combined_code.append(
             f"```python\n{clean_code(st.session_state.python_code)}\n```"
         )
+    if st.session_state.react_code:
+        combined_code.append(
+            f"```jsx\n{clean_code(st.session_state.react_code)}\n```"
+        )
 
     # st.session_state.js_code
 
@@ -604,6 +610,9 @@ def set_ai_running():
 
 
 if task["type"] == "coding" and not st.session_state.is_review_mode:
+    if 'react_code' not in st.session_state:
+        st.session_state["react_code"] = react_default_code
+        
     with code_input_container:
         for lang in supported_language_keys:
             if lang not in st.session_state:
@@ -620,6 +629,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                 "Javascript": "JS",
                 "NodeJS": "NodeJS",
                 "Python": "Python",
+                "React": "React",
             }
             tab_name_to_language = {
                 "HTML": "html",
@@ -627,6 +637,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                 "JS": "javascript",
                 "NodeJS": "javascript",
                 "Python": "python",
+                "React": "jsx",
             }
             tab_names = []
             for lang in task["coding_language"]:
@@ -644,6 +655,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                     with tab:
                         tab_name = tab_names[index].lower()
                         language = tab_name_to_language[tab_names[index]]
+
                         st_ace(
                             min_lines=15,
                             theme="monokai",
@@ -755,6 +767,8 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                             execute_code(st.session_state.nodejs_code, "NodeJS")
                         elif "Python" in task["coding_language"]:
                             execute_code(st.session_state.python_code, "Python")
+                        elif "React" in task["coding_language"]:
+                            execute_code(st.session_state.react_code, "React", width=width, height=height)
                         else:
                             st.write("**No output to show**")
                         # TODO: support for only JS

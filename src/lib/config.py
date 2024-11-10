@@ -33,7 +33,7 @@ badges_table_name = "badges"
 group_role_learner = "learner"
 group_role_mentor = "mentor"
 
-coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python"]
+coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python", "React"]
 leaderboard_view_types = [
     str(LeaderboardViewType.ALL_TIME),
     str(LeaderboardViewType.WEEKLY),
