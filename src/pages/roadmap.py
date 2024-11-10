@@ -6,7 +6,6 @@ from auth import (
     unauthorized_redirect_to_home,
     get_logged_in_user,
 )
-from lib.db import get_all_verified_tasks
 from views.roadmap import get_tasks_with_completion_status, show_roadmap_as_list
 
 redirect_if_not_logged_in()

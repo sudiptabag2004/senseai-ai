@@ -276,6 +276,9 @@ def display_user_message(user_response: str, message_index: int):
 # st.session_state.chat_history
 # st.session_state.ai_chat_history
 
+if st.session_state.is_review_mode and not st.session_state.chat_history:
+    chat_container.warning("No chat history found")
+
 # Display chat messages from history on app rerun
 for index, message in enumerate(st.session_state.chat_history):
     if message["role"] == "user":
@@ -598,6 +601,7 @@ def toggle_show_code_output():
 def set_ai_running():
     st.session_state.is_ai_running = True
     retain_code()
+
 
 if task["type"] == "coding" and not st.session_state.is_review_mode:
     with code_input_container:
