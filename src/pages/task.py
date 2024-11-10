@@ -44,7 +44,12 @@ from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
 from lib.utils import get_current_time_in_ist
 from auth import get_logged_in_user
-from components.code_execution import execute_code, run_tests, react_default_code
+from components.code_execution import (
+    execute_code,
+    run_tests,
+    react_default_code,
+    show_react_help_text,
+)
 from components.badge import show_badge_dialog, show_multiple_badges_dialog
 
 init_env_vars()
@@ -575,9 +580,7 @@ def get_code_for_ai_feedback():
             f"```python\n{clean_code(st.session_state.python_code)}\n```"
         )
     if st.session_state.react_code:
-        combined_code.append(
-            f"```jsx\n{clean_code(st.session_state.react_code)}\n```"
-        )
+        combined_code.append(f"```jsx\n{clean_code(st.session_state.react_code)}\n```")
 
     # st.session_state.js_code
 
@@ -610,9 +613,9 @@ def set_ai_running():
 
 
 if task["type"] == "coding" and not st.session_state.is_review_mode:
-    if 'react_code' not in st.session_state:
+    if "react_code" not in st.session_state:
         st.session_state["react_code"] = react_default_code
-        
+
     with code_input_container:
         for lang in supported_language_keys:
             if lang not in st.session_state:
@@ -655,6 +658,9 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                     with tab:
                         tab_name = tab_names[index].lower()
                         language = tab_name_to_language[tab_names[index]]
+
+                        if tab_name == "react":
+                            show_react_help_text()
 
                         st_ace(
                             min_lines=15,
@@ -768,7 +774,12 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                         elif "Python" in task["coding_language"]:
                             execute_code(st.session_state.python_code, "Python")
                         elif "React" in task["coding_language"]:
-                            execute_code(st.session_state.react_code, "React", width=width, height=height)
+                            execute_code(
+                                st.session_state.react_code,
+                                "React",
+                                width=width,
+                                height=height,
+                            )
                         else:
                             st.write("**No output to show**")
                         # TODO: support for only JS

@@ -8,6 +8,16 @@ import json
 import streamlit.components.v1 as components
 
 
+def show_react_help_text():
+    with st.expander("Learn More"):
+        working_code_sample = """function ToggleButton() {\n  const [isOn, setIsOn] = React.useState(false);\n\n  const toggle = () => {\n    setIsOn(prevState => !prevState);\n  };\n\n  return (\n    <button onClick={toggle}>\n      {isOn ? 'On' : 'Off'}\n    </button>\n  );\n}\n\nconst rootElement = document.getElementById('root');\nReactDOM.render(<ToggleButton />, rootElement);"""
+        failing_code_sample = """import React, { useState } from 'react';\n\nfunction ToggleButton() {\n  const [isOn, setIsOn] = useState(false);\n\n  const toggle = () => {\n    setIsOn(prevState => !prevState);\n  };\n\n  return (\n    <button onClick={toggle}>\n      {isOn ? 'On' : 'Off'}\n    </button>\n  );\n}\n\nconst rootElement = document.getElementById('root');\nReactDOM.render(<ToggleButton />, rootElement);"""
+
+        st.markdown(
+            f"A few guidelines to follow:\n- Avoid importing `React` or `useState`. Directly use `React.useState` and so on.\n- Structure your code to adhere to the initial code template provided.\n- If your code does not produce the desired output, check if it follows these principles (refer to the example below).\n\nHere is a code sample that produces the desired output.\n\n```jsx\n{working_code_sample}\n```\nBut the following code does not:\n\n```jsx\n{failing_code_sample}\n```"
+        )
+
+
 def run_nodejs_code(code: str) -> str:
     """Execute Node.js code and return the output."""
     with tempfile.NamedTemporaryFile(suffix=".js", delete=False) as temp_file:
@@ -166,6 +176,7 @@ def run_tests(code: str, tests: List[Dict]):
             results.append({"status": "error", "output": str(e)})
 
     return results
+
 
 react_default_code = """
 function App() {
