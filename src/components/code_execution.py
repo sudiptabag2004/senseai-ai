@@ -5,6 +5,7 @@ import re
 import streamlit as st
 import asyncio
 import json
+import streamlit.components.v1 as components
 
 
 def run_nodejs_code(code: str) -> str:
@@ -85,7 +86,24 @@ def replace_inputs_in_code_with_test_inputs(code: str, inputs: List[str]):
     return replace_inputs_in_code(code, user_input_instances, inputs)
 
 
-def execute_code(code: str, lang: str):
+def run_react_code(jsx_code: str, css_code: str) -> str:
+    """Generate HTML for executing React code."""
+    react_template = f"""
+    <style>
+        {css_code}
+    </style>
+    <div id="root"></div>
+    <script src="https://unpkg.com/react/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone/babel.min.js"></script>
+    <script type="text/babel">
+        {jsx_code}
+    </script>
+    """
+    return react_template
+
+
+def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
     """Run code based on language and display output."""
     if lang == "NodeJS" or lang == "Javascript":
         output = run_nodejs_code(code)
@@ -116,12 +134,17 @@ def execute_code(code: str, lang: str):
             # print(code)
 
         output = asyncio.run(run_python_code_with_timeout(code))
+    elif lang == "React":
+        output = run_react_code(code, st.session_state.css_code)
     else:
         output = "Unsupported language for execution."
 
     # Display the output
     st.write("### Output")
-    st.code(output, language="python" if lang == "Python" else "javascript")
+    if lang == "React":
+        components.html(output, width=width, height=height, scrolling=True)
+    else:
+        st.code(output, language="python" if lang == "Python" else "javascript")
 
 
 def run_tests(code: str, tests: List[Dict]):
@@ -143,3 +166,16 @@ def run_tests(code: str, tests: List[Dict]):
             results.append({"status": "error", "output": str(e)})
 
     return results
+
+react_default_code = """
+function App() {
+
+
+  return (
+    <></>
+  );
+}
+
+const rootElement = document.getElementById('root');
+ReactDOM.render(<App />, rootElement);
+"""
