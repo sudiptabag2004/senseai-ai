@@ -646,7 +646,7 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
 
     cursor.execute(
         f"""
-    SELECT id, timestamp, user_id, task_id, role, content, is_solved FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
+    SELECT id, timestamp, user_id, task_id, role, content, is_solved, response_type FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
     """,
         (task_id, user_id),
     )
@@ -664,6 +664,7 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
             "role": row[4],
             "content": row[5],
             "is_solved": bool(row[6]),
+            "response_type": row[7],
         }
         for row in chat_history
     ]

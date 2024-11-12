@@ -11,14 +11,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.output_parsers import JsonOutputParser
+import re
 
-# from langchain_core.chat_history import (
-#     InMemoryChatMessageHistory,
-# )
 from langchain.globals import set_verbose, set_debug
 from langchain_core.messages import HumanMessage, AIMessage
-
-# from langchain_core.runnables.history import RunnableWithMessageHistory
 
 import streamlit as st
 
@@ -511,7 +507,9 @@ supported_language_keys = [
 
 def retain_code():
     for key in supported_language_keys:
-        if key in st.session_state and st.session_state[key]:
+        # avoid checking for st.session_state[key] being not None as it prevents the code
+        # from being restored later on when a chat history is restored
+        if key in st.session_state:
             st.session_state[key] = st.session_state[key]
 
 
@@ -610,6 +608,30 @@ def toggle_show_code_output():
 def set_ai_running():
     st.session_state.is_ai_running = True
     retain_code()
+
+
+def restore_code_snippets(chat_history):
+    code_pattern = re.compile(r"```(\w+)\n([\s\S]*?)```")
+
+    for message in reversed(chat_history):
+        if not message.get("response_type") == "code":
+            continue
+
+        content = message.get("content", "")
+        snippets = code_pattern.findall(content)
+        if snippets:
+            return {
+                f"{language.lower()}_code": code.strip() for language, code in snippets
+            }
+
+    return {}
+
+
+restored_code_snippets = restore_code_snippets(st.session_state.chat_history)
+
+for lang, code in restored_code_snippets.items():
+    if lang not in st.session_state:
+        st.session_state[lang] = code
 
 
 if task["type"] == "coding" and not st.session_state.is_review_mode:
