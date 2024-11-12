@@ -613,7 +613,7 @@ def set_ai_running():
 
 
 if task["type"] == "coding" and not st.session_state.is_review_mode:
-    if "react_code" not in st.session_state:
+    if "React" in task["coding_language"] and "react_code" not in st.session_state:
         st.session_state["react_code"] = react_default_code
 
     with code_input_container:
