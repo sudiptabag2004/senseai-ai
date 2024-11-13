@@ -7,9 +7,12 @@ import pypdf
 from streamlit_pdf_viewer import pdf_viewer
 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
+
+from components.buttons import back_to_home_button
 from auth import redirect_if_not_logged_in
 
 redirect_if_not_logged_in(key="id")
+back_to_home_button()
 
 with st.expander("Learn more"):
     st.warning(

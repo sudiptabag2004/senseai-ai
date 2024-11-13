@@ -6,6 +6,7 @@ st.set_page_config(page_title="Interview Practice | SensAI", layout="wide")
 from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
+from components.buttons import back_to_home_button
 
 redirect_if_not_logged_in(key="id")
 
@@ -21,6 +22,8 @@ questions = [
 
 if "interview_started" not in st.session_state:
     st.session_state["interview_started"] = False
+
+back_to_home_button()
 
 with st.expander("Learn more"):
     st.warning(

@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Home | SensAI")
 
 from auth import login_or_signup_user, get_logged_in_user, login
 from lib.init import init_app

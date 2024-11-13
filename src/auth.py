@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from email_validator import validate_email, EmailNotValidError
-from lib.db import upsert_user, get_user_by_email
+from lib.db import upsert_user, get_user_by_email, get_user_by_id
 
 
 def login_or_signup_user(email: str):
@@ -10,10 +10,13 @@ def login_or_signup_user(email: str):
 
 
 def get_logged_in_user():
-    if "email" not in st.session_state:
+    if "email" not in st.session_state and "id" not in st.session_state:
         return None
 
-    return get_user_by_email(st.session_state.email)
+    if "email" in st.session_state:
+        return get_user_by_email(st.session_state.email)
+    else:
+        return get_user_by_id(st.session_state.id)
 
 
 def unauthorized_redirect_to_home():
@@ -22,15 +25,19 @@ def unauthorized_redirect_to_home():
     st.switch_page("./home.py")
 
 
-def set_logged_in_user(email: str):
-    st.session_state.email = email
+def set_logged_in_user(value: str, key: str = "email", dtype: type = str):
+    if dtype == int:
+        st.session_state[key] = int(value)
+    else:
+        st.session_state[key] = value
 
 
 def redirect_if_not_logged_in(key: str = "email"):
     if key not in st.query_params:
         unauthorized_redirect_to_home()
     else:
-        set_logged_in_user(st.query_params[key])
+        key_dtype = int if key == "id" else str
+        set_logged_in_user(st.query_params[key], key, key_dtype)
 
 
 def login():
