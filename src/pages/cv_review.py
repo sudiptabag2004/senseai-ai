@@ -48,7 +48,14 @@ with role_col:
         "Select the role you want to apply for",
         disabled=st.session_state.cv_data is not None,
         key="selected_role",
-        options=["Software Developer", "Data Scientist", "Quality Assurance", "Other"],
+        options=[
+            "Frontend Developer",
+            "Backend Developer",
+            "Full Stack Developer",
+            "Data Analyst",
+            "Quality Assurance",
+            "Other",
+        ],
         index=None,
     )
 
