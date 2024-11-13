@@ -40,13 +40,14 @@ if "ai_response_rows" not in st.session_state:
 if "invalid_links" not in st.session_state:
     st.session_state.invalid_links = []
 
-st.text_input(
-    "Enter the name of the role you want to submit your CV for (e.g. Software Developer)",
-    disabled=st.session_state.cv_data is not None,
-    key="selected_role",
-)
+role_col, cv_upload_col = st.columns([2, 1])
 
-cv_file_upload_container = st.container()
+with role_col:
+    st.text_input(
+        "Name of the role you want to apply for (e.g. Software Developer)",
+        disabled=st.session_state.cv_data is not None,
+        key="selected_role",
+    )
 
 cols = st.columns([1, 0.1, 2])
 
@@ -57,7 +58,6 @@ links_container = cols[2].empty()
 
 def update_file_uploader_key():
     st.session_state.file_uploader_key += 1
-    # pass
 
 
 def set_cv(cv: UploadedFile):
@@ -335,8 +335,6 @@ def generate_cv_report(pdf: pypdf.PdfReader):
     container.empty()
     show_ai_report()
 
-    # ai_chat_history.append({"role": "assistant", "content": json.dumps(rows)})
-    # logger.info(get_formatted_history(ai_chat_history))
     toggle_ai_running()
 
 
@@ -360,41 +358,30 @@ def run_cv_review():
 def reset_params():
     del st.session_state.ai_response_rows
     del st.session_state.invalid_links
+    del st.session_state.cv_data
     cv_container.empty()
     ai_report_container.empty()
     links_container.empty()
 
 
-def reset_params_and_set_cv(uploaded_file: bytes):
-    reset_params()
-    set_cv(uploaded_file)
-    st.rerun()
+def show_cv_uploader():
+    key = f"cv_{st.session_state.file_uploader_key}"
+    description = "Upload your CV (PDF)"
 
-
-# run_cv_review(uploaded_file, selected_role)
-
-
-def show_cv_uploader(type: Literal["new", "update"]):
-    if type == "new":
-        key = f"cv_{st.session_state.file_uploader_key}"
-        description = "Upload your CV (PDF)"
-    else:
-        key = f"cv_updated_{st.session_state.file_uploader_key}"
-        description = "Upload updated CV (PDF)"
-
-    if uploaded_file := cv_file_upload_container.file_uploader(
+    if uploaded_file := cv_upload_col.file_uploader(
         description,
         key=key,
         type="pdf",
     ):
-        reset_params_and_set_cv(uploaded_file)
+        set_cv(uploaded_file)
+        st.rerun()
 
 
 if not st.session_state.cv_data:
     key = f"cv_{st.session_state.file_uploader_key}"
 
     if st.session_state.selected_role:
-        show_cv_uploader("new")
+        show_cv_uploader()
 
 else:
     show_uploaded_cv()
@@ -404,4 +391,5 @@ else:
     else:
         run_cv_review()
 
-    show_cv_uploader("update")
+    cv_upload_col.container(height=10, border=False)
+    cv_upload_col.button("Delete CV", on_click=reset_params, type="primary")
