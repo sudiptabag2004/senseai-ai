@@ -9,6 +9,7 @@ from streamlit_pdf_viewer import pdf_viewer
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from components.buttons import back_to_home_button
+from components.selectors import select_role, get_selected_role
 from auth import redirect_if_not_logged_in
 
 redirect_if_not_logged_in(key="id")
@@ -42,40 +43,12 @@ if "invalid_links" not in st.session_state:
 
 role_col, cv_upload_col = st.columns([1, 1])
 
-
 with role_col:
-    st.selectbox(
-        "Select the role you want to apply for",
-        disabled=st.session_state.cv_data is not None,
-        key="selected_role",
-        options=[
-            "Frontend Developer",
-            "Backend Developer",
-            "Full Stack Developer",
-            "Data Analyst",
-            "Quality Assurance",
-            "Other",
-        ],
-        index=None,
-    )
-
-if st.session_state.selected_role == "Other":
-    with role_col:
-        st.text_input(
-            "Please specify",
-            key="other_role",
-            disabled=st.session_state.cv_data is not None,
-        )
-
-
-def get_selected_role():
-    if st.session_state.selected_role == "Other":
-        return st.session_state.other_role
-
-    return st.session_state.selected_role
-
+    select_role(is_disabled=st.session_state.cv_data is not None)
 
 st.session_state.job_role = get_selected_role()
+
+st.session_state.job_role
 
 cols = st.columns([1, 0.1, 2])
 

@@ -7,6 +7,7 @@ from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
 from components.buttons import back_to_home_button
+from components.selectors import select_role, get_selected_role
 
 redirect_if_not_logged_in(key="id")
 
@@ -40,10 +41,9 @@ with st.expander("Learn more"):
 
 cols = st.columns([3, 3, 1])
 with cols[0]:
-    selected_role = st.text_input(
-        "Enter the name of the role you want to interview for (e.g. Software Developer)",
-        disabled=st.session_state["interview_started"],
-    )
+    select_role()
+
+selected_role = get_selected_role()
 
 if not selected_role:
     st.stop()
