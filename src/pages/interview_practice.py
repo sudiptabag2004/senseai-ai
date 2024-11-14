@@ -283,21 +283,21 @@ else:
         "How would you like to respond?", ["Record my answer", "Upload my answer"]
     )
     is_recording = input_type == "Record my answer"
-    with st.chat_message("user"):
-        if is_recording:
-            if "localhost" in os.environ["APP_URL"]:
-                st.info(
-                    f"To record in browser (only required for testing locally):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
-                )
-            audio_value = st.experimental_audio_input(
-                "Record a voice message by pressing on the mic icon"
+
+    if is_recording:
+        if "localhost" in os.environ["APP_URL"]:
+            st.info(
+                f"To record in browser (only required for testing locally):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
             )
-        else:
-            audio_value = st.file_uploader(
-                "Upload your answer (audio)",
-                key=f"file_uploader_{st.session_state.file_uploader_key}",
-                type=["wav", "mp3", "mov"],
-            )
+        audio_value = st.experimental_audio_input(
+            "Record a voice message by pressing on the mic icon"
+        )
+    else:
+        audio_value = st.file_uploader(
+            "Upload your answer (audio)",
+            key=f"file_uploader_{st.session_state.file_uploader_key}",
+            type=["wav", "mp3", "mov"],
+        )
 
     if audio_value:
         if is_recording:
