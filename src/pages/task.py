@@ -24,6 +24,7 @@ from streamlit_ace import st_ace, THEMES
 
 from lib.llm import logger, get_formatted_history
 from components.sticky_container import sticky_container
+from components.buttons import back_to_home_button
 from auth import login_or_signup_user
 from lib.config import coding_languages_supported
 from lib.db import (
@@ -152,6 +153,8 @@ task_name_container_text_color = None
 if st.session_state.is_solved:
     task_name_container_background_color = "#62B670"
     task_name_container_text_color = "white"
+
+back_to_home_button()
 
 with sticky_container(
     border=True,

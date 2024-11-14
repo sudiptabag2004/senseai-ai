@@ -36,9 +36,12 @@ def get_task_view(task: Dict):
 
     # Escape HTML characters in task name and description
     task_name = html.escape(task["name"].strip())
-    task_description = html.escape(task["description"].strip())
+    if len(task_name) > 50:
+        task_name = task_name[:50] + "..."
 
-    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-name">{task_name}</div>\n\t\t<div class="task-description">\n\t\t\t{task_description}\n\t\t</div>\n\t\t<a href="{task_url}" class="open-task-btn">Open Task</a>\n\t</div>\n</div>"""
+    # task_description = html.escape(task["description"].strip())
+
+    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-header">\n\t\t\t<div class="task-name">{task_name}</div>\n\t\t\t<a href="{task_url}" class="open-task-btn">Open Task</a>\n\t\t</div>\n\t</div>\n</div>"""
 
 
 def show_milestone_card(
@@ -126,13 +129,13 @@ def show_milestone_card(
     
     .task-checkbox {{
         flex-shrink: 0;
-        margin-top: 5px;
+        margin-top: 15px;
         margin-right: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 20px;
-        height: 20px;
+        width: 15px;
+        height: 15px;
     }}
     .task-checkbox svg {{
         width: 100%;
@@ -142,22 +145,18 @@ def show_milestone_card(
         flex-grow: 1;
         min-width: 0; /* Allows content to shrink below its minimum content size */
     }}
+    .task-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+    }}
     .task-name {{
         font-size: 16px;
         font-weight: 500;
-        margin-bottom: 4px;
-    }}
-    .task-description {{
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 8px;
-        line-height: 1.4;
-        word-wrap: break-word; /* Allows long words to break and wrap */
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        margin-bottom: 0;  /* Remove bottom margin since it's now in a flex container */
+        flex: 1;          /* Allow task name to take available space */
+        margin-right: 16px; /* Add some space between name and button */
     }}
     .open-task-btn {{
         background-color: #4CAF50;
@@ -192,28 +191,7 @@ def show_milestone_card(
         text-decoration: none;
     }}
 
-    </style>
-    <script>
-    document.addEventListener('DOMContentLoaded', (event) => {{
-        document.querySelectorAll('.view-more-btn').forEach(button => {{
-            button.addEventListener('click', function() {{
-                const descriptionContainer = this.closest('.task-description');
-                const preview = descriptionContainer.querySelector('.description-preview');
-                const full = descriptionContainer.querySelector('.description-full');
-                
-                if (preview.style.display !== 'none') {{
-                    preview.style.display = 'none';
-                    full.style.display = 'block';
-                    this.textContent = 'View Less';
-                }} else {{
-                    preview.style.display = '-webkit-box';
-                    full.style.display = 'none';
-                    this.textContent = 'View More';
-                }}
-            }});
-        }});
-    }});
-    </script>
+    </style>   
     """,
         unsafe_allow_html=True,
     )
