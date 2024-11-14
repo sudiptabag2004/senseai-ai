@@ -235,9 +235,10 @@ else:
     is_recording = input_type == "Record my answer"
     with st.chat_message("user"):
         if is_recording:
-            st.info(
-                f"To record in browser (temporary fix until https is enabled):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
-            )
+            if "localhost" in os.environ["APP_URL"]:
+                st.info(
+                    f"To record in browser (only required for testing locally):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
+                )
             audio_value = st.experimental_audio_input(
                 "Record a voice message by pressing on the mic icon"
             )
