@@ -56,7 +56,8 @@ def show_milestone_card(
     # Generate a unique class name based on the milestone name
     milestone_class = f"milestone-{milestone['id']}"
 
-    # Custom CSS for styling
+    task_list_view = "".join(get_task_view(task) for task in tasks)
+
     st.markdown(
         f"""
     <style>
@@ -68,10 +69,10 @@ def show_milestone_card(
     }}
     .{milestone_class} .milestone-header {{
         background-color: {header_bg_color};
-        padding: 16px 20px;
+        padding: 0px 20px 8px 20px;
     }}
     .milestone-name {{
-        font-size: 24px;
+        font-size: 16px;
         margin: 0;
         display: flex;
         align-items: center;
@@ -82,11 +83,11 @@ def show_milestone_card(
     }}
     .completed-tasks {{
         color: #666;
-        margin: 2px 0 0 0;
-        font-size: 14px;
+        margin: -16px 0 0 0;
+        font-size: 12px;
     }}
     .{milestone_class} .progress-section {{
-        padding: 16px 20px;
+        padding: 4px 20px 4px 20px;
         background-color: {progress_bg_color};
     }}
     .progress-container {{
@@ -108,11 +109,12 @@ def show_milestone_card(
     }}
     .task-list-container {{
         background-color: #fff;
-        padding: 16px 20px;
+        padding: 8px 16px;
         max-height: calc(2 * (20px + 1.4em * 3 + 8px + 32px + 20px)); /* Approximate height of 2 tasks */
         overflow-y: auto;
         margin-bottom: 20px;
     }}
+    
     .task-item {{
         display: flex;
         align-items: flex-start;
@@ -123,6 +125,7 @@ def show_milestone_card(
         margin-bottom: 0;
         padding-bottom: 0;
     }}
+
     .task-item:not(:last-child) {{
         border-bottom: 1px solid #e0e0e0;
     }}
@@ -191,32 +194,19 @@ def show_milestone_card(
         text-decoration: none;
     }}
 
-    </style>   
+
+    </style>
     """,
         unsafe_allow_html=True,
     )
 
-    # Milestone container
-    task_list_view = "".join(get_task_view(task) for task in tasks)
-
-    # print(task_list_view)
     st.markdown(
-        f"""
-    <div class="milestone-container {milestone_class}">
-        <div class="milestone-header">
-            <h2 class="milestone-name">{milestone['name']}</h2>
-            <p class="completed-tasks">Completed: {completed_tasks} / {total_tasks}</p>
-        </div>
-        <div class="progress-section">
-            <p class="progress-percentage">{progress_percentage:.0f}%</p>
-            <div class="progress-container">
-                <div class="progress-bar"></div>
-            </div>
-        </div>
-         <div class="task-list-container">
-            {task_list_view}
-        </div>
-    </div>
-    """,
+        f"""<div class="milestone-container {milestone_class}">\n\t<div class="milestone-header">\n\t\t<div class="milestone-left">\n\t\t\t<h2 class="milestone-name">{milestone['name']}</h2>\n\t\t\t<p class="completed-tasks">Completed: {completed_tasks} / {total_tasks}</p>\n\t\t</div>\n\t</div>\n\t<div class="progress-section">\n\t\t<p class="progress-percentage">{progress_percentage:.0f}%</p>\n\t\t<div class="progress-container">\n\t\t\t<div class="progress-bar"></div>\n\t\t</div>\n\t</div>\n</div>""",
         unsafe_allow_html=True,
     )
+
+    with st.expander("Show tasks"):
+        st.markdown(
+            f"""<div class="task-list-container">\n\t\t{task_list_view}\n\t</div>""",
+            unsafe_allow_html=True,
+        )
