@@ -1,13 +1,25 @@
 import streamlit as st
 import os
+import base64
+from typing import List
 
 st.set_page_config(page_title="Interview Practice | SensAI", layout="wide")
+
+from openai import OpenAI
+from dotenv import load_dotenv
+import instructor
+from pydantic import BaseModel, Field
+from langchain_core.output_parsers import PydanticOutputParser
+import pandas as pd
 
 from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
+from lib.init import init_env_vars
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
+
+init_env_vars()
 
 redirect_if_not_logged_in(key="id")
 
@@ -85,13 +97,32 @@ def reset_interview():
     refresh_audio_data()
 
 
+def reset_ai_running():
+    st.session_state["is_ai_running"] = False
+
+
+def toggle_ai_running():
+    st.session_state["is_ai_running"] = not st.session_state["is_ai_running"]
+
+
+if "is_ai_running" not in st.session_state:
+    reset_ai_running()
+
+
+if "ai_response_rows" not in st.session_state:
+    st.session_state.ai_response_rows = []
+
 with cols[-1]:
     st.container(height=10, border=False)
     if not st.session_state["interview_started"]:
         st.button("Start Interview", on_click=start_interview)
         st.stop()
     else:
-        st.button("End Interview", on_click=reset_interview)
+        st.button(
+            "End Interview",
+            on_click=reset_interview,
+            disabled=st.session_state.is_ai_running,
+        )
 
 
 def get_wave_data_from_file_upload(audio_file):
@@ -112,18 +143,18 @@ def get_wave_data_from_audio_input(audio_value):
     return audio_value.read()
 
 
+def show_ai_report():
+    df = pd.DataFrame(
+        st.session_state.ai_response_rows, columns=["Category", "Feedback"]
+    )
+
+    st.markdown(
+        df.to_html(escape=False, index=False),
+        unsafe_allow_html=True,
+    )
+
+
 def give_feedback_on_audio_input():
-    import base64
-    from typing import List
-    from openai import OpenAI
-    from dotenv import load_dotenv
-    import instructor
-    from pydantic import BaseModel, Field
-    from langchain_core.output_parsers import PydanticOutputParser
-    from lib.init import init_env_vars
-
-    init_env_vars()
-
     encoded_string = base64.b64encode(st.session_state.audio_data).decode("utf-8")
 
     container = st.empty()
@@ -131,7 +162,7 @@ def give_feedback_on_audio_input():
     with container:
         display_waiting_indicator()
 
-    model = "gpt-4o-audio-preview"
+    model = "gpt-4o-audio-preview-2024-10-01"
 
     class Feedback(BaseModel):
         topic: str = Field(description="topic of the feedback")
@@ -159,7 +190,7 @@ def give_feedback_on_audio_input():
     # )
     # \n\nHere are a few examples of desirable feedback:\n{examples_for_prompt}\n\n=========
 
-    system_prompt = f"""f"You are an expert, helpful, encouraging and empathetic {selected_role} coach who is helping your mentee improve their interviewing skills.\n\nYou will be given an interview question and the conversation history between you and the mentee.\n\nYou need to give feedback on the mentee's response on what part of their answer stood out, what pieces were missing, what they did well, and what could they have done differently, in light of best practices for interviews, including tense consistency, clarity, precision, sentence structure, clarity of speech and confidence.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into individual topics so that it is easy to process for the mentee.\n- You must be very specific about exactly what part of the mentee's response you are suggesting any improvement for by quoting directly from their response along with a clear example of how it could be improved. The example for the improvement must be given as if the mentee had said it themselves.\n\nAvoid demotivating the mentee. Only provide critique where it is clearly necessary and praise them for the parts of their response that are good.\n- Some mandatory topics for the feedback are: tense consistency, clarity, precision, sentence structure, clarity of speech and confidence. Add more topics as you deem fit.\n\n{format_instructions}"""
+    system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach who is helping your mentee improve their interviewing skills for the role of {selected_role}.\n\nYou will be given an interview question and the conversation history between you and the mentee.\n\nYou need to give feedback on the mentee's response on what part of their answer stood out, what pieces were missing, what they did well, and what could they have done differently, in light of best practices for interviews, including tense consistency, clarity, precision, sentence structure, clarity of speech and confidence.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into individual topics so that it is easy to process for the mentee.\n- You must be very specific about exactly what part of the mentee's response you are suggesting any improvement for by quoting directly from their response along with a clear example of how it could be improved. The example for the improvement must be given as if the mentee had said it themselves.\n\nAvoid demotivating the mentee. Only provide critique where it is clearly necessary and praise them for the parts of their response that are good.\n- Some mandatory topics for the feedback are: tense consistency, clarity, precision, sentence structure, clarity of speech and confidence. Add more topics as you deem fit.\n- Give any feedback as needed on how their response to the question can be made more suited to the role of a {selected_role}.\n\n{format_instructions}"""
 
     client = instructor.from_openai(OpenAI())
 
@@ -195,39 +226,58 @@ def give_feedback_on_audio_input():
     # TODO: what about if student just wants to ask something instead of answering prompt, using text?
     # TODO: for just text, we need to add a new prompt
 
-    ai_response = ""
+    rows = []
     for val in stream:
         if not val.feedback:
             continue
 
-        display_feedback = ""
-
-        for topicwise_feedback in val.feedback:
+        for index, topicwise_feedback in enumerate(val.feedback):
             if not topicwise_feedback.topic or not topicwise_feedback.feedback:
                 continue
 
-            display_feedback += (
-                f"**{topicwise_feedback.topic}**\n\n{topicwise_feedback.feedback}\n\n"
-            )
+            if (
+                rows
+                and len(rows) > index
+                and rows[index][0] == topicwise_feedback.topic
+            ):
+                rows[index][1] = topicwise_feedback.feedback
+            else:
+                rows.append([topicwise_feedback.topic, topicwise_feedback.feedback])
 
-        if not display_feedback:
-            continue
+        st.session_state.ai_response_rows = rows
+        with container:
+            show_ai_report()
 
-        container.markdown(display_feedback)
-        ai_response = val.feedback
-
-    ai_chat_history.append({"role": "assistant", "content": ai_response})
     logger.info(get_formatted_history(ai_chat_history))
+    toggle_ai_running()
+    st.rerun()
 
-    update_file_uploader_key()
+
+def reset_params():
+    del st.session_state.ai_response_rows
+    del st.session_state.audio_data
 
 
 if st.session_state.audio_data:
-    with st.chat_message("user"):
+    user_input_col, _, ai_report_col = st.columns([1, 0.1, 2])
+    with user_input_col:
+        st.subheader("Your response")
         st.audio(st.session_state.audio_data)
 
-    with st.chat_message("assistant"):
-        give_feedback_on_audio_input()
+        st.button(
+            "Delete response",
+            on_click=reset_params,
+            type="primary",
+            disabled=st.session_state.is_ai_running,
+        )
+
+    with ai_report_col:
+        st.container(height=20, border=False)
+
+        if st.session_state.ai_response_rows:
+            show_ai_report()
+        else:
+            give_feedback_on_audio_input()
 else:
     input_type = st.radio(
         "How would you like to respond?", ["Record my answer", "Upload my answer"]
@@ -254,4 +304,7 @@ else:
             st.session_state.audio_data = get_wave_data_from_audio_input(audio_value)
         else:
             st.session_state.audio_data = get_wave_data_from_file_upload(audio_value)
+
+        update_file_uploader_key()
+        toggle_ai_running()
         st.rerun()

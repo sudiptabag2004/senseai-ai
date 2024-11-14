@@ -2,16 +2,28 @@ import streamlit as st
 
 st.set_page_config(page_title="Mock Interview | SensAI", layout="wide")
 
+import tempfile
 from typing import Tuple, List, Optional, Literal
 import pypdf
 from streamlit_pdf_viewer import pdf_viewer
-
 from streamlit.runtime.uploaded_file_manager import UploadedFile
+from openai import OpenAI
+from dotenv import load_dotenv
+import instructor
+from pydantic import BaseModel, Field
+from langchain_core.output_parsers import PydanticOutputParser
 
+from lib.init import init_env_vars
+from lib.config import PDF_PAGE_DIMS
+from lib.ui import display_waiting_indicator
+from lib.pdf import get_raw_images_from_pdf, get_links_from_pdf
+from lib.image import get_base64_images
+from lib.llm import get_formatted_history, logger
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 from auth import redirect_if_not_logged_in
 
+init_env_vars()
 redirect_if_not_logged_in(key="id")
 back_to_home_button()
 
@@ -47,8 +59,6 @@ with role_col:
     select_role(is_disabled=st.session_state.cv_data is not None)
 
 st.session_state.job_role = get_selected_role()
-
-st.session_state.job_role
 
 cols = st.columns([1, 0.1, 2])
 
@@ -165,22 +175,6 @@ def show_ai_report(container: st.container = None):
 
 
 def generate_cv_report(pdf: pypdf.PdfReader):
-    import tempfile
-    import json
-    from openai import OpenAI
-    from dotenv import load_dotenv
-    import instructor
-    from pydantic import BaseModel, Field
-    from langchain_core.output_parsers import PydanticOutputParser
-    from lib.init import init_env_vars
-    from lib.config import PDF_PAGE_DIMS
-    from lib.ui import display_waiting_indicator
-    from lib.pdf import get_raw_images_from_pdf, get_links_from_pdf
-    from lib.image import get_base64_images
-    from lib.llm import get_formatted_history, logger
-
-    init_env_vars()
-    toggle_ai_running()
 
     # Create a temporary file to store the PDF
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
@@ -336,8 +330,6 @@ def generate_cv_report(pdf: pypdf.PdfReader):
     container.empty()
     show_ai_report()
 
-    toggle_ai_running()
-
 
 def show_uploaded_cv():
     with cv_container:
@@ -350,10 +342,12 @@ def run_cv_review():
 
     if num_pages > 2:
         st.error("Please upload a PDF with 2 pages or less!")
-        st.stop()
+    else:
+        with ai_report_container:
+            generate_cv_report(pdf)
 
-    with ai_report_container:
-        generate_cv_report(pdf)
+    toggle_ai_running()
+    st.rerun()
 
 
 def reset_params():
@@ -375,6 +369,7 @@ def show_cv_uploader():
         type="pdf",
     ):
         set_cv(uploaded_file)
+        toggle_ai_running()
         st.rerun()
 
 
@@ -393,4 +388,9 @@ else:
         run_cv_review()
 
     cv_upload_col.container(height=10, border=False)
-    cv_upload_col.button("Delete CV", on_click=reset_params, type="primary")
+    cv_upload_col.button(
+        "Delete CV",
+        on_click=reset_params,
+        type="primary",
+        disabled=st.session_state.is_ai_running,
+    )
