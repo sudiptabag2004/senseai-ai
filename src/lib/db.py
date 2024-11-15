@@ -89,11 +89,12 @@ def create_cohort_tables(cursor):
     # Create a table to store user_groups
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name} (
-                user_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
                 group_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 learner_id TEXT,
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
             )"""
     )
 
@@ -170,6 +171,42 @@ def check_table_exists(table_name: str, cursor):
 def get_db_connection():
     # print(sqlite_db_path)
     return sqlite3.connect(sqlite_db_path)
+
+
+def migrate_user_groups_user_id():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Create temporary table with correct schema
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name}_temp (
+                user_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                learner_id TEXT,
+                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+            )"""
+    )
+
+    # Copy data from old table to temp table, converting user_id to INTEGER
+    cursor.execute(
+        f"""INSERT INTO {user_groups_table_name}_temp (user_id, group_id, role, learner_id)
+            SELECT users.id, group_id, role, learner_id 
+            FROM {user_groups_table_name}
+            JOIN {users_table_name} users ON users.email = {user_groups_table_name}.user_id"""
+    )
+
+    # Drop old table
+    cursor.execute(f"DROP TABLE {user_groups_table_name}")
+
+    # Rename temp table to original name
+    cursor.execute(
+        f"ALTER TABLE {user_groups_table_name}_temp RENAME TO {user_groups_table_name}"
+    )
+
+    conn.commit()
+    conn.close()
 
 
 def init_db():
@@ -996,6 +1033,20 @@ def delete_all_cohort_info():
     conn.close()
 
 
+def delete_cohort(cohort_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"DELETE FROM {user_groups_table_name} WHERE group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
+        (cohort_id,),
+    )
+    cursor.execute(f"DELETE FROM {groups_table_name} WHERE cohort_id = ?", (cohort_id,))
+    cursor.execute(f"DELETE FROM {cohorts_table_name} WHERE id = ?", (cohort_id,))
+    conn.commit()
+    conn.close()
+
+
 def drop_cohorts_table():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1041,13 +1092,16 @@ def create_cohort(name: str, df: pd.DataFrame):
 
             # Create user_group entries for learners
             for _, row in group_df.iterrows():
+                user_id = insert_or_return_user(row["Learner Email"], cursor, conn)[
+                    "id"
+                ]
                 cursor.execute(
                     f"""
                     INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
                     VALUES (?, ?, ?, ?)
                     """,
                     (
-                        row["Learner Email"],
+                        user_id,
                         group_id,
                         group_role_learner,
                         row["Learner ID"],
@@ -1056,13 +1110,14 @@ def create_cohort(name: str, df: pd.DataFrame):
 
             # Create user_group entry for mentor
             mentor_email = group_df["Mentor Email"].iloc[0]
+            user_id = insert_or_return_user(mentor_email, cursor, conn)["id"]
             cursor.execute(
                 f"""
                 INSERT INTO {user_groups_table_name} (user_id, group_id, role)
                 VALUES (?, ?, ?)
                 """,
                 (
-                    mentor_email,
+                    user_id,
                     group_id,
                     group_role_mentor,
                 ),
@@ -1147,11 +1202,13 @@ def get_cohort_by_id(cohort_id: int):
         cursor.execute(
             f"""
             SELECT g.id, g.name,
-                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN ug.user_id END) AS learner_emails,
+                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN u_learner.email END) AS learner_emails,
                    GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN ug.learner_id END) AS learner_ids,
-                   MAX(CASE WHEN ug.role = '{group_role_mentor}' THEN ug.user_id END) AS mentor_email
+                   MAX(CASE WHEN ug.role = '{group_role_mentor}' THEN u_mentor.email END) AS mentor_email
             FROM {groups_table_name} g
             LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
+            LEFT JOIN {users_table_name} u_learner ON ug.user_id = u_learner.id AND ug.role = '{group_role_learner}'
+            LEFT JOIN {users_table_name} u_mentor ON ug.user_id = u_mentor.id AND ug.role = '{group_role_mentor}'
             WHERE g.cohort_id = ?
             GROUP BY g.id, g.name
         """,
@@ -1188,8 +1245,11 @@ def get_cohort_group_learners(group_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        f"SELECT * FROM {user_groups_table_name} WHERE group_id = ? AND role = 'learner'",
-        (group_id),
+        f"""SELECT u.email 
+        FROM {user_groups_table_name} ug
+        JOIN {users_table_name} u ON ug.user_id = u.id 
+        WHERE ug.group_id = ? AND ug.role = '{group_role_learner}'""",
+        (group_id,),
     )
     learners = cursor.fetchall()
 
@@ -1330,6 +1390,42 @@ def upsert_user(email: str):
     return email
 
 
+def convert_user_db_to_dict(user: Tuple) -> Dict:
+    return {
+        "id": user[0],
+        "email": user[1],
+        "first_name": user[2],
+        "middle_name": user[3],
+        "last_name": user[4],
+        "default_dp_color": user[5],
+        "created_at": user[6],
+    }
+
+
+def insert_or_return_user(email: str, cursor, conn):
+    # Check if user exists
+    cursor.execute(f"SELECT * FROM {users_table_name} WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        # User doesn't exist, insert new user with random color
+        color = generate_random_color()
+        cursor.execute(
+            f"""
+            INSERT INTO {users_table_name} (email, default_dp_color)
+            VALUES (?, ?)
+            """,
+            (email, color),
+        )
+        conn.commit()
+
+        # Get the newly inserted user
+        cursor.execute(f"SELECT * FROM {users_table_name} WHERE email = ?", (email,))
+        user = cursor.fetchone()
+
+    return convert_user_db_to_dict(user)
+
+
 def update_user(
     user_id: str,
     first_name: str,
@@ -1346,18 +1442,6 @@ def update_user(
     )
     conn.commit()
     conn.close()
-
-
-def convert_user_db_to_dict(user: Tuple) -> Dict:
-    return {
-        "id": user[0],
-        "email": user[1],
-        "first_name": user[2],
-        "middle_name": user[3],
-        "last_name": user[4],
-        "default_dp_color": user[5],
-        "created_at": user[6],
-    }
 
 
 def get_all_users():
@@ -1395,7 +1479,7 @@ def get_user_by_id(user_id: str) -> Dict:
     return convert_user_db_to_dict(user)
 
 
-def get_user_cohorts(user_id: str) -> List[Dict]:
+def get_user_cohorts(user_id: int) -> List[Dict]:
     """Get all cohorts (and the groups in each cohort) that the user is a part of along with their role in each group"""
     conn = get_db_connection()
     cursor = conn.cursor()

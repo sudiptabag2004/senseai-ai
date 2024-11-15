@@ -58,7 +58,7 @@ def mentor_view(mentor_cohorts: List[Dict]):
             )
 
         if selected_group:
-            group_learners = get_cohort_group_learners(str(selected_group["id"]))
+            group_learners = get_cohort_group_learners(selected_group["id"])
             with cols[2]:
                 selected_learner = st.selectbox(
                     "Select a learner",
@@ -140,7 +140,9 @@ def is_mentor_for_cohort(user_cohort_dict: Dict) -> bool:
 
 
 def show_home():
-    user_cohorts = get_user_cohorts(st.session_state.email)
+    logged_in_user = get_logged_in_user()
+
+    user_cohorts = get_user_cohorts(logged_in_user["id"])
 
     mentor_cohorts = [cohort for cohort in user_cohorts if is_mentor_for_cohort(cohort)]
 
@@ -171,7 +173,5 @@ def show_home():
             st.divider()
 
         learner_view()
-
-    logged_in_user = get_logged_in_user()
 
     menu(logged_in_user, st.session_state.is_mentor)
