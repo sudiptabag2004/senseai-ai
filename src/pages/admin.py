@@ -1274,11 +1274,6 @@ def show_analytics_tab():
         st.info("No usage data yet!")
         return
 
-    # Group by user email and get counts
-    usage_counts = (
-        df.groupby("user_email").size().reset_index(name="number of submissions")
-    )
-
     # Get unique emails for filtering
     unique_emails = df["user_email"].unique().tolist()
     selected_email = cols[1].selectbox(
@@ -1295,7 +1290,7 @@ def show_analytics_tab():
 
         for index, entry in user_entries.iterrows():
             with st.expander(
-                f"#{index + 1} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
+                f"#{index + 1} - {entry['role']} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
             ):
                 df = pd.DataFrame(
                     json.loads(entry["ai_review"]), columns=["Category", "Feedback"]
@@ -1303,7 +1298,22 @@ def show_analytics_tab():
                 st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.markdown("#### Overview")
-        st.dataframe(usage_counts, use_container_width=True, hide_index=True)
+        # Group by user email and get counts
+        # Get submission counts
+        usage_counts = (
+            df.groupby("user_email").size().reset_index(name="number of submissions")
+        )
+
+        # Get unique roles per user
+        roles_by_user = (
+            df.groupby("user_email")["role"]
+            .agg(lambda x: ", ".join(sorted(set(x))))
+            .reset_index(name="rolesr")
+        )
+
+        # Merge the two dataframes
+        usage_stats = usage_counts.merge(roles_by_user, on="user_email")
+        st.dataframe(usage_stats, use_container_width=True, hide_index=True)
 
 
 with tabs[4]:

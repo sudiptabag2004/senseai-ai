@@ -149,6 +149,7 @@ def create_cv_review_usage_table(cursor):
         f"""CREATE TABLE IF NOT EXISTS {cv_review_usage_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
                 ai_review TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
@@ -1581,13 +1582,13 @@ def drop_badges_table():
         conn.close()
 
 
-def add_cv_review_usage(user_id: int, ai_review: str):
+def add_cv_review_usage(user_id: int, role: str, ai_review: str):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        f"INSERT INTO {cv_review_usage_table_name} (user_id, ai_review) VALUES (?, ?)",
-        (user_id, ai_review),
+        f"INSERT INTO {cv_review_usage_table_name} (user_id, role, ai_review) VALUES (?, ?, ?)",
+        (user_id, role, ai_review),
     )
     conn.commit()
     conn.close()
@@ -1598,9 +1599,10 @@ def transform_cv_review_usage_to_dict(cv_review_usage: Tuple):
         "id": cv_review_usage[0],
         "user_id": cv_review_usage[1],
         "user_email": cv_review_usage[2],
-        "ai_review": cv_review_usage[3],
+        "role": cv_review_usage[3],
+        "ai_review": cv_review_usage[4],
         "created_at": convert_utc_to_ist(
-            datetime.fromisoformat(cv_review_usage[4])
+            datetime.fromisoformat(cv_review_usage[5])
         ).isoformat(),
     }
 
@@ -1626,7 +1628,7 @@ def get_all_cv_review_usage():
 
     cursor.execute(
         f"""
-        SELECT cv.id, cv.user_id, u.email, cv.ai_review , cv.created_at
+        SELECT cv.id, cv.user_id, u.email, cv.role, cv.ai_review , cv.created_at
         FROM {cv_review_usage_table_name} cv
         JOIN users u ON cv.user_id = u.id
     """

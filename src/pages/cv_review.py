@@ -331,7 +331,9 @@ def generate_cv_report(pdf: pypdf.PdfReader):
     container.empty()
     show_ai_report()
 
-    add_cv_review_usage(st.session_state["id"], json.dumps(rows))
+    add_cv_review_usage(
+        st.session_state["id"], st.session_state.job_role, json.dumps(rows)
+    )
 
 
 def show_uploaded_cv():
