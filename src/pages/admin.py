@@ -1287,7 +1287,7 @@ def show_analytics_tab():
 
     # Filter usage counts for selected email if one is chosen
     if selected_email:
-        user_entries = df[df["user_email"] == selected_email]
+        user_entries = df[df["user_email"] == selected_email].reset_index(drop=True)
 
         st.markdown("#### Submissions")
         # Convert ai_review string to dict and extract timestamp
@@ -1295,7 +1295,7 @@ def show_analytics_tab():
 
         for index, entry in user_entries.iterrows():
             with st.expander(
-                f"#{index} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
+                f"#{index + 1} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
             ):
                 df = pd.DataFrame(
                     json.loads(entry["ai_review"]), columns=["Category", "Feedback"]
