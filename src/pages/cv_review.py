@@ -2,6 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Mock Interview | SensAI", layout="wide")
 
+import json
 import tempfile
 from typing import Tuple, List, Optional, Literal
 import pypdf
@@ -12,7 +13,9 @@ from dotenv import load_dotenv
 import instructor
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
+import pandas as pd
 
+from lib.db import add_cv_review_usage
 from lib.init import init_env_vars
 from lib.config import PDF_PAGE_DIMS
 from lib.ui import display_waiting_indicator
@@ -154,8 +157,6 @@ def get_phone_number_from_phone_links(phone_links: List[str]) -> Optional[str]:
 
 
 def show_ai_report(container: st.container = None):
-    import pandas as pd
-
     df = pd.DataFrame(
         st.session_state.ai_response_rows, columns=["Category", "Feedback"]
     )
@@ -329,6 +330,8 @@ def generate_cv_report(pdf: pypdf.PdfReader):
 
     container.empty()
     show_ai_report()
+
+    add_cv_review_usage(st.session_state["id"], json.dumps(rows))
 
 
 def show_uploaded_cv():

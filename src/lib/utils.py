@@ -44,3 +44,17 @@ def generate_random_color() -> str:
 
 def get_current_time_in_ist() -> datetime:
     return datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+
+def convert_utc_to_ist(utc_dt: datetime) -> datetime:
+    # First ensure the datetime is UTC aware if it isn't already
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+
+    # Create IST timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+
+    # Convert to IST
+    ist_dt = utc_dt.astimezone(ist)
+
+    return ist_dt

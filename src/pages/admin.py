@@ -1,13 +1,16 @@
 from typing import List, Dict, Literal
 import itertools
 import traceback
-import time
+from datetime import datetime
 import asyncio
 from functools import partial
 import numpy as np
 import streamlit as st
+import json
 
-st.set_page_config(page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed"
+)
 
 from copy import deepcopy
 import pandas as pd
@@ -39,6 +42,7 @@ from lib.db import (
     insert_milestone as insert_milestone_to_db,
     delete_milestone as delete_milestone_from_db,
     update_milestone_color as update_milestone_color_in_db,
+    get_all_cv_review_usage,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
@@ -735,7 +739,7 @@ num_cohorts = len(st.session_state.cohorts)
 if num_cohorts > 0:
     cohorts_heading = f"Cohorts ({num_cohorts})"
 
-tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags"]
+tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags", "Analytics"]
 tabs = st.tabs(tab_names)
 
 
@@ -1253,3 +1257,54 @@ def show_tags_tab():
 
 with tabs[3]:
     show_tags_tab()
+
+
+def show_analytics_tab():
+    cols = st.columns(4)
+    selected_module = cols[0].selectbox("Select a module", ["CV Review"])
+
+    if selected_module != "CV Review":
+        st.error("Analytics for this module not implemented yet")
+        return
+
+    all_cv_review_usage = get_all_cv_review_usage()
+    df = pd.DataFrame(all_cv_review_usage)
+
+    if not len(df):
+        st.info("No usage data yet!")
+        return
+
+    # Group by user email and get counts
+    usage_counts = (
+        df.groupby("user_email").size().reset_index(name="number of submissions")
+    )
+
+    # Get unique emails for filtering
+    unique_emails = df["user_email"].unique().tolist()
+    selected_email = cols[1].selectbox(
+        "Select specific user", unique_emails, index=None
+    )
+
+    # Filter usage counts for selected email if one is chosen
+    if selected_email:
+        user_entries = df[df["user_email"] == selected_email]
+
+        st.markdown("#### Submissions")
+        # Convert ai_review string to dict and extract timestamp
+        user_entries = user_entries.sort_values("created_at", ascending=False)
+
+        for index, entry in user_entries.iterrows():
+            with st.expander(
+                f"#{index} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
+            ):
+                df = pd.DataFrame(
+                    json.loads(entry["ai_review"]), columns=["Category", "Feedback"]
+                )
+                st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.markdown("#### Overview")
+        st.dataframe(usage_counts, use_container_width=True, hide_index=True)
+
+
+with tabs[4]:
+    show_analytics_tab()

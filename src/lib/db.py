@@ -17,9 +17,10 @@ from lib.config import (
     milestones_table_name,
     users_table_name,
     badges_table_name,
+    cv_review_usage_table_name,
 )
 from models import LeaderboardViewType
-from lib.utils import get_date_from_str, generate_random_color
+from lib.utils import get_date_from_str, generate_random_color, convert_utc_to_ist
 import json
 
 
@@ -143,6 +144,19 @@ def create_chat_history_table(cursor):
     )
 
 
+def create_cv_review_usage_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {cv_review_usage_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                ai_review TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+    )
+
+
 def check_table_exists(table_name: str, cursor):
     cursor.execute(
         f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
@@ -195,6 +209,10 @@ def init_db():
             create_chat_history_table(cursor)
             conn.commit()
 
+        if not check_table_exists(cv_review_usage_table_name, cursor):
+            create_cv_review_usage_table(cursor)
+            conn.commit()
+
         conn.close()
         return
 
@@ -210,6 +228,9 @@ def init_db():
 
         # Create a table to store chat history
         create_chat_history_table(cursor)
+
+        # Create a table to store cv review usage
+        create_cv_review_usage_table(cursor)
 
         # Create a table to store tests
         create_tests_table(cursor)
@@ -1558,3 +1579,61 @@ def drop_badges_table():
         raise e
     finally:
         conn.close()
+
+
+def add_cv_review_usage(user_id: int, ai_review: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"INSERT INTO {cv_review_usage_table_name} (user_id, ai_review) VALUES (?, ?)",
+        (user_id, ai_review),
+    )
+    conn.commit()
+    conn.close()
+
+
+def transform_cv_review_usage_to_dict(cv_review_usage: Tuple):
+    return {
+        "id": cv_review_usage[0],
+        "user_id": cv_review_usage[1],
+        "user_email": cv_review_usage[2],
+        "ai_review": cv_review_usage[3],
+        "created_at": convert_utc_to_ist(
+            datetime.fromisoformat(cv_review_usage[4])
+        ).isoformat(),
+    }
+
+
+def drop_cv_review_usage_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {cv_review_usage_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {cv_review_usage_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def get_all_cv_review_usage():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT cv.id, cv.user_id, u.email, cv.ai_review , cv.created_at
+        FROM {cv_review_usage_table_name} cv
+        JOIN users u ON cv.user_id = u.id
+    """
+    )
+    all_cv_review_usage = cursor.fetchall()
+
+    return [
+        transform_cv_review_usage_to_dict(cv_review_usage)
+        for cv_review_usage in all_cv_review_usage
+    ]
