@@ -259,10 +259,21 @@ def reset_params():
 
 
 if st.session_state.audio_data:
-    user_input_col, _, ai_report_col = st.columns([1, 0.1, 2])
+    user_input_col, _, ai_report_col = st.columns([1, 0.1, 1.5])
     with user_input_col:
-        st.subheader("Your response")
-        st.audio(st.session_state.audio_data)
+        cols = st.columns([3, 1])
+        with cols[0]:
+            st.subheader("Your response")
+            st.audio(st.session_state.audio_data)
+
+        with cols[1]:
+            st.container(height=40, border=False)
+            st.download_button(
+                "Download",
+                data=st.session_state.audio_data,
+                file_name="interview_response.wav",
+                mime="audio/wav",
+            )
 
         st.button(
             "Delete response",
