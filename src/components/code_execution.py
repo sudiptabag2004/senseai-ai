@@ -118,28 +118,41 @@ def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
     if lang == "NodeJS" or lang == "Javascript":
         output = run_nodejs_code(code)
     elif lang == "Python":
-        if user_input_instances := get_python_user_input_instances(code):
+        user_input_instances = get_python_user_input_instances(code)
+        user_input_keys = []
+
+        if user_input_instances:
             # Create text input widgets for each user input instance
             with st.expander("User Inputs", expanded=True):
                 st.markdown(
                     "Your code requires user inputs to run. Hit `Enter` after adding each input"
                 )
                 for i, _ in enumerate(user_input_instances):
+                    user_input_key = f"input_{i}"
                     st.text_input(
                         f"Input {i+1}",
-                        key=f"input_{i}",
+                        key=user_input_key,
                         on_change=retain_python_code,
                     )
+                    user_input_keys.append(user_input_key)
 
             # Replace input() calls with the collected user inputs
+            inputs = [st.session_state[key] for key in user_input_keys]
             code = replace_inputs_in_code(
                 code,
                 user_input_instances,
-                [
-                    st.session_state[f"input_{i}"]
-                    for i in range(len(user_input_instances))
-                ],
+                inputs,
             )
+
+            if any(input is None or input == "" for input in inputs):
+                st.info(
+                    "You have provided one or more empty inputs. Is your code supposed to run correctly with empty inputs?"
+                )
+                if not st.checkbox(
+                    "Yes, my code works correctly for empty inputs",
+                    on_change=retain_python_code,
+                ):
+                    st.stop()
 
             # print(code)
 
