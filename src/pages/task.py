@@ -264,8 +264,8 @@ def display_user_message(user_response: str, message_index: int):
     #     return
 
     with chat_container.chat_message("user"):
-        user_answer_cols = st.columns([5, 1])
-        user_answer_cols[0].markdown(user_response, unsafe_allow_html=True)
+        # user_answer_cols = st.columns([5, 1])
+        st.markdown(user_response, unsafe_allow_html=True)
         if st.session_state.is_review_mode:
             return
 
