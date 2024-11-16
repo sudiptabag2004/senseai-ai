@@ -152,7 +152,7 @@ def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
                     "Yes, my code works correctly for empty inputs",
                     on_change=retain_python_code,
                 ):
-                    st.stop()
+                    return
 
             # print(code)
 
