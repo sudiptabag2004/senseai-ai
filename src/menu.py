@@ -85,7 +85,7 @@ def authenticated_menu(logged_in_user: Dict):
         display_name = get_logged_in_user_display_name("first")
         st.markdown(
             f"""
-            <span style="margin: 0; font-weight: bold; font-size: 1.25em;">Welcome, {display_name}!</span>
+            <h3 style="margin: 0;">Welcome, {display_name}!</h3>
             """,
             unsafe_allow_html=True,
         )
