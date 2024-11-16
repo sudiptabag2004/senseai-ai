@@ -35,7 +35,10 @@ async def get_tasks() -> List[Task]:
 async def get_all_streaks(
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> Streaks:
-    return get_streaks(view=view)
+    streak_data = get_streaks(view=view)
+    # only retain the count
+    streak_data = {value["user"]["email"]: value["count"] for value in streak_data}
+    return streak_data
 
 
 @app.get(

@@ -3,7 +3,7 @@ import time
 from typing import Literal, Dict
 from email_validator import validate_email, EmailNotValidError
 from lib.db import upsert_user, get_user_by_email, get_user_by_id
-from lib.profile import get_user_name
+from lib.profile import get_display_name_for_user
 
 
 def login_or_signup_user(email: str):
@@ -75,9 +75,4 @@ def login():
 
 def get_logged_in_user_display_name(name_type: Literal["full", "first"] = "full"):
     user = get_logged_in_user()
-    user_name = get_user_name(user, name_type)
-
-    if not user_name:
-        return user["email"]
-
-    return user_name
+    return get_display_name_for_user(user, name_type)

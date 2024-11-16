@@ -1,5 +1,6 @@
 import os
 from os.path import exists
+import json
 import sqlite3
 from typing import List, Any, Tuple, Dict
 from datetime import datetime, timezone, timedelta
@@ -21,7 +22,6 @@ from lib.config import (
 )
 from models import LeaderboardViewType
 from lib.utils import get_date_from_str, generate_random_color, convert_utc_to_ist
-import json
 
 
 def create_tests_table(cursor):
@@ -918,26 +918,42 @@ def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
     # Get all user interactions, ordered by user and timestamp
     cursor.execute(
         f"""
-    SELECT user_id, GROUP_CONCAT(timestamp) as timestamps
+    SELECT 
+        u.email,
+        u.first_name,
+        u.middle_name,
+        u.last_name,
+        GROUP_CONCAT(t.timestamp) as timestamps
     FROM (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
         WHERE 1=1 {date_filter}
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
-    )
-    GROUP BY user_id
+    ) t
+    JOIN users u ON u.email = t.user_id
+    GROUP BY u.email, u.first_name, u.middle_name, u.last_name
     """
     )
 
     usage_per_user = cursor.fetchall()
     conn.close()
+    
+    streaks = []
 
-    streaks = {}
-
-    for user_id, user_usage_dates_str in usage_per_user:
+    for user_id, user_first_name, user_middle_name, user_last_name, user_usage_dates_str in usage_per_user:
         user_usage_dates = user_usage_dates_str.split(",")
-        streaks[user_id] = len(get_user_streak_from_usage_dates(user_usage_dates))
+        streaks.append(
+            {
+                "user": {
+                    "email": user_id,
+                    "first_name": user_first_name,
+                    "middle_name": user_middle_name,
+                    "last_name": user_last_name,
+                },
+                "count": len(get_user_streak_from_usage_dates(user_usage_dates)),
+            }
+        )
 
     return streaks
 
