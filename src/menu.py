@@ -2,6 +2,7 @@ import streamlit as st
 from typing import Dict
 import os
 from lib.url import update_query_params
+from auth import get_logged_in_user_display_name
 
 
 def menu_header():
@@ -81,6 +82,13 @@ def menu_footer(is_mentor: bool):
 
 def authenticated_menu(logged_in_user: Dict):
     with st.sidebar:
+        display_name = get_logged_in_user_display_name("first")
+        st.markdown(
+            f"""
+            <span style="margin: 0; font-weight: bold; font-size: 1.25em;">Welcome, {display_name}!</span>
+            """,
+            unsafe_allow_html=True,
+        )
         st.page_link(
             f"{os.environ.get('APP_URL')}/profile?id={logged_in_user['id']}",
             label="Your Profile",

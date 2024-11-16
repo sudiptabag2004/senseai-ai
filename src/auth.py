@@ -1,7 +1,9 @@
 import streamlit as st
 import time
+from typing import Literal, Dict
 from email_validator import validate_email, EmailNotValidError
 from lib.db import upsert_user, get_user_by_email, get_user_by_id
+from lib.profile import get_user_name
 
 
 def login_or_signup_user(email: str):
@@ -69,3 +71,13 @@ def login():
     if logged_in:
         placeholder.empty()
         st.rerun()
+
+
+def get_logged_in_user_display_name(name_type: Literal["full", "first"] = "full"):
+    user = get_logged_in_user()
+    user_name = get_user_name(user, name_type)
+
+    if not user_name:
+        return user["email"]
+
+    return user_name

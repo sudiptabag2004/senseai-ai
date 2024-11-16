@@ -3,10 +3,11 @@ import streamlit as st
 
 st.set_page_config(page_title="Profile | SensAI", layout="wide")
 
-from typing import Dict
+from typing import Dict, Literal
 
 from lib.db import get_user_by_id, update_user as update_user_in_db
 from lib.db import get_badges_by_user_id
+from lib.profile import get_user_name
 from components.badge import (
     show_badge,
     show_share_badge_prompt,
@@ -17,18 +18,6 @@ if "id" not in st.query_params:
     st.error("Not authorized. Redirecting to home page...")
     time.sleep(2)
     st.switch_page("./home.py")
-
-
-def get_user_name(user: Dict) -> str:
-    if not user["first_name"]:
-        return ""
-
-    middle_name = ""
-    if user["middle_name"]:
-        middle_name = f" {user['middle_name']}"
-
-    full_name = f"{user['first_name']}{middle_name} {user['last_name']}"
-    return full_name.strip()
 
 
 def show_profile_icon(user: Dict):
@@ -107,6 +96,7 @@ def update_account_details(
     error_placeholder.empty()
 
     update_user_in_db(user_id, first_name, middle_name, last_name, profile_color)
+    st.rerun()
 
 
 with tabs[0]:
@@ -114,34 +104,45 @@ with tabs[0]:
         cols = st.columns(3)
         with cols[0]:
             first_name = st.text_input(
-                "First Name*", value=st.session_state.user["first_name"]
+                "First Name*",
+                key="first_name",
+                value=st.session_state.user["first_name"],
             )
 
         with cols[1]:
             middle_name = st.text_input(
-                "Middle Name", value=st.session_state.user["middle_name"]
+                "Middle Name",
+                key="middle_name",
+                value=st.session_state.user["middle_name"],
             )
 
         with cols[2]:
             last_name = st.text_input(
-                "Last Name*", value=st.session_state.user["last_name"]
+                "Last Name*", key="last_name", value=st.session_state.user["last_name"]
             )
 
         cols = st.columns(2)
         with cols[0]:
             email = st.text_input(
-                "Email", value=st.session_state.user["email"], disabled=True
+                "Email",
+                value=st.session_state.user["email"],
+                disabled=True,
+                key="email",
             )
 
         with cols[1]:
             profile_color = st.color_picker(
-                "Profile Color", value=st.session_state.user["default_dp_color"]
+                "Profile Color",
+                value=st.session_state.user["default_dp_color"],
+                key="profile_color",
             )
 
-        submit_button = st.form_submit_button("Save", type="primary")
+        submit_button = st.form_submit_button(
+            "Save",
+            type="primary",
+        )
         if submit_button:
             update_account_details(first_name, middle_name, last_name, profile_color)
-            st.rerun()
 
 
 def show_badges_tab():

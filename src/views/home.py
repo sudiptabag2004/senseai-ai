@@ -25,7 +25,6 @@ def learner_view():
 
     cols = st.columns([4, 0.1, 3])
     with cols[0]:
-        st.markdown(f"Welcome `{st.session_state.email}`! Let's begin learning! 🚀")
         show_roadmap()
 
     with cols[-1]:
