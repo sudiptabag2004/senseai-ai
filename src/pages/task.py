@@ -269,12 +269,12 @@ def display_user_message(user_response: str, message_index: int):
         if st.session_state.is_review_mode:
             return
 
-        user_answer_cols[1].button(
-            "Delete",
-            on_click=partial(delete_user_chat_message, index_to_delete=message_index),
-            key=delete_button_key,
-            disabled=st.session_state.is_ai_running,
-        )
+        # user_answer_cols[1].button(
+        #     "Delete",
+        #     on_click=partial(delete_user_chat_message, index_to_delete=message_index),
+        #     key=delete_button_key,
+        #     disabled=st.session_state.is_ai_running,
+        # )
 
 
 # st.session_state.chat_history
