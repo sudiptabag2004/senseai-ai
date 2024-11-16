@@ -7,7 +7,6 @@ from pathlib import Path
 from streamlit_extras.let_it_rain import rain
 
 from lib.db import (
-    get_user_by_email,
     create_badge_for_user,
     update_badge,
     get_badge_by_id,
@@ -77,19 +76,17 @@ BADGE_TYPE_TO_IMAGE_PATH = {
 
 
 def create_badge(
-    email: str,
+    user_id: int,
     emphasis_value: str,
     badge_type: str,
 ) -> int:
-    user = get_user_by_email(email)
-
     image_path = None
 
     if badge_type == "streak":
 
         image_path = BADGE_TYPE_TO_IMAGE_PATH[badge_type]
 
-        existing_streak_badge = get_badge_by_type_and_user_id(user["id"], badge_type)
+        existing_streak_badge = get_badge_by_type_and_user_id(user_id, badge_type)
 
         if existing_streak_badge:
             # no new streak badge to create
@@ -103,7 +100,7 @@ def create_badge(
                 # badge already exists as it would automatically be updated as the
                 # current streak surpasses longest_streak elsewhere in the code
                 longest_streak_badge = get_badge_by_type_and_user_id(
-                    user["id"], "longest_streak"
+                    user_id, "longest_streak"
                 )
                 if not longest_streak_badge:
                     update_badge(
@@ -119,13 +116,13 @@ def create_badge(
 
     elif badge_type == "longest_streak":
         image_path = BADGE_TYPE_TO_IMAGE_PATH[badge_type]
-        existing_streak_badge = get_badge_by_type_and_user_id(user["id"], badge_type)
+        existing_streak_badge = get_badge_by_type_and_user_id(user_id, badge_type)
         if existing_streak_badge:
             delete_badge_by_id(existing_streak_badge["id"])
 
     badge_params = get_badge_params(image_path)
     created_badge_id = create_badge_for_user(
-        user["id"],
+        user_id,
         emphasis_value,
         badge_type,
         badge_params["image_path"],

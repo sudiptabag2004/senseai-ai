@@ -34,6 +34,7 @@ from lib.db import (
     delete_message as delete_message_from_db,
     get_user_streak,
     get_badge_by_type_and_user_id,
+    get_user_by_email,
 )
 from lib.ui import display_waiting_indicator
 from components.badge import create_badge
@@ -106,11 +107,10 @@ if not task["verified"]:
 if "user" not in st.session_state:
     st.session_state.user = get_logged_in_user()
 
-task_user_email = (
-    st.query_params["learner"]
-    if "learner" in st.query_params
-    else st.session_state.email
-)
+if "learner" in st.query_params:
+    task_user_id = st.query_params["learner"]
+else:
+    task_user_id = st.session_state.user["id"]
 
 if "mode" in st.query_params and st.query_params["mode"] == "review":
     st.session_state.is_review_mode = True
@@ -119,7 +119,7 @@ else:
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(
-        task_id, task_user_email
+        task_id, task_user_id
     )
 
 if "is_solved" not in st.session_state:
@@ -133,7 +133,7 @@ if "is_ai_running" not in st.session_state:
 
 
 def refresh_streak():
-    st.session_state.user_streak = get_user_streak(task_user_email)
+    st.session_state.user_streak = get_user_streak(task_user_id)
 
 
 refresh_streak()
@@ -378,7 +378,7 @@ def check_for_badges_unlocked():
             current_streak = len(st.session_state.user_streak) + 1
 
             streak_badge_id = create_badge(
-                task_user_email,
+                task_user_id,
                 str(current_streak),
                 "streak",
             )
@@ -400,7 +400,7 @@ def check_for_badges_unlocked():
                 ):
 
                     longest_streak_badge_id = create_badge(
-                        task_user_email, str(current_streak), "longest_streak"
+                        task_user_id, str(current_streak), "longest_streak"
                     )
                     st.session_state.badges_to_show.append(longest_streak_badge_id)
 
@@ -453,7 +453,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     # st.session_state.chat_history.append(ai_response)
     # Add user message to chat history [store to db only if ai response has been completely fetched]
     new_user_message = store_message_to_db(
-        task_user_email,
+        task_user_id,
         task_id,
         "user",
         user_response,
@@ -464,7 +464,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
 
     # Add assistant response to chat history
     new_ai_message = store_message_to_db(
-        task_user_email,
+        task_user_id,
         task_id,
         "assistant",
         ai_response,

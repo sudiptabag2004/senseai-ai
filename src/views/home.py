@@ -62,71 +62,76 @@ def mentor_view(mentor_cohorts: List[Dict]):
                 selected_learner = st.selectbox(
                     "Select a learner",
                     group_learners,
+                    format_func=lambda val: val["email"],
                     index=0,
                 )
 
-        if selected_learner:
-            all_milestone_data = get_all_milestone_progress(selected_learner)
-            rows = []
+        if not selected_learner:
+            return
 
-            for milestone_data in all_milestone_data:
-                milestone_data["percent_completed"] = np.round(
-                    (milestone_data["completed_tasks"] / milestone_data["total_tasks"])
-                    * 100,
-                    2,
-                )
-                rows.append(
-                    [
-                        milestone_data["milestone_id"],
-                        milestone_data["milestone_name"],
-                        milestone_data["completed_tasks"],
-                        milestone_data["total_tasks"],
-                        milestone_data["percent_completed"],
-                    ]
-                )
+        all_milestone_data = get_all_milestone_progress(selected_learner["id"])
+        rows = []
 
-            df = pd.DataFrame(
-                rows,
-                columns=[
-                    "milestone_id",
-                    "milestone_name",
-                    "tasks_completed",
-                    "total_tasks",
-                    "% completed",
-                ],
+        for milestone_data in all_milestone_data:
+            milestone_data["percent_completed"] = np.round(
+                (milestone_data["completed_tasks"] / milestone_data["total_tasks"])
+                * 100,
+                2,
+            )
+            rows.append(
+                [
+                    milestone_data["milestone_id"],
+                    milestone_data["milestone_name"],
+                    milestone_data["completed_tasks"],
+                    milestone_data["total_tasks"],
+                    milestone_data["percent_completed"],
+                ]
             )
 
-            df_actions = st.container(border=True)
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "milestone_id",
+                "milestone_name",
+                "tasks_completed",
+                "total_tasks",
+                "% completed",
+            ],
+        )
 
-            event = st.dataframe(
-                df,
-                on_select="rerun",
-                selection_mode="single-row",
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "milestone_id": None,
-                    "milestone_name": st.column_config.TextColumn("Milestone"),
-                    "tasks_completed": st.column_config.NumberColumn(
-                        "Tasks Completed", width="small"
-                    ),
-                    "total_tasks": st.column_config.NumberColumn(
-                        "Total Tasks", width="small"
-                    ),
-                    "% completed": st.column_config.NumberColumn(
-                        "% Completed", width="small"
-                    ),
-                },
-            )
-            if len(event.selection["rows"]):
-                df_actions.write("Do you want to dig deeper into this milestone?")
-                milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
-                df_actions.link_button(
-                    "Yes",
-                    f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner}&mode=review",
-                )
-                # print()
-                # delete_tasks(event.selection['rows'])
+        df_actions = st.container(border=True)
+
+        event = st.dataframe(
+            df,
+            on_select="rerun",
+            selection_mode="single-row",
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "milestone_id": None,
+                "milestone_name": st.column_config.TextColumn("Milestone"),
+                "tasks_completed": st.column_config.NumberColumn(
+                    "Tasks Completed", width="small"
+                ),
+                "total_tasks": st.column_config.NumberColumn(
+                    "Total Tasks", width="small"
+                ),
+                "% completed": st.column_config.NumberColumn(
+                    "% Completed", width="small"
+                ),
+            },
+        )
+        if not len(event.selection["rows"]):
+            return
+
+        df_actions.write("Do you want to dig deeper into this milestone?")
+        milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
+        df_actions.link_button(
+            "Yes",
+            f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&mode=review",
+        )
+        # print()
+        # delete_tasks(event.selection['rows'])
 
 
 def is_mentor_for_cohort(user_cohort_dict: Dict) -> bool:

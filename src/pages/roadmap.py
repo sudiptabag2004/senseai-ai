@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Roadmap | SensAI")
 from auth import (
     redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
@@ -32,5 +32,5 @@ all_tasks = get_tasks_with_completion_status(
 )
 
 show_roadmap_as_list(
-    all_tasks, is_review_mode=True, learner_email=st.query_params["learner"]
+    all_tasks, is_review_mode=True, learner_id=st.query_params["learner"]
 )

@@ -37,8 +37,10 @@ async def get_all_streaks(
 ) -> Streaks:
     streak_data = get_streaks(view=view)
     # only retain the count
-    streak_data = {value["user"]["email"]: value["count"] for value in streak_data}
-    return streak_data
+    return [
+        (value["user"]["id"], value["user"]["email"], value["count"])
+        for value in streak_data
+    ]
 
 
 @app.get(
@@ -46,7 +48,7 @@ async def get_all_streaks(
     response_model=List[int],
 )
 async def get_tasks_completed_for_user(
-    email: str,
+    user_id: int,
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> List[int]:
-    return get_solved_tasks_for_user(email, view)
+    return get_solved_tasks_for_user(user_id, view)

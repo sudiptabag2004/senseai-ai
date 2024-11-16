@@ -6,6 +6,7 @@ from .base import set_box_style, show_box_header
 from lib.db import get_user_streak, get_user_activity_last_n_days
 from lib.emoji import generate_emoji
 from lib.utils import get_current_time_in_ist
+from auth import get_logged_in_user
 
 
 def display_day_level_streak(user_activity: List[datetime]):
@@ -62,10 +63,11 @@ def display_day_level_streak(user_activity: List[datetime]):
 
 
 def show_streak():
-    user_streak = get_user_streak(st.session_state.email)
+    logged_in_user = get_logged_in_user()
+    user_streak = get_user_streak(logged_in_user["id"])
     # Get the user's activity for the last 3 days as we are displaying a week's activity
     # with the current day in the center
-    user_week_activity = get_user_activity_last_n_days(st.session_state.email, 3)
+    user_week_activity = get_user_activity_last_n_days(logged_in_user["id"], 3)
 
     streak_count = len(user_streak)
 
