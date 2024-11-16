@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Tuple, Optional
 
 
 class ChatRole(str, Enum):
@@ -38,7 +38,7 @@ class Task(BaseModel):
     milestone_name: Optional[str]
 
 
-Streaks = Dict[str, int]
+Streaks = List[Tuple]
 
 
 class LeaderboardViewType(Enum):

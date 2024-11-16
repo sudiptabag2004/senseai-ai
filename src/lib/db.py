@@ -132,7 +132,7 @@ def create_chat_history_table(cursor):
         f"""
                 CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
                     task_id INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
@@ -140,6 +140,7 @@ def create_chat_history_table(cursor):
                     response_type TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
                 )
                 """
     )
@@ -173,37 +174,57 @@ def get_db_connection():
     return sqlite3.connect(sqlite_db_path)
 
 
-def migrate_user_groups_user_id():
+def migrate_chat_history_table():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Create temporary table with correct schema
-    cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name}_temp (
+    # Check if the column exists and is storing emails
+    cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
+    columns = cursor.fetchall()
+    user_id_column = next((col for col in columns if col[1] == "user_id"), None)
+
+    if user_id_column and user_id_column[2].upper() == "TEXT":
+        # Create temporary table with correct schema
+        cursor.execute(
+            f"""
+            CREATE TABLE temp_chat_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                group_id INTEGER NOT NULL,
+                task_id INTEGER NOT NULL, 
                 role TEXT NOT NULL,
-                learner_id TEXT,
-                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
+                content TEXT NOT NULL,
+                is_solved BOOLEAN NOT NULL DEFAULT 0,
+                response_type TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
-            )"""
-    )
+            )
+        """
+        )
 
-    # Copy data from old table to temp table, converting user_id to INTEGER
-    cursor.execute(
-        f"""INSERT INTO {user_groups_table_name}_temp (user_id, group_id, role, learner_id)
-            SELECT users.id, group_id, role, learner_id 
-            FROM {user_groups_table_name}
-            JOIN {users_table_name} users ON users.email = {user_groups_table_name}.user_id"""
-    )
+        # Copy data with user id lookup
+        cursor.execute(
+            f"""
+            INSERT INTO temp_chat_history (id, user_id, task_id, role, content, is_solved, response_type, timestamp)
+            SELECT 
+                ch.id,
+                u.id,
+                ch.task_id,
+                ch.role,
+                ch.content,
+                ch.is_solved,
+                ch.response_type,
+                ch.timestamp
+            FROM {chat_history_table_name} ch
+            JOIN {users_table_name} u ON ch.user_id = u.email
+        """
+        )
 
-    # Drop old table
-    cursor.execute(f"DROP TABLE {user_groups_table_name}")
-
-    # Rename temp table to original name
-    cursor.execute(
-        f"ALTER TABLE {user_groups_table_name}_temp RENAME TO {user_groups_table_name}"
-    )
+        # Drop old table and rename new one
+        cursor.execute(f"DROP TABLE {chat_history_table_name}")
+        cursor.execute(
+            f"ALTER TABLE temp_chat_history RENAME TO {chat_history_table_name}"
+        )
 
     conn.commit()
     conn.close()
@@ -610,7 +631,7 @@ def delete_all_tasks():
 
 
 def store_message(
-    user_id: str,
+    user_id: int,
     task_id: int,
     role: str,
     content: str,
@@ -670,9 +691,10 @@ def get_all_chat_history():
 
     cursor.execute(
         f"""
-    SELECT message.id, message.timestamp, message.user_id, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type 
+    SELECT message.id, message.timestamp, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
     FROM {chat_history_table_name} message
     INNER JOIN {tasks_table_name} task ON message.task_id = task.id
+    INNER JOIN {users_table_name} user ON message.user_id = user.id
     ORDER BY message.timestamp ASC
     """
     )
@@ -685,7 +707,7 @@ def get_all_chat_history():
         {
             "id": row[0],
             "timestamp": row[1],
-            "user_id": row[2],
+            "user_email": row[2],
             "task_id": row[3],
             "task_name": row[4],
             "role": row[5],
@@ -699,7 +721,7 @@ def get_all_chat_history():
     return chat_history_dicts
 
 
-def get_task_chat_history_for_user(task_id: int, user_id: str):
+def get_task_chat_history_for_user(task_id: int, user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -731,7 +753,7 @@ def get_task_chat_history_for_user(task_id: int, user_id: str):
 
 
 def get_solved_tasks_for_user(
-    user_id: str, view_type: LeaderboardViewType = LeaderboardViewType.ALL_TIME
+    user_id: int, view_type: LeaderboardViewType = LeaderboardViewType.ALL_TIME
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -800,7 +822,7 @@ def update_message_timestamp(message_id: int, new_timestamp: datetime):
     conn.close()
 
 
-def delete_user_chat_history_for_task(task_id: int, user_id: str):
+def delete_user_chat_history_for_task(task_id: int, user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -852,7 +874,7 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     return current_streak
 
 
-def get_user_activity_last_n_days(user_id: str, n: int):
+def get_user_activity_last_n_days(user_id: int, n: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -880,7 +902,7 @@ def get_user_activity_last_n_days(user_id: str, n: int):
     return active_days
 
 
-def get_user_streak(user_id: str):
+def get_user_streak(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -919,6 +941,7 @@ def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
     cursor.execute(
         f"""
     SELECT 
+        u.id,
         u.email,
         u.first_name,
         u.middle_name,
@@ -931,22 +954,30 @@ def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
     ) t
-    JOIN users u ON u.email = t.user_id
+    JOIN users u ON u.id = t.user_id
     GROUP BY u.email, u.first_name, u.middle_name, u.last_name
     """
     )
 
     usage_per_user = cursor.fetchall()
     conn.close()
-    
+
     streaks = []
 
-    for user_id, user_first_name, user_middle_name, user_last_name, user_usage_dates_str in usage_per_user:
+    for (
+        user_id,
+        user_email,
+        user_first_name,
+        user_middle_name,
+        user_last_name,
+        user_usage_dates_str,
+    ) in usage_per_user:
         user_usage_dates = user_usage_dates_str.split(",")
         streaks.append(
             {
                 "user": {
-                    "email": user_id,
+                    "id": user_id,
+                    "email": user_email,
                     "first_name": user_first_name,
                     "middle_name": user_middle_name,
                     "last_name": user_last_name,
@@ -1261,7 +1292,7 @@ def get_cohort_group_learners(group_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        f"""SELECT u.email 
+        f"""SELECT u.id, u.email 
         FROM {user_groups_table_name} ug
         JOIN {users_table_name} u ON ug.user_id = u.id 
         WHERE ug.group_id = ? AND ug.role = '{group_role_learner}'""",
@@ -1269,7 +1300,7 @@ def get_cohort_group_learners(group_id: int):
     )
     learners = cursor.fetchall()
 
-    return [learner[0] for learner in learners]
+    return [{"id": learner[0], "email": learner[1]} for learner in learners]
 
 
 def get_all_milestones():
@@ -1330,7 +1361,7 @@ def delete_milestone(milestone_id: int):
     conn.close()
 
 
-def get_all_milestone_progress(user_id: str):
+def get_all_milestone_progress(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1526,39 +1557,6 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
         )
 
     return list(cohorts.values())
-
-
-def seed_users_table_with_existing_users():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Get all unique user ids from chat history table
-    cursor.execute(f"SELECT DISTINCT user_id FROM {chat_history_table_name}")
-    existing_chat_user_emails = [row[0] for row in cursor.fetchall()]
-
-    # Get all existing user emails from users table
-    cursor.execute(f"SELECT email FROM {users_table_name}")
-    existing_user_emails = set([row[0] for row in cursor.fetchall()])
-
-    # Find user ids that are not in the users table
-    new_user_ids = [
-        user_id
-        for user_id in existing_chat_user_emails
-        if user_id not in existing_user_emails
-    ]
-
-    # Insert new users into the users table
-    for user_id in new_user_ids:
-        random_color = generate_random_color()
-        cursor.execute(
-            f"INSERT INTO {users_table_name} (email, first_name, middle_name, last_name, default_dp_color) VALUES (?, ?, ?, ?, ?)",
-            (user_id, "", "", "", random_color),
-        )
-
-    conn.commit()
-    conn.close()
-
-    print(f"Added {len(new_user_ids)} new users to the users table.")
 
 
 def create_badge_for_user(

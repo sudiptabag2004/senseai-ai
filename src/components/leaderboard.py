@@ -43,9 +43,7 @@ def get_top_performers(view_type: LeaderboardViewType):
         if not streak_data["count"]:
             continue
 
-        solved_tasks = get_solved_tasks_for_user(
-            streak_data["user"]["email"], view_type
-        )
+        solved_tasks = get_solved_tasks_for_user(streak_data["user"]["id"], view_type)
         tasks_completed = len(solved_tasks)
         users_data.append(
             (
@@ -114,18 +112,19 @@ def show_leaderboard():
                         is_logged_in_user_top_performer = True
 
                 if not is_logged_in_user_top_performer:
-                    streak_count = len(get_user_streak(st.session_state.email)) or 0
+                    logged_in_user = get_logged_in_user()
+
+                    streak_count = len(get_user_streak(logged_in_user["id"])) or 0
                     tasks_completed = (
                         len(
                             get_solved_tasks_for_user(
-                                st.session_state.email,
+                                logged_in_user["id"],
                                 leaderboard_view_types[tab_index],
                             ),
                         )
                         or 0
                     )
                     show_separator = len(top_performers) > 0
-                    logged_in_user = get_logged_in_user()
 
                     show_user_info(
                         get_display_name_for_user(logged_in_user),

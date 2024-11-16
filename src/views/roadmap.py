@@ -6,9 +6,10 @@ from lib.db import (
     get_solved_tasks_for_user,
 )
 from components.milestone_learner_view import show_milestone_card
+from auth import get_logged_in_user
 
 
-def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_email: str = None):
+def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_id: int = None):
     st.write("Select a task by clicking beside the `id` of the task")
 
     df = pd.DataFrame(tasks)
@@ -62,7 +63,7 @@ def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_email: str
         link = f"/task?id={task_id}&email={st.session_state.email}"
 
         if is_review_mode:
-            link += f"&learner={learner_email}&mode=review"
+            link += f"&learner={learner_id}&mode=review"
 
         df_actions.link_button(
             "Yes",
@@ -72,8 +73,8 @@ def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_email: str
         # delete_tasks(event.selection['rows'])
 
 
-def show_roadmap_by_milestone(all_tasks):
-    all_milestone_data = get_all_milestone_progress(st.session_state.email)
+def show_roadmap_by_milestone(all_tasks, user_id: int):
+    all_milestone_data = get_all_milestone_progress(user_id)
     for milestone_data in all_milestone_data:
         milestone_tasks = [
             task
@@ -99,9 +100,9 @@ def update_task_view():
     st.query_params.view = "list" if st.session_state.show_list_view else "milestone"
 
 
-def get_tasks_with_completion_status(user_email: str, milestone_id: int = None):
+def get_tasks_with_completion_status(user_id: int, milestone_id: int = None):
     all_tasks = get_all_verified_tasks(milestone_id)
-    solved_task_ids = get_solved_tasks_for_user(user_email)
+    solved_task_ids = get_solved_tasks_for_user(user_id)
 
     for task in all_tasks:
         if task["id"] in solved_task_ids:
@@ -113,7 +114,8 @@ def get_tasks_with_completion_status(user_email: str, milestone_id: int = None):
 
 
 def show_roadmap():
-    all_tasks = get_tasks_with_completion_status(st.session_state.email)
+    logged_in_user = get_logged_in_user()
+    all_tasks = get_tasks_with_completion_status(logged_in_user["id"])
 
     st.toggle(
         "Show List View",
@@ -125,4 +127,4 @@ def show_roadmap():
     if st.session_state.show_list_view:
         show_roadmap_as_list(all_tasks)
     else:
-        show_roadmap_by_milestone(all_tasks)
+        show_roadmap_by_milestone(all_tasks, user_id=logged_in_user["id"])

@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="Mock Interview | SensAI", layout="wide")
+st.set_page_config(page_title="CV Review | SensAI", layout="wide")
 
 import json
 import tempfile

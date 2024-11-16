@@ -12,6 +12,8 @@ def login_or_signup_user(email: str):
 
 
 def get_logged_in_user():
+    # TODO: when logged in, set session_state.id and use that everywhere or return it from here or something like that
+    # TODO: add a cache to avoid making DB calls and invalidate cache when user logs out or when user changes their profile details
     if "email" not in st.session_state and "id" not in st.session_state:
         return None
 
