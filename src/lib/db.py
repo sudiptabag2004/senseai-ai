@@ -1415,6 +1415,18 @@ def get_all_milestone_progress(user_id: int):
     ]
 
 
+def convert_user_db_to_dict(user: Tuple) -> Dict:
+    return {
+        "id": user[0],
+        "email": user[1],
+        "first_name": user[2],
+        "middle_name": user[3],
+        "last_name": user[4],
+        "default_dp_color": user[5],
+        "created_at": user[6],
+    }
+
+
 def upsert_user(email: str):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1431,21 +1443,17 @@ def upsert_user(email: str):
     )
 
     conn.commit()
+
+    cursor.execute(
+        f"""SELECT * FROM {users_table_name} WHERE email = ?""",
+        (email,),
+    )
+
+    user = cursor.fetchone()
+
     conn.close()
 
-    return email
-
-
-def convert_user_db_to_dict(user: Tuple) -> Dict:
-    return {
-        "id": user[0],
-        "email": user[1],
-        "first_name": user[2],
-        "middle_name": user[3],
-        "last_name": user[4],
-        "default_dp_color": user[5],
-        "created_at": user[6],
-    }
+    return convert_user_db_to_dict(user)
 
 
 def insert_or_return_user(email: str, cursor, conn):

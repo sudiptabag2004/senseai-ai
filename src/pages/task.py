@@ -78,8 +78,6 @@ if "email" not in st.query_params:
 
 login_or_signup_user(st.query_params["email"])
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
 task_id = st.query_params.get("id")
 
 if not task_id:

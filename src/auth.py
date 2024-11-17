@@ -8,19 +8,24 @@ from lib.profile import get_display_name_for_user
 
 def login_or_signup_user(email: str):
     st.session_state.email = email
-    upsert_user(email)
+    st.session_state.user = upsert_user(email)
 
 
 def get_logged_in_user():
     # TODO: when logged in, set session_state.id and use that everywhere or return it from here or something like that
     # TODO: add a cache to avoid making DB calls and invalidate cache when user logs out or when user changes their profile details
+    if "user" in st.session_state and st.session_state.user:
+        return st.session_state.user
+
     if "email" not in st.session_state and "id" not in st.session_state:
         return None
 
     if "email" in st.session_state:
-        return get_user_by_email(st.session_state.email)
+        st.session_state.user = get_user_by_email(st.session_state.email)
     else:
-        return get_user_by_id(st.session_state.id)
+        st.session_state.user = get_user_by_id(st.session_state.id)
+
+    return st.session_state.user
 
 
 def unauthorized_redirect_to_home():
@@ -29,19 +34,24 @@ def unauthorized_redirect_to_home():
     st.switch_page("./home.py")
 
 
-def set_logged_in_user(value: str, key: str = "email", dtype: type = str):
-    if dtype == int:
-        st.session_state[key] = int(value)
+def set_logged_in_user(
+    value: str,
+    key: str = "email",
+):
+    if key == "id":
+        value = int(value)
+        st.session_state[key] = value
+        st.session_state.user = get_user_by_id(value)
     else:
         st.session_state[key] = value
+        st.session_state.user = get_user_by_email(value)
 
 
 def redirect_if_not_logged_in(key: str = "email"):
     if key not in st.query_params:
         unauthorized_redirect_to_home()
     else:
-        key_dtype = int if key == "id" else str
-        set_logged_in_user(st.query_params[key], key, key_dtype)
+        set_logged_in_user(st.query_params[key], key)
 
 
 def login():
