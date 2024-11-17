@@ -30,6 +30,8 @@ milestones_table_name = "milestones"
 users_table_name = "users"
 badges_table_name = "badges"
 cv_review_usage_table_name = "cv_review_usage"
+organizations_table_name = "organizations"
+user_organizations_table_name = "user_organizations"
 
 group_role_learner = "learner"
 group_role_mentor = "mentor"

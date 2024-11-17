@@ -80,7 +80,7 @@ def menu_footer(is_mentor: bool):
             clear_auth()
 
 
-def authenticated_menu(logged_in_user: Dict):
+def authenticated_menu(logged_in_user: Dict, is_mentor: bool):
     with st.sidebar:
         display_name = get_logged_in_user_display_name("first")
         st.markdown(
@@ -94,6 +94,10 @@ def authenticated_menu(logged_in_user: Dict):
             label="Your Profile",
             icon="👔",
         )
+
+        if is_mentor:
+            return
+
         st.divider()
 
         st.markdown(
@@ -121,10 +125,8 @@ def authenticated_menu(logged_in_user: Dict):
 
 def menu(logged_in_user: Dict, is_mentor: bool):
     menu_header()
-    if logged_in_user and not is_mentor:
-        authenticated_menu(
-            logged_in_user,
-        )
+    if logged_in_user:
+        authenticated_menu(logged_in_user, is_mentor)
 
     menu_footer(is_mentor)
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

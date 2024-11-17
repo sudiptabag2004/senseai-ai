@@ -13,11 +13,15 @@ from components.badge import (
     show_share_badge_prompt,
     show_download_badge_button,
 )
+from components.buttons import back_to_home_button
+from auth import redirect_if_not_logged_in
 
-if "id" not in st.query_params:
-    st.error("Not authorized. Redirecting to home page...")
-    time.sleep(2)
-    st.switch_page("./home.py")
+redirect_if_not_logged_in("id")
+
+
+back_to_home_button()
+
+st.container(height=20, border=False)
 
 
 def show_profile_icon(user: Dict):

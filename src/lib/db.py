@@ -2,7 +2,9 @@ import os
 from os.path import exists
 import json
 import sqlite3
-from typing import List, Any, Tuple, Dict
+import uuid
+from unidecode import unidecode
+from typing import List, Any, Tuple, Dict, Literal
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 from lib.config import (
@@ -19,9 +21,12 @@ from lib.config import (
     users_table_name,
     badges_table_name,
     cv_review_usage_table_name,
+    organizations_table_name,
+    user_organizations_table_name,
 )
 from models import LeaderboardViewType
 from lib.utils import get_date_from_str, generate_random_color, convert_utc_to_ist
+from lib.url import slugify
 
 
 def create_tests_table(cursor):
@@ -39,6 +44,19 @@ def create_tests_table(cursor):
     )
 
 
+def create_organizations_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {organizations_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                website_url TEXT,
+                default_logo_color TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"""
+    )
+
+
 def create_users_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {users_table_name} (
@@ -49,6 +67,20 @@ def create_users_table(cursor):
                 last_name TEXT,
                 default_dp_color TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"""
+    )
+
+
+def create_user_organizations_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {user_organizations_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                org_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
 
@@ -240,12 +272,20 @@ def init_db():
     cursor = conn.cursor()
 
     if exists(sqlite_db_path):
-        if not check_table_exists(milestones_table_name, cursor):
-            create_milestones_table(cursor)
+        if not check_table_exists(organizations_table_name, cursor):
+            create_organizations_table(cursor)
             conn.commit()
 
         if not check_table_exists(users_table_name, cursor):
             create_users_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(user_organizations_table_name, cursor):
+            create_user_organizations_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(milestones_table_name, cursor):
+            create_milestones_table(cursor)
             conn.commit()
 
         if not check_table_exists(badges_table_name, cursor):
@@ -1138,9 +1178,7 @@ def create_cohort(name: str, df: pd.DataFrame):
 
             # Create user_group entries for learners
             for _, row in group_df.iterrows():
-                user_id = insert_or_return_user(row["Learner Email"], cursor, conn)[
-                    "id"
-                ]
+                user_id = upsert_user(row["Learner Email"], cursor, conn)["id"]
                 cursor.execute(
                     f"""
                     INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
@@ -1156,7 +1194,7 @@ def create_cohort(name: str, df: pd.DataFrame):
 
             # Create user_group entry for mentor
             mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = insert_or_return_user(mentor_email, cursor, conn)["id"]
+            user_id = upsert_user(mentor_email, cursor, conn)["id"]
             cursor.execute(
                 f"""
                 INSERT INTO {user_groups_table_name} (user_id, group_id, role)
@@ -1427,57 +1465,64 @@ def convert_user_db_to_dict(user: Tuple) -> Dict:
     }
 
 
-def upsert_user(email: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+def upsert_user(email: str, conn=None, cursor=None):
+    should_close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        should_close_conn = True
 
-    # Use UPSERT command to insert or update the user record
-    color = generate_random_color()
-    cursor.execute(
-        f"""
-        INSERT INTO {users_table_name} (email, first_name, middle_name, last_name, default_dp_color)
-        VALUES (?, '', '', '', ?)
-        ON CONFLICT(email) DO NOTHING
-    """,
-        (email, color),
-    )
+    try:
+        # if user exists, no need to do anything, just return the user
+        cursor.execute(
+            f"""SELECT * FROM {users_table_name} WHERE email = ?""",
+            (email,),
+        )
 
-    conn.commit()
+        user = cursor.fetchone()
 
-    cursor.execute(
-        f"""SELECT * FROM {users_table_name} WHERE email = ?""",
-        (email,),
-    )
+        if user:
+            return convert_user_db_to_dict(user)
 
-    user = cursor.fetchone()
-
-    conn.close()
-
-    return convert_user_db_to_dict(user)
-
-
-def insert_or_return_user(email: str, cursor, conn):
-    # Check if user exists
-    cursor.execute(f"SELECT * FROM {users_table_name} WHERE email = ?", (email,))
-    user = cursor.fetchone()
-
-    if not user:
-        # User doesn't exist, insert new user with random color
+        # create a new user
         color = generate_random_color()
         cursor.execute(
             f"""
             INSERT INTO {users_table_name} (email, default_dp_color)
             VALUES (?, ?)
-            """,
+        """,
             (email, color),
         )
-        conn.commit()
 
-        # Get the newly inserted user
-        cursor.execute(f"SELECT * FROM {users_table_name} WHERE email = ?", (email,))
-        user = cursor.fetchone()
+        cursor.execute(
+            f"""SELECT * FROM {users_table_name} WHERE email = ?""",
+            (email,),
+        )
 
-    return convert_user_db_to_dict(user)
+        user = convert_user_db_to_dict(cursor.fetchone())
+
+        # create a new organization for the user (Personal Workspace)
+        new_org_id = create_organization(
+            name="Personal Workspace", website_url="", conn=conn, cursor=cursor
+        )
+        add_user_to_organization(
+            user_id=user["id"],
+            organization_id=new_org_id,
+            role="owner",
+            conn=conn,
+            cursor=cursor,
+        )
+        if should_close_conn:
+            conn.commit()
+
+        return user
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        if should_close_conn:
+            conn.close()
 
 
 def update_user(
@@ -1744,3 +1789,204 @@ def get_all_cv_review_usage():
         transform_cv_review_usage_to_dict(cv_review_usage)
         for cv_review_usage in all_cv_review_usage
     ]
+
+
+def drop_organizations_table():
+    drop_user_organizations_table()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {organizations_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {organizations_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def drop_user_organizations_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {user_organizations_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {user_organizations_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def create_organization(name: str, website_url: str, conn=None, cursor=None):
+    slug = slugify(name) + "-" + str(uuid.uuid4())
+    default_logo_color = generate_random_color()
+
+    should_close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        should_close_conn = True
+
+    try:
+        cursor.execute(
+            f"""INSERT INTO {organizations_table_name} 
+                (slug, name, website_url, default_logo_color)
+                VALUES (?, ?, ?, ?)""",
+            (slug, name, website_url, default_logo_color),
+        )
+        if should_close_conn:
+            conn.commit()
+
+        return cursor.lastrowid
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        if should_close_conn:
+            conn.close()
+
+
+def add_user_to_organization(
+    user_id: int,
+    organization_id: int,
+    role: Literal["owner", "admin"],
+    conn=None,
+    cursor=None,
+):
+    should_close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        should_close_conn = True
+
+    try:
+        cursor.execute(
+            f"""INSERT INTO {user_organizations_table_name}
+                (user_id, org_id, role)
+                VALUES (?, ?, ?)""",
+            (user_id, organization_id, role),
+        )
+        if should_close_conn:
+            conn.commit()
+
+        return cursor.lastrowid
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        if should_close_conn:
+            conn.close()
+
+
+def convert_user_organization_db_to_dict(user_organization: Tuple):
+    return {
+        "id": user_organization[0],
+        "user_id": user_organization[1],
+        "org_id": user_organization[2],
+        "role": user_organization[3],
+    }
+
+
+def get_user_organizations(user_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"SELECT * FROM {user_organizations_table_name} WHERE user_id = ?", (user_id,)
+    )
+    user_organizations = cursor.fetchall()
+
+    return [
+        convert_user_organization_db_to_dict(user_organization)
+        for user_organization in user_organizations
+    ]
+
+
+def get_all_user_organizations():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {user_organizations_table_name}")
+    user_organizations = cursor.fetchall()
+
+    return [
+        convert_user_organization_db_to_dict(user_organization)
+        for user_organization in user_organizations
+    ]
+
+
+def seed_organizations_for_each_user():
+    users = get_all_users()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    user_organizations = get_all_user_organizations()
+    user_ids_with_org = set(
+        [user_organization["user_id"] for user_organization in user_organizations]
+    )
+
+    try:
+        for user in users:
+            # org already exists for this user
+            if user["id"] in user_ids_with_org:
+                print("Skipping user", user["id"])
+                continue
+
+            print("Creating org for user", user["id"])
+
+            # create a new org for this user
+            new_org_id = create_organization(
+                name="Personal Workspace", website_url="", conn=conn, cursor=cursor
+            )
+            add_user_to_organization(
+                user["id"], new_org_id, "owner", conn=conn, cursor=cursor
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def seed_hva_organization():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Create HyperVerge Academy organization
+        org_id = create_organization(
+            name="HyperVerge Academy", website_url="", conn=conn, cursor=cursor
+        )
+
+        # Get users by email
+        cursor.execute(
+            f"SELECT id FROM {users_table_name} WHERE email = ?",
+            ("gayathri@hyperverge.co",),
+        )
+        owner_id = cursor.fetchone()[0]
+
+        cursor.execute(
+            f"SELECT id FROM {users_table_name} WHERE email = ?",
+            ("amandalmia18@gmail.com",),
+        )
+        admin_id = cursor.fetchone()[0]
+
+        # Add users to organization with roles
+        add_user_to_organization(owner_id, org_id, "owner", conn=conn, cursor=cursor)
+        add_user_to_organization(admin_id, org_id, "admin", conn=conn, cursor=cursor)
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
