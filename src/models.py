@@ -15,7 +15,8 @@ class ResponseType(str, Enum):
 
 class ChatMessage(BaseModel):
     id: int
-    user_id: str
+    user_id: int
+    user_email: str
     task_id: int
     task_name: str
     role: ChatRole

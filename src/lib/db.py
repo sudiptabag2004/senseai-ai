@@ -691,7 +691,7 @@ def get_all_chat_history():
 
     cursor.execute(
         f"""
-    SELECT message.id, message.timestamp, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
+    SELECT message.id, message.timestamp, user.id AS user_id, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
     FROM {chat_history_table_name} message
     INNER JOIN {tasks_table_name} task ON message.task_id = task.id
     INNER JOIN {users_table_name} user ON message.user_id = user.id
@@ -703,22 +703,21 @@ def get_all_chat_history():
 
     conn.close()
 
-    chat_history_dicts = [
+    return [
         {
             "id": row[0],
             "timestamp": row[1],
-            "user_email": row[2],
-            "task_id": row[3],
-            "task_name": row[4],
-            "role": row[5],
-            "content": row[6],
-            "is_solved": bool(row[7]),
-            "response_type": row[8],
+            "user_id": row[2],
+            "user_email": row[3],
+            "task_id": row[4],
+            "task_name": row[5],
+            "role": row[6],
+            "content": row[7],
+            "is_solved": bool(row[8]),
+            "response_type": row[9],
         }
         for row in chat_history
     ]
-
-    return chat_history_dicts
 
 
 def get_task_chat_history_for_user(task_id: int, user_id: int):
