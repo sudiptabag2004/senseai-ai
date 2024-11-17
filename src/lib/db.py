@@ -18,14 +18,22 @@ from lib.config import (
     group_role_learner,
     group_role_mentor,
     milestones_table_name,
+    tags_table_name,
+    task_tags_table_name,
     users_table_name,
     badges_table_name,
     cv_review_usage_table_name,
     organizations_table_name,
     user_organizations_table_name,
+    tags_list_path,
 )
 from models import LeaderboardViewType
-from lib.utils import get_date_from_str, generate_random_color, convert_utc_to_ist
+from lib.utils import (
+    get_date_from_str,
+    generate_random_color,
+    convert_utc_to_ist,
+    load_json,
+)
 from lib.url import slugify
 
 
@@ -141,6 +149,27 @@ def create_milestones_table(cursor):
     )
 
 
+def create_tag_tables(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {tags_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"""
+    )
+
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {task_tags_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                tag_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES tasks(id),
+                FOREIGN KEY (tag_id) REFERENCES tags(id)
+            )"""
+    )
+
+
 def create_tasks_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
@@ -148,7 +177,6 @@ def create_tasks_table(cursor):
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
                     answer TEXT NOT NULL,
-                    tags TEXT,  -- Stored as comma-separated values
                     type TEXT NOT NULL DEFAULT 'text',
                     coding_language TEXT,
                     generation_model TEXT NOT NULL,
@@ -288,6 +316,10 @@ def init_db():
             create_milestones_table(cursor)
             conn.commit()
 
+        if not check_table_exists(tags_table_name, cursor):
+            create_tag_tables(cursor)
+            conn.commit()
+
         if not check_table_exists(badges_table_name, cursor):
             create_badges_table(cursor)
             conn.commit()
@@ -367,7 +399,7 @@ def store_task(
     name: str,
     description: str,
     answer: str,
-    tags: List[str],
+    tags: List[Dict],
     task_type: str,
     coding_languages: List[str],
     generation_model: str,
@@ -375,7 +407,6 @@ def store_task(
     tests: List[dict],
     milestone_id: int,
 ):
-    tags_str = serialise_list_to_str(tags)
     coding_language_str = serialise_list_to_str(coding_languages)
 
     conn = get_db_connection()
@@ -384,14 +415,13 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, tags, type, coding_language, generation_model, verified, milestone_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
                 description,
                 answer,
-                tags_str,
                 task_type,
                 coding_language_str,
                 generation_model,
@@ -401,6 +431,16 @@ def store_task(
         )
 
         task_id = cursor.lastrowid
+
+        # Insert tags for the task
+        for tag in tags:
+            cursor.execute(
+                f"""
+                INSERT INTO {task_tags_table_name} (task_id, tag_id)
+                VALUES (?, ?)
+                """,
+                (task_id, tag["id"]),
+            )
 
         # Insert test cases
         for test in tests:
@@ -430,13 +470,11 @@ def update_task(
     name: str,
     description: str,
     answer: str,
-    task_tags: List[str],
     task_type: str,
     coding_languages: List[str],
     generation_model: str,
     verified: bool,
 ):
-    task_tags_str = serialise_list_to_str(task_tags)
     coding_language_str = serialise_list_to_str(coding_languages)
 
     conn = get_db_connection()
@@ -445,14 +483,13 @@ def update_task(
     cursor.execute(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, tags = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?
+    SET name = ?, description = ?, answer = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?
     WHERE id = ?
     """,
         (
             name,
             description,
             answer,
-            task_tags_str,
             task_type,
             coding_language_str,
             generation_model,
@@ -492,15 +529,38 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
     ]
 
 
+def convert_task_db_to_dict(task, tests):
+    return {
+        "id": task[0],
+        "name": task[1],
+        "description": task[2],
+        "answer": task[3],
+        "tags": deserialise_list_from_str(task[4]),
+        "type": task[5],
+        "coding_language": deserialise_list_from_str(task[6]),
+        "generation_model": task[7],
+        "verified": bool(task[8]),
+        "timestamp": task[9],
+        "milestone_id": task[10],
+        "milestone_name": task[11],
+        "tests": tests,
+    }
+
+
 def get_all_tasks():
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         f"""
-    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
+    SELECT t.id, t.name, t.description, t.answer, 
+        GROUP_CONCAT(tg.name) as tags,
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
+    LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
+    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
+    GROUP BY t.id
     ORDER BY t.timestamp ASC
     """
     )
@@ -520,24 +580,7 @@ def get_all_tasks():
         )
 
         tests = return_test_rows_as_dict(cursor.fetchall())
-
-        tasks_dicts.append(
-            {
-                "id": task_id,
-                "name": row[1],
-                "description": row[2],
-                "answer": row[3],
-                "tags": deserialise_list_from_str(row[4]),
-                "type": row[5],
-                "coding_language": deserialise_list_from_str(row[6]),
-                "generation_model": row[7],
-                "verified": bool(row[8]),
-                "timestamp": row[9],
-                "milestone_id": row[10],
-                "milestone_name": row[11],
-                "tests": tests,
-            }
-        )
+        tasks_dicts.append(convert_task_db_to_dict(row, tests))
 
     conn.close()
 
@@ -558,10 +601,15 @@ def get_task_by_id(task_id: int):
 
     cursor.execute(
         f"""
-    SELECT t.id, t.name, t.description, t.answer, t.tags, t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.name as milestone_name
+    SELECT t.id, t.name, t.description, t.answer, 
+        GROUP_CONCAT(tg.name) as tags,
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
+    LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
+    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
     WHERE t.id = ?
+    GROUP BY t.id
     """,
         (task_id,),
     )
@@ -584,20 +632,7 @@ def get_task_by_id(task_id: int):
 
     conn.close()
 
-    return {
-        "id": task[0],
-        "name": task[1],
-        "description": task[2],
-        "answer": task[3],
-        "tags": deserialise_list_from_str(task[4]),
-        "type": task[5],
-        "coding_language": deserialise_list_from_str(task[6]),
-        "generation_model": task[7],
-        "verified": bool(task[8]),
-        "timestamp": task[9],
-        "milestone": task[10],
-        "tests": tests,
-    }
+    return convert_task_db_to_dict(task, tests)
 
 
 def delete_task(task_id: int):
@@ -1990,3 +2025,149 @@ def seed_hva_organization():
         raise e
     finally:
         conn.close()
+
+
+def drop_task_tags_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {task_tags_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {task_tags_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def drop_tags_table():
+    drop_task_tags_table()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"DELETE FROM {tags_table_name}")
+        cursor.execute(f"DROP TABLE IF EXISTS {tags_table_name}")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def create_tag(tag_name: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"INSERT INTO {tags_table_name} (name) VALUES (?)", (tag_name,))
+    conn.commit()
+    conn.close()
+
+
+def create_bulk_tags(tag_names: List[str]) -> bool:
+    if not tag_names:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get existing tags
+    cursor.execute(f"SELECT name FROM {tags_table_name}")
+    existing_tags = {row[0] for row in cursor.fetchall()}
+
+    # Filter out tags that already exist
+    new_tags = [tag for tag in tag_names if tag not in existing_tags]
+
+    has_new_tags = len(new_tags) > 0
+
+    # Insert new tags
+    if new_tags:
+        cursor.executemany(
+            f"INSERT INTO {tags_table_name} (name) VALUES (?)",
+            [(tag,) for tag in new_tags],
+        )
+
+    conn.commit()
+    conn.close()
+
+    return has_new_tags
+
+
+def convert_tag_db_to_dict(tag: Tuple) -> Dict:
+    return {
+        "id": tag[0],
+        "name": tag[1],
+        "created_at": convert_utc_to_ist(datetime.fromisoformat(tag[2])).isoformat(),
+    }
+
+
+def get_all_tags() -> List[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {tags_table_name}")
+    tags = cursor.fetchall()
+    conn.close()
+
+    return [convert_tag_db_to_dict(tag) for tag in tags]
+
+
+def delete_tag(tag_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {tags_table_name} WHERE id = ?", (tag_id,))
+    conn.commit()
+    conn.close()
+
+
+def migrate_tags():
+    # Read tags from JSON file
+    tags_to_insert = set(load_json(tags_list_path))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all tasks with non-empty tags
+    cursor.execute(
+        f"SELECT id, tags FROM {tasks_table_name} WHERE tags IS NOT NULL AND tags != ''"
+    )
+    tasks_with_tags = cursor.fetchall()
+
+    # Extract unique tags from tasks
+    task_tag_mapping = {}
+    for task in tasks_with_tags:
+        task_id = task[0]
+        task_tags = [tag.strip() for tag in task[1].split(",") if tag.strip()]
+        task_tag_mapping[task_id] = task_tags
+        tags_to_insert.update(task_tags)
+
+    # Bulk create unique tags
+    if tags_to_insert:
+        create_bulk_tags(list(tags_to_insert))
+
+        # Get tag IDs for all tags
+        cursor.execute(f"SELECT id, name FROM {tags_table_name}")
+        tag_id_mapping = {name: id for id, name in cursor.fetchall()}
+
+        # Link tasks with tag IDs
+        all_task_tags = []
+        for task_id, tag_names in task_tag_mapping.items():
+            all_task_tags.extend(
+                [(task_id, tag_id_mapping[tag_name]) for tag_name in tag_names]
+            )
+
+        cursor.executemany(
+            f"INSERT INTO {task_tags_table_name} (task_id, tag_id) VALUES (?, ?)",
+            all_task_tags,
+        )
+
+    # Remove tags column from tasks table since tags are now stored in task_tags table
+    cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN tags")
+
+    conn.commit()
+    conn.close()

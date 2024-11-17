@@ -39,6 +39,10 @@ from lib.db import (
     get_all_cohorts,
     get_cohort_by_id,
     get_all_milestones,
+    get_all_tags,
+    create_bulk_tags,
+    create_tag as create_tag_in_db,
+    delete_tag as delete_tag_from_db,
     insert_milestone as insert_milestone_to_db,
     delete_milestone as delete_milestone_from_db,
     update_milestone_color as update_milestone_color_in_db,
@@ -46,7 +50,7 @@ from lib.db import (
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
-from lib.config import coding_languages_supported, tags_list_path
+from lib.config import coding_languages_supported
 
 init_env_vars()
 init_db()
@@ -65,7 +69,7 @@ def refresh_milestones():
 
 
 def refresh_tags():
-    st.session_state.tags = load_json(tags_list_path)[::-1]
+    st.session_state.tags = get_all_tags()
 
 
 if "tasks" not in st.session_state:
@@ -496,11 +500,8 @@ def show_task_form():
         "Tags",
         st.session_state.tags,
         key="task_tags",
-        default=(
-            [st.session_state.tags[st.session_state.tags.index("Python")]]
-            if "Python" in st.session_state.tags
-            else None
-        ),
+        default=None,
+        format_func=lambda tag: tag["name"],
         help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
     )
 
@@ -640,12 +641,32 @@ def show_bulk_upload_tasks_form():
         if "Answer" not in tasks_df.columns:
             tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
 
+        unique_tags = list(
+            set(
+                list(
+                    itertools.chain(
+                        *tasks_df["Tags"]
+                        .apply(lambda val: [tag.strip() for tag in val.split(",")])
+                        .tolist()
+                    )
+                )
+            )
+        )
+        has_new_tags = create_bulk_tags(unique_tags)
+        if has_new_tags:
+            refresh_tags()
+
         for _, row in tasks_df.iterrows():
+            task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
+            task_tags = [
+                tag for tag in st.session_state.tags if tag["name"] in task_tag_names
+            ]
+
             store_task_to_db(
                 row["Name"],
                 row["Description"],
                 row["Answer"],
-                row["Tags"].split(","),
+                task_tags,
                 task_type,
                 coding_languages,
                 model["version"],
@@ -773,8 +794,9 @@ def show_tasks_tab():
     df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
     cols = st.columns(4)
+    tasks_with_tags_df = df[df["tags"].notna()]
     all_tags = np.unique(
-        list(itertools.chain(*[tags for tags in df["tags"].tolist()]))
+        list(itertools.chain(*[tags for tags in tasks_with_tags_df["tags"].tolist()]))
     ).tolist()
     filter_tags = cols[0].multiselect("Filter by tags", all_tags)
 
@@ -877,7 +899,6 @@ def show_tasks_tab():
                 row["name"],
                 row["description"],
                 row["answer"],
-                row["tags"],
                 row["type"],
                 row["coding_language"],
                 row["generation_model"],
@@ -1177,23 +1198,17 @@ with tabs[2]:
     show_milestones_tab()
 
 
-def save_tags():
-    # since we show the tags in reverse order, we need to save them in reverse order
-    save_json(tags_list_path, st.session_state.tags[::-1])
-
-
 def add_tag(new_tag):
     if not new_tag:
         st.toast("Enter a tag name")
         return
 
-    if new_tag in st.session_state.tags:
+    if new_tag in [tag["name"] for tag in st.session_state.tags]:
         st.toast("Tag already exists")
         return
 
     # since we show the tags in reverse order, we need to save them in reverse order
-    st.session_state.tags = [new_tag] + st.session_state.tags
-    save_tags()
+    create_tag_in_db(new_tag)
     st.toast("New tag added")
     refresh_tags()
 
@@ -1201,15 +1216,14 @@ def add_tag(new_tag):
 
 
 def delete_tag(tag):
-    st.session_state.tags.remove(tag)
-    save_tags()
+    delete_tag_from_db(tag["id"])
     set_toast("Tag deleted")
     refresh_tags()
 
 
 @st.dialog("Delete Tag")
 def show_tag_delete_confirmation_dialog(tag):
-    st.markdown(f"Are you sure you want to delete `{tag}`?")
+    st.markdown(f"Are you sure you want to delete `{tag['name']}`?")
     (
         confirm_col,
         cancel_col,
@@ -1241,12 +1255,12 @@ def show_tags_tab():
 
     num_layout_cols = 3
     layout_cols = st.columns(num_layout_cols)
-    for i, tag in enumerate(st.session_state.tags):
+    for i, tag in enumerate(st.session_state.tags[::-1]):
         with layout_cols[i % num_layout_cols].container(
             border=True,
         ):
             cols = st.columns([3, 1])
-            cols[0].write(tag)
+            cols[0].write(tag["name"])
             cols[-1].button(
                 "Delete",
                 on_click=show_tag_delete_confirmation_dialog,
