@@ -2,13 +2,43 @@ import streamlit as st
 import time
 from typing import Literal, Dict
 from email_validator import validate_email, EmailNotValidError
-from lib.db import upsert_user, get_user_by_email, get_user_by_id
+from lib.db import (
+    upsert_user,
+    get_user_by_email,
+    get_user_by_id,
+    get_user_organizations,
+    get_db_connection,
+)
 from lib.profile import get_display_name_for_user
+
+
+def set_logged_in_user_orgs(user: Dict):
+    if "user_orgs" in st.session_state:
+        return
+
+    st.session_state.user_orgs = get_user_organizations(user["id"])
 
 
 def login_or_signup_user(email: str):
     st.session_state.email = email
     st.session_state.user = upsert_user(email)
+    set_logged_in_user_orgs(st.session_state.user)
+
+
+def get_hva_org_id():
+    if "hva_org_id" in st.session_state:
+        return st.session_state.hva_org_id
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM organizations WHERE name = ?", ("HyperVerge Academy",)
+    )
+    hva_org_id = cursor.fetchone()[0]
+    conn.close()
+
+    st.session_state.hva_org_id = hva_org_id
+    return hva_org_id
 
 
 def get_logged_in_user():
@@ -28,8 +58,10 @@ def get_logged_in_user():
     return st.session_state.user
 
 
-def unauthorized_redirect_to_home():
-    st.error("Not authorized. Redirecting to home page...")
+def unauthorized_redirect_to_home(
+    error_message: str = "Not authorized. Redirecting to home page...",
+):
+    st.error(error_message)
     time.sleep(2)
     st.switch_page("./home.py")
 

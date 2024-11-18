@@ -82,17 +82,27 @@ def menu_footer(is_mentor: bool):
 
 def authenticated_menu(logged_in_user: Dict, is_mentor: bool):
     with st.sidebar:
-        display_name = get_logged_in_user_display_name("first")
-        st.markdown(
-            f"""
-            <h3 style="margin: 0;">Welcome, {display_name}!</h3>
-            """,
-            unsafe_allow_html=True,
-        )
+        # display_name = get_logged_in_user_display_name("first")
+        # st.markdown(
+        #     f"""
+        #     <h3 style="margin: 0;">Welcome, {display_name}!</h3>
+        #     """,
+        #     unsafe_allow_html=True,
+        # )
         st.page_link(
             f"{os.environ.get('APP_URL')}/profile?id={logged_in_user['id']}",
             label="Your Profile",
             icon="👔",
+        )
+        selected_org = st.sidebar.selectbox(
+            f'`{st.session_state["email"]}`',
+            st.session_state.user_orgs,
+            format_func=lambda val: val["name"],
+        )
+        st.page_link(
+            f"{os.environ.get('APP_URL')}/admin?id={logged_in_user['id']}&org_id={selected_org['id']}",
+            label="Admin Panel",
+            icon="⚙️",
         )
 
         if is_mentor:

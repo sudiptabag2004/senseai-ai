@@ -112,7 +112,9 @@ def create_cohort_tables(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {cohorts_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
                 name TEXT NOT NULL
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
 
@@ -143,8 +145,10 @@ def create_milestones_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {milestones_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
 
@@ -153,8 +157,10 @@ def create_tag_tables(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tags_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
 
@@ -174,6 +180,7 @@ def create_tasks_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    org_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
                     answer TEXT NOT NULL,
@@ -182,7 +189,9 @@ def create_tasks_table(cursor):
                     generation_model TEXT NOT NULL,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    milestone_id INTEGER REFERENCES {milestones_table_name}(id)
+                    milestone_id INTEGER
+                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
     )
 
@@ -350,6 +359,7 @@ def store_task(
     verified: bool,
     tests: List[dict],
     milestone_id: int,
+    org_id: int,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -359,8 +369,8 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
@@ -371,6 +381,7 @@ def store_task(
                 generation_model,
                 verified,
                 milestone_id,
+                org_id,
             ),
         )
 
@@ -491,22 +502,33 @@ def convert_task_db_to_dict(task, tests):
     }
 
 
-def get_all_tasks():
+def get_all_tasks(org_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"""
+    query = f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
         t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
-    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
+    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id"""
+
+    if org_id is not None:
+        query += f" WHERE t.org_id = ?"
+        query_params = (org_id,)
+    else:
+        query_params = ()
+
+    query += f"""
     GROUP BY t.id
     ORDER BY t.timestamp ASC
     """
+
+    cursor.execute(
+        query,
+        query_params,
     )
 
     tasks = cursor.fetchall()
@@ -1128,7 +1150,7 @@ def drop_cohorts_table():
         conn.close()
 
 
-def create_cohort(name: str, df: pd.DataFrame):
+def create_cohort(name: str, df: pd.DataFrame, org_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1136,10 +1158,10 @@ def create_cohort(name: str, df: pd.DataFrame):
         # Create cohort
         cursor.execute(
             f"""
-            INSERT INTO {cohorts_table_name} (name)
-            VALUES (?)
+            INSERT INTO {cohorts_table_name} (name, org_id)
+            VALUES (?, ?)
             """,
-            (name,),
+            (name, org_id),
         )
         cohort_id = cursor.lastrowid
 
@@ -1206,7 +1228,7 @@ def add_user_to_cohort_group(user_id: int, group_id: int, role: str):
     conn.close()
 
 
-def get_all_cohorts():
+def get_all_cohorts_for_org(org_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1220,9 +1242,11 @@ def get_all_cohorts():
             FROM {cohorts_table_name} c
             LEFT JOIN {groups_table_name} g ON c.id = g.cohort_id
             LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
+            WHERE c.org_id = ?
             GROUP BY c.id, c.name
             ORDER BY c.id DESC
-            """
+            """,
+            (org_id,),
         )
 
         cohorts = cursor.fetchall()
@@ -1319,6 +1343,10 @@ def get_cohort_group_learners(group_id: int):
     return [{"id": learner[0], "email": learner[1]} for learner in learners]
 
 
+def convert_milestone_db_to_dict(milestone: Tuple) -> Dict:
+    return {"id": milestone[0], "name": milestone[1], "color": milestone[2]}
+
+
 def get_all_milestones():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1328,20 +1356,28 @@ def get_all_milestones():
 
     conn.close()
 
-    # Convert the fetched data into a list of dictionaries
-    return [
-        {"id": milestone[0], "name": milestone[1], "color": milestone[2]}
-        for milestone in milestones
-    ]
+    return [convert_milestone_db_to_dict(milestone) for milestone in milestones]
 
 
-def insert_milestone(name: str, color: str):
+def get_all_milestones_for_org(org_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {milestones_table_name} WHERE org_id = ?", (org_id,))
+    milestones = cursor.fetchall()
+
+    conn.close()
+
+    return [convert_milestone_db_to_dict(milestone) for milestone in milestones]
+
+
+def insert_milestone(name: str, color: str, org_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        f"INSERT INTO {milestones_table_name} (name, color) VALUES (?, ?)",
-        (name, color),
+        f"INSERT INTO {milestones_table_name} (name, color, org_id) VALUES (?, ?, ?)",
+        (name, color, org_id),
     )
     conn.commit()
     conn.close()
@@ -1877,12 +1913,16 @@ def get_user_organizations(user_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        f"SELECT * FROM {user_organizations_table_name} WHERE user_id = ?", (user_id,)
+        f"""SELECT uo.org_id, o.name 
+        FROM {user_organizations_table_name} uo
+        JOIN organizations o ON uo.org_id = o.id 
+        WHERE uo.user_id = ?""",
+        (user_id,),
     )
     user_organizations = cursor.fetchall()
 
     return [
-        convert_user_organization_db_to_dict(user_organization)
+        {"id": user_organization[0], "name": user_organization[1]}
         for user_organization in user_organizations
     ]
 
@@ -2003,11 +2043,14 @@ def drop_tags_table():
         conn.close()
 
 
-def create_tag(tag_name: str):
+def create_tag(tag_name: str, org_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"INSERT INTO {tags_table_name} (name) VALUES (?)", (tag_name,))
+    cursor.execute(
+        f"INSERT INTO {tags_table_name} (name, org_id) VALUES (?, ?)",
+        (tag_name, org_id),
+    )
     conn.commit()
     conn.close()
 
@@ -2060,6 +2103,17 @@ def get_all_tags() -> List[Dict]:
     return [convert_tag_db_to_dict(tag) for tag in tags]
 
 
+def get_all_tags_for_org(org_id: int) -> List[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {tags_table_name} WHERE org_id = ?", (org_id,))
+    tags = cursor.fetchall()
+    conn.close()
+
+    return [convert_tag_db_to_dict(tag) for tag in tags]
+
+
 def delete_tag(tag_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2069,49 +2123,61 @@ def delete_tag(tag_id: int):
     conn.close()
 
 
-def migrate_tags():
-    # Read tags from JSON file
-    tags_to_insert = set(load_json(tags_list_path))
-
+def migrate_entities_to_org():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get all tasks with non-empty tags
-    cursor.execute(
-        f"SELECT id, tags FROM {tasks_table_name} WHERE tags IS NOT NULL AND tags != ''"
-    )
-    tasks_with_tags = cursor.fetchall()
-
-    # Extract unique tags from tasks
-    task_tag_mapping = {}
-    for task in tasks_with_tags:
-        task_id = task[0]
-        task_tags = [tag.strip() for tag in task[1].split(",") if tag.strip()]
-        task_tag_mapping[task_id] = task_tags
-        tags_to_insert.update(task_tags)
-
-    # Bulk create unique tags
-    if tags_to_insert:
-        create_bulk_tags(list(tags_to_insert))
-
-        # Get tag IDs for all tags
-        cursor.execute(f"SELECT id, name FROM {tags_table_name}")
-        tag_id_mapping = {name: id for id, name in cursor.fetchall()}
-
-        # Link tasks with tag IDs
-        all_task_tags = []
-        for task_id, tag_names in task_tag_mapping.items():
-            all_task_tags.extend(
-                [(task_id, tag_id_mapping[tag_name]) for tag_name in tag_names]
-            )
-
-        cursor.executemany(
-            f"INSERT INTO {task_tags_table_name} (task_id, tag_id) VALUES (?, ?)",
-            all_task_tags,
+    try:
+        # Get HyperVerge Academy org id
+        cursor.execute(
+            f"SELECT id FROM {organizations_table_name} WHERE name = 'HyperVerge Academy'"
         )
+        org = cursor.fetchone()
+        if not org:
+            raise Exception("HyperVerge Academy organization not found")
 
-    # Remove tags column from tasks table since tags are now stored in task_tags table
-    cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN tags")
+        org_id = org[0]
 
-    conn.commit()
-    conn.close()
+        # Add org_id column to cohorts table if it doesn't exist
+        cursor.execute(f"PRAGMA table_info({cohorts_table_name})")
+        columns = cursor.fetchall()
+        if "org_id" not in [col[1] for col in columns]:
+            cursor.execute(
+                f"ALTER TABLE {cohorts_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
+            )
+            cursor.execute(f"UPDATE {cohorts_table_name} SET org_id = ?", (org_id,))
+
+        # Add org_id column to tasks table if it doesn't exist
+        cursor.execute(f"PRAGMA table_info({tasks_table_name})")
+        columns = cursor.fetchall()
+        if "org_id" not in [col[1] for col in columns]:
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
+            )
+            cursor.execute(f"UPDATE {tasks_table_name} SET org_id = ?", (org_id,))
+
+        # Add org_id column to milestones table if it doesn't exist
+        cursor.execute(f"PRAGMA table_info({milestones_table_name})")
+        columns = cursor.fetchall()
+        if "org_id" not in [col[1] for col in columns]:
+            cursor.execute(
+                f"ALTER TABLE {milestones_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
+            )
+            cursor.execute(f"UPDATE {milestones_table_name} SET org_id = ?", (org_id,))
+
+        # Add org_id column to tags table if it doesn't exist
+        cursor.execute(f"PRAGMA table_info({tags_table_name})")
+        columns = cursor.fetchall()
+        if "org_id" not in [col[1] for col in columns]:
+            cursor.execute(
+                f"ALTER TABLE {tags_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
+            )
+            cursor.execute(f"UPDATE {tags_table_name} SET org_id = ?", (org_id,))
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

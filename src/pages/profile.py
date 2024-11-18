@@ -18,7 +18,6 @@ from auth import redirect_if_not_logged_in
 
 redirect_if_not_logged_in("id")
 
-
 back_to_home_button()
 
 st.container(height=20, border=False)

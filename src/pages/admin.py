@@ -7,6 +7,7 @@ from functools import partial
 import numpy as np
 import streamlit as st
 import json
+import time
 
 st.set_page_config(
     page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed"
@@ -36,10 +37,10 @@ from lib.db import (
     update_column_for_task_ids,
     update_tests_for_task,
     create_cohort,
-    get_all_cohorts,
+    get_all_cohorts_for_org,
     get_cohort_by_id,
-    get_all_milestones,
-    get_all_tags,
+    get_all_milestones_for_org,
+    get_all_tags_for_org,
     create_bulk_tags,
     create_tag as create_tag_in_db,
     delete_tag as delete_tag_from_db,
@@ -51,25 +52,37 @@ from lib.db import (
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
 from lib.config import coding_languages_supported
+from auth import (
+    redirect_if_not_logged_in,
+    unauthorized_redirect_to_home,
+    get_hva_org_id,
+)
 
 init_env_vars()
 init_db()
 
+redirect_if_not_logged_in("id")
+
+if "org_id" not in st.query_params:
+    unauthorized_redirect_to_home("`org_id` not given. Redirecting to home page...")
+
+st.session_state.org_id = int(st.query_params["org_id"])
+
 
 def refresh_tasks():
-    st.session_state.tasks = get_all_tasks()
+    st.session_state.tasks = get_all_tasks(st.session_state.org_id)
 
 
 def refresh_cohorts():
-    st.session_state.cohorts = get_all_cohorts()
+    st.session_state.cohorts = get_all_cohorts_for_org(st.session_state.org_id)
 
 
 def refresh_milestones():
-    st.session_state.milestones = get_all_milestones()
+    st.session_state.milestones = get_all_milestones_for_org(st.session_state.org_id)
 
 
 def refresh_tags():
-    st.session_state.tags = get_all_tags()
+    st.session_state.tags = get_all_tags_for_org(st.session_state.org_id)
 
 
 if "tasks" not in st.session_state:
@@ -296,6 +309,7 @@ def add_verified_task_to_list(final_answer):
         True,
         st.session_state.tests,  # Add this line to include the tests
         st.session_state.milestone["id"] if st.session_state.milestone else None,
+        st.session_state.org_id,
     )
     refresh_tasks()
 
@@ -672,7 +686,8 @@ def show_bulk_upload_tasks_form():
                 model["version"],
                 False,
                 [],
-                milestone["id"] if milestone else None,
+                milestone["id"] if milestone is not None else None,
+                st.session_state.org_id,
             )
 
         refresh_tasks()
@@ -752,7 +767,8 @@ num_tasks = len(st.session_state.tasks)
 
 if num_tasks > 0:
     tasks_heading = f"Tasks ({num_tasks})"
-    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, whether to show code preview, coding language)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time"
+
+tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)"
 
 cohorts_heading = "Cohorts"
 num_cohorts = len(st.session_state.cohorts)
@@ -760,13 +776,18 @@ num_cohorts = len(st.session_state.cohorts)
 if num_cohorts > 0:
     cohorts_heading = f"Cohorts ({num_cohorts})"
 
-tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags", "Analytics"]
+tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags"]
+
+is_hva_org = get_hva_org_id() == st.session_state.org_id
+if is_hva_org:
+    tab_names.append("Analytics")
+
 tabs = st.tabs(tab_names)
 
 
 @st.fragment
 def show_tasks_tab():
-    single_task_col, bulk_upload_tasks_col, _ = st.columns([1, 3, 2])
+    single_task_col, bulk_upload_tasks_col, _ = st.columns([1, 6, 2])
     add_task = single_task_col.button("Add a new task")
     bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
 
@@ -781,12 +802,11 @@ def show_tasks_tab():
 
     st.write(tasks_description)
 
-    st.divider()
-
     if not st.session_state.tasks:
         st.error("No tasks added yet")
         return
 
+    st.divider()
     df = pd.DataFrame(st.session_state.tasks)
     df["coding_language"] = df["coding_language"].apply(
         lambda x: x.split(",") if isinstance(x, str) else x
@@ -832,22 +852,22 @@ def show_tasks_tab():
         filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
         df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
-    coding_languages_filter = cols[3].multiselect(
-        "Filter by coding language",
-        coding_languages_supported,
-        help="Select one or more coding languages to filter tasks",
-    )
+    # coding_languages_filter = cols[3].multiselect(
+    #     "Filter by coding language",
+    #     coding_languages_supported,
+    #     help="Select one or more coding languages to filter tasks",
+    # )
 
-    if coding_languages_filter:
-        df = df[
-            df["coding_language"].apply(
-                lambda x: (
-                    any(lang in x for lang in coding_languages_filter)
-                    if isinstance(x, list)
-                    else False
-                )
-            )
-        ]
+    # if coding_languages_filter:
+    #     df = df[
+    #         df["coding_language"].apply(
+    #             lambda x: (
+    #                 any(lang in x for lang in coding_languages_filter)
+    #                 if isinstance(x, list)
+    #                 else False
+    #             )
+    #         )
+    #     ]
 
     (
         edit_mode_col,
@@ -1003,7 +1023,7 @@ def show_create_cohort_dialog():
             disabled=is_create_disabled,
             help="Enter a cohort name" if is_create_disabled else None,
         ):
-            create_cohort(cohort_name, cohort_df)
+            create_cohort(cohort_name, cohort_df, st.session_state.org_id)
             refresh_cohorts()
             set_toast(f"Cohort `{cohort_name}` created successfully!")
             st.rerun()
@@ -1093,7 +1113,7 @@ def add_milestone(new_milestone, milestone_color):
         st.toast("Milestone already exists")
         return
 
-    insert_milestone_to_db(new_milestone, milestone_color)
+    insert_milestone_to_db(new_milestone, milestone_color, st.session_state.org_id)
     st.toast("New milestone added")
     refresh_milestones()
 
@@ -1208,7 +1228,7 @@ def add_tag(new_tag):
         return
 
     # since we show the tags in reverse order, we need to save them in reverse order
-    create_tag_in_db(new_tag)
+    create_tag_in_db(new_tag, st.session_state.org_id)
     st.toast("New tag added")
     refresh_tags()
 
@@ -1330,5 +1350,6 @@ def show_analytics_tab():
         st.dataframe(usage_stats, use_container_width=True, hide_index=True)
 
 
-with tabs[4]:
-    show_analytics_tab()
+if is_hva_org:
+    with tabs[4]:
+        show_analytics_tab()
