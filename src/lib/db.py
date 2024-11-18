@@ -234,62 +234,6 @@ def get_db_connection():
     return sqlite3.connect(sqlite_db_path)
 
 
-def migrate_chat_history_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check if the column exists and is storing emails
-    cursor.execute(f"PRAGMA table_info({chat_history_table_name})")
-    columns = cursor.fetchall()
-    user_id_column = next((col for col in columns if col[1] == "user_id"), None)
-
-    if user_id_column and user_id_column[2].upper() == "TEXT":
-        # Create temporary table with correct schema
-        cursor.execute(
-            f"""
-            CREATE TABLE temp_chat_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                task_id INTEGER NOT NULL, 
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                is_solved BOOLEAN NOT NULL DEFAULT 0,
-                response_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
-            )
-        """
-        )
-
-        # Copy data with user id lookup
-        cursor.execute(
-            f"""
-            INSERT INTO temp_chat_history (id, user_id, task_id, role, content, is_solved, response_type, timestamp)
-            SELECT 
-                ch.id,
-                u.id,
-                ch.task_id,
-                ch.role,
-                ch.content,
-                ch.is_solved,
-                ch.response_type,
-                ch.timestamp
-            FROM {chat_history_table_name} ch
-            JOIN {users_table_name} u ON ch.user_id = u.email
-        """
-        )
-
-        # Drop old table and rename new one
-        cursor.execute(f"DROP TABLE {chat_history_table_name}")
-        cursor.execute(
-            f"ALTER TABLE temp_chat_history RENAME TO {chat_history_table_name}"
-        )
-
-    conn.commit()
-    conn.close()
-
-
 def init_db():
     # Ensure the database folder exists
     db_folder = os.path.dirname(sqlite_db_path)
