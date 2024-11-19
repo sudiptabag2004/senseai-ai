@@ -58,7 +58,6 @@ def create_organizations_table(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slug TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
-                website_url TEXT,
                 default_logo_color TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )"""
@@ -1518,7 +1517,7 @@ def upsert_user(email: str, conn=None, cursor=None):
 
         # create a new organization for the user (Personal Workspace)
         new_org_id = create_organization(
-            name="Personal Workspace", website_url="", conn=conn, cursor=cursor
+            name="Personal Workspace", conn=conn, cursor=cursor
         )
         add_user_to_organization(
             user_id=user["id"],
@@ -1601,10 +1600,11 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
     # Get all cohorts and groups the user is a member of
     cursor.execute(
         f"""
-        SELECT c.id, c.name, g.id, g.name, ug.role 
+        SELECT c.id, c.name, g.id, g.name, ug.role, o.id, o.name
         FROM {cohorts_table_name} c
         JOIN {groups_table_name} g ON g.cohort_id = c.id
         JOIN {user_groups_table_name} ug ON ug.group_id = g.id
+        JOIN {organizations_table_name} o ON o.id = c.org_id
         WHERE ug.user_id = ?
     """,
         (user_id,),
@@ -1615,9 +1615,15 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
 
     # Convert results into nested dict structure
     cohorts = {}
-    for cohort_id, cohort_name, group_id, group_name, role in results:
+    for cohort_id, cohort_name, group_id, group_name, role, org_id, org_name in results:
         if cohort_id not in cohorts:
-            cohorts[cohort_id] = {"id": cohort_id, "name": cohort_name, "groups": []}
+            cohorts[cohort_id] = {
+                "id": cohort_id,
+                "name": cohort_name,
+                "org_id": org_id,
+                "org_name": org_name,
+                "groups": [],
+            }
 
         cohorts[cohort_id]["groups"].append(
             {"id": group_id, "name": group_name, "role": role}
@@ -1838,7 +1844,7 @@ def drop_user_organizations_table():
         conn.close()
 
 
-def create_organization(name: str, website_url: str, conn=None, cursor=None):
+def create_organization(name: str, conn=None, cursor=None):
     slug = slugify(name) + "-" + str(uuid.uuid4())
     default_logo_color = generate_random_color()
 
@@ -1851,9 +1857,9 @@ def create_organization(name: str, website_url: str, conn=None, cursor=None):
     try:
         cursor.execute(
             f"""INSERT INTO {organizations_table_name} 
-                (slug, name, website_url, default_logo_color)
+                (slug, name, default_logo_color)
                 VALUES (?, ?, ?, ?)""",
-            (slug, name, website_url, default_logo_color),
+            (slug, name, default_logo_color),
         )
         if should_close_conn:
             conn.commit()
@@ -1865,6 +1871,25 @@ def create_organization(name: str, website_url: str, conn=None, cursor=None):
     finally:
         if should_close_conn:
             conn.close()
+
+
+def convert_org_db_to_dict(org: Tuple):
+    return {
+        "id": org[0],
+        "slug": org[1],
+        "name": org[2],
+        "logo_color": org[3],
+    }
+
+
+def get_org_by_id(org_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT * FROM {organizations_table_name} WHERE id = ?", (org_id,))
+    org_details = cursor.fetchone()
+
+    return convert_org_db_to_dict(org_details)
 
 
 def add_user_to_organization(
@@ -1962,7 +1987,7 @@ def seed_organizations_for_each_user():
 
             # create a new org for this user
             new_org_id = create_organization(
-                name="Personal Workspace", website_url="", conn=conn, cursor=cursor
+                name="Personal Workspace", conn=conn, cursor=cursor
             )
             add_user_to_organization(
                 user["id"], new_org_id, "owner", conn=conn, cursor=cursor
@@ -1983,7 +2008,7 @@ def seed_hva_organization():
     try:
         # Create HyperVerge Academy organization
         org_id = create_organization(
-            name="HyperVerge Academy", website_url="", conn=conn, cursor=cursor
+            name="HyperVerge Academy", conn=conn, cursor=cursor
         )
 
         # Get users by email
@@ -2123,59 +2148,15 @@ def delete_tag(tag_id: int):
     conn.close()
 
 
-def migrate_entities_to_org():
+def migrate_org_table():
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Get HyperVerge Academy org id
         cursor.execute(
-            f"SELECT id FROM {organizations_table_name} WHERE name = 'HyperVerge Academy'"
+            f"ALTER TABLE {organizations_table_name} DROP COLUMN website_url"
         )
-        org = cursor.fetchone()
-        if not org:
-            raise Exception("HyperVerge Academy organization not found")
-
-        org_id = org[0]
-
-        # Add org_id column to cohorts table if it doesn't exist
-        cursor.execute(f"PRAGMA table_info({cohorts_table_name})")
-        columns = cursor.fetchall()
-        if "org_id" not in [col[1] for col in columns]:
-            cursor.execute(
-                f"ALTER TABLE {cohorts_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
-            )
-            cursor.execute(f"UPDATE {cohorts_table_name} SET org_id = ?", (org_id,))
-
-        # Add org_id column to tasks table if it doesn't exist
-        cursor.execute(f"PRAGMA table_info({tasks_table_name})")
-        columns = cursor.fetchall()
-        if "org_id" not in [col[1] for col in columns]:
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
-            )
-            cursor.execute(f"UPDATE {tasks_table_name} SET org_id = ?", (org_id,))
-
-        # Add org_id column to milestones table if it doesn't exist
-        cursor.execute(f"PRAGMA table_info({milestones_table_name})")
-        columns = cursor.fetchall()
-        if "org_id" not in [col[1] for col in columns]:
-            cursor.execute(
-                f"ALTER TABLE {milestones_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
-            )
-            cursor.execute(f"UPDATE {milestones_table_name} SET org_id = ?", (org_id,))
-
-        # Add org_id column to tags table if it doesn't exist
-        cursor.execute(f"PRAGMA table_info({tags_table_name})")
-        columns = cursor.fetchall()
-        if "org_id" not in [col[1] for col in columns]:
-            cursor.execute(
-                f"ALTER TABLE {tags_table_name} ADD COLUMN org_id INTEGER REFERENCES {organizations_table_name}(id)"
-            )
-            cursor.execute(f"UPDATE {tags_table_name} SET org_id = ?", (org_id,))
-
         conn.commit()
-
     except Exception as e:
         conn.rollback()
         raise e

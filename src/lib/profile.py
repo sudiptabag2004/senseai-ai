@@ -1,4 +1,5 @@
 from typing import Literal, Dict
+import streamlit as st
 
 
 def get_user_name(user: Dict, name_type: Literal["full", "first"] = "full"):
@@ -26,3 +27,18 @@ def get_display_name_for_user(user: dict, name_type: Literal["full", "first"] = 
         return user["email"]
 
     return user_name
+
+
+def show_placeholder_icon(
+    display_name: str, color: str, dim: int = 150, font_size: int = 72
+):
+    initial = display_name[0].upper()
+
+    st.markdown(
+        f"""
+        <div style="width:{dim}px;height:{dim}px;border-radius:50%;background-color:{color};display:flex;justify-content:center;align-items:center;">
+            <span style="font-size:{font_size}px;color:#333;">{initial}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

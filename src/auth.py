@@ -8,6 +8,7 @@ from lib.db import (
     get_user_by_id,
     get_user_organizations,
     get_db_connection,
+    get_org_by_id,
 )
 from lib.profile import get_display_name_for_user
 
@@ -120,3 +121,15 @@ def login():
 def get_logged_in_user_display_name(name_type: Literal["full", "first"] = "full"):
     user = get_logged_in_user()
     return get_display_name_for_user(user, name_type)
+
+
+def get_org_details_from_org_id(org_id: int):
+    if "org_details" not in st.session_state:
+        st.session_state.org_details = {}
+
+    if org_id in st.session_state.org_details:
+        return st.session_state.org_details[org_id]
+
+    org_details = get_org_by_id(org_id)
+    st.session_state.org_details[org_id] = org_details
+    return org_details

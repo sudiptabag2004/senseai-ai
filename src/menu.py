@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Dict
 import os
 from lib.url import update_query_params
-from auth import get_logged_in_user_display_name
+from auth import get_hva_org_id
 
 
 def menu_header():
@@ -49,27 +49,21 @@ def show_links():
 
 def clear_auth():
     st.query_params.clear()
+    st.session_state.user = None
     st.session_state.email = None
     st.rerun()
 
 
-def menu_footer(is_mentor: bool):
+def menu_footer(selected_cohort: Dict, is_mentor: bool):
     st.sidebar.divider()
 
-    if not is_mentor:
-        if "is_hv_learner" in st.query_params:
-            st.session_state.is_hv_learner = int(st.query_params["is_hv_learner"])
+    if (
+        not is_mentor
+        and selected_cohort is not None
+        and selected_cohort["org_id"] == get_hva_org_id()
+    ):
 
-        if "is_hv_learner" not in st.session_state:
-            st.session_state.is_hv_learner = False
-
-        if st.sidebar.checkbox(
-            "I am a HyperVerge Academy learner",
-            key="is_hv_learner",
-            on_change=update_query_params,
-            args=("is_hv_learner", int),
-        ):
-            show_links()
+        show_links()
 
         st.sidebar.divider()
 
@@ -80,7 +74,7 @@ def menu_footer(is_mentor: bool):
             clear_auth()
 
 
-def authenticated_menu(logged_in_user: Dict, is_mentor: bool):
+def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: bool):
     with st.sidebar:
         # display_name = get_logged_in_user_display_name("first")
         # st.markdown(
@@ -105,7 +99,11 @@ def authenticated_menu(logged_in_user: Dict, is_mentor: bool):
             icon="⚙️",
         )
 
-        if is_mentor:
+        if (
+            is_mentor
+            or selected_cohort is None
+            or selected_cohort["org_id"] != get_hva_org_id()
+        ):
             return
 
         st.divider()
@@ -133,10 +131,10 @@ def authenticated_menu(logged_in_user: Dict, is_mentor: bool):
         )
 
 
-def menu(logged_in_user: Dict, is_mentor: bool):
+def menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: bool):
     menu_header()
     if logged_in_user:
-        authenticated_menu(logged_in_user, is_mentor)
+        authenticated_menu(logged_in_user, selected_cohort, is_mentor)
 
-    menu_footer(is_mentor)
+    menu_footer(selected_cohort, is_mentor)
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

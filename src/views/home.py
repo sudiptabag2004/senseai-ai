@@ -32,23 +32,14 @@ def learner_view():
         show_leaderboard()
 
 
-def mentor_view(mentor_cohorts: List[Dict]):
-    cols = st.columns(3)
+def mentor_view(selected_cohort: Dict):
+    cols = st.columns(2)
 
-    selected_cohort = None
     selected_group = None
     selected_learner = None
 
-    with cols[0]:
-        selected_cohort = st.selectbox(
-            "Select a cohort",
-            mentor_cohorts,
-            format_func=lambda x: x["name"],
-            index=0,
-        )
-
     if selected_cohort:
-        with cols[1]:
+        with cols[0]:
             selected_group = st.selectbox(
                 "Select a group",
                 selected_cohort["groups"],
@@ -58,7 +49,7 @@ def mentor_view(mentor_cohorts: List[Dict]):
 
         if selected_group:
             group_learners = get_cohort_group_learners(selected_group["id"])
-            with cols[2]:
+            with cols[1]:
                 selected_learner = st.selectbox(
                     "Select a learner",
                     group_learners,
@@ -134,48 +125,38 @@ def mentor_view(mentor_cohorts: List[Dict]):
         # delete_tasks(event.selection['rows'])
 
 
-def is_mentor_for_cohort(user_cohort_dict: Dict) -> bool:
-    return (
-        len(
-            [group for group in user_cohort_dict["groups"] if group["role"] == "mentor"]
-        )
-        > 0
-    )
-
-
 def show_home():
     logged_in_user = get_logged_in_user()
 
     user_cohorts = get_user_cohorts(logged_in_user["id"])
 
-    mentor_cohorts = [cohort for cohort in user_cohorts if is_mentor_for_cohort(cohort)]
+    is_mentor = False
 
-    if "is_mentor" in st.query_params:
-        st.session_state.is_mentor = int(st.query_params["is_mentor"])
+    if user_cohorts:
+        if len(user_cohorts) == 1:
+            selected_cohort = user_cohorts[0]
+        else:
+            selected_cohort = st.selectbox(
+                "Select a cohort",
+                user_cohorts,
+                format_func=lambda x: f"{x['name']} ({x['org_name']})",
+                index=0,
+            )
 
-    if "is_mentor" not in st.query_params:
-        st.session_state.is_mentor = False
+        role = selected_cohort["groups"][0]["role"]
+        if role == "mentor":
+            is_mentor = st.toggle("Switch to mentor view", key="is_mentor", value=True)
+            st.markdown("----")
 
-    if st.session_state.is_mentor and not mentor_cohorts:
-        st.error("You are not a mentor for any cohort")
-        st.stop()
+        if is_mentor:
+            mentor_view(selected_cohort)
+        else:
+            learner_view()
 
-    if mentor_cohorts:
-        st.toggle(
-            "Switch to mentor view",
-            key="is_mentor",
-            on_change=update_query_params,
-            args=("is_mentor", int),
-        )
-
-    if st.session_state.is_mentor:
-        st.markdown("----")
-        mentor_view(mentor_cohorts)
     else:
-        if mentor_cohorts:
-            st.info("You are currently seeing the learner view!")
-            st.divider()
+        st.info(
+            "You are currently not a member of any cohort. Please ask your admin to add you to one!"
+        )
+        selected_cohort = None
 
-        learner_view()
-
-    menu(logged_in_user, st.session_state.is_mentor)
+    menu(logged_in_user, selected_cohort, is_mentor)

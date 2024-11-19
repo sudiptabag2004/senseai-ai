@@ -7,7 +7,7 @@ from typing import Dict, Literal
 
 from lib.db import get_user_by_id, update_user as update_user_in_db
 from lib.db import get_badges_by_user_id
-from lib.profile import get_user_name
+from lib.profile import get_user_name, show_placeholder_icon
 from components.badge import (
     show_badge,
     show_share_badge_prompt,
@@ -25,19 +25,13 @@ st.container(height=20, border=False)
 
 def show_profile_icon(user: Dict):
     user_name = get_user_name(user)
-    if user_name:
-        initial = user_name[0].upper()
-    else:
-        initial = user["email"][0].upper()
 
-    st.markdown(
-        f"""
-        <div style="width:150px;height:150px;border-radius:50%;background-color:{user['default_dp_color']};display:flex;justify-content:center;align-items:center;">
-            <span style="font-size:72px;color:#333;">{initial}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if user_name:
+        display_name = user_name
+    else:
+        display_name = user["email"]
+
+    show_placeholder_icon(display_name, user["default_dp_color"])
 
 
 def profile_header(user: Dict):

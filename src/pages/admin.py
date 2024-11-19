@@ -52,10 +52,12 @@ from lib.db import (
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
 from lib.config import coding_languages_supported
+from lib.profile import show_placeholder_icon
 from auth import (
     redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
     get_hva_org_id,
+    get_org_details_from_org_id,
 )
 
 init_env_vars()
@@ -67,6 +69,30 @@ if "org_id" not in st.query_params:
     unauthorized_redirect_to_home("`org_id` not given. Redirecting to home page...")
 
 st.session_state.org_id = int(st.query_params["org_id"])
+st.session_state.org = get_org_details_from_org_id(st.session_state.org_id)
+
+
+def show_logo():
+    show_placeholder_icon(
+        st.session_state.org["name"],
+        st.session_state.org["logo_color"],
+        dim=100,
+        font_size=56,
+    )
+    st.container(height=10, border=False)
+
+
+def show_profile_header():
+    cols = st.columns([1, 7])
+
+    with cols[0]:
+        show_logo()
+
+    with cols[1]:
+        st.subheader(st.session_state.org["name"])
+
+
+show_profile_header()
 
 
 def refresh_tasks():
@@ -134,14 +160,16 @@ def show_toast():
 
 show_toast()
 
-model = st.sidebar.selectbox(
-    "Model",
-    [
-        {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},
-        {"label": "gpt-4o-mini", "version": "gpt-4o-mini-2024-07-18"},
-    ],
-    format_func=lambda val: val["label"],
-)
+# model = st.sidebar.selectbox(
+#     "Model",
+#     [
+#         {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},
+#         {"label": "gpt-4o-mini", "version": "gpt-4o-mini-2024-07-18"},
+#     ],
+#     format_func=lambda val: val["label"],
+# )
+
+model = ({"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},)
 
 
 async def generate_answer_for_task(task_name, task_description):
