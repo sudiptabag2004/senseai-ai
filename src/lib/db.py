@@ -1124,6 +1124,10 @@ def delete_cohort(cohort_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
+        f"DELETE FROM {tasks_table_name} WHERE cohort_id = ?",
+        (cohort_id,),
+    )
+    cursor.execute(
         f"DELETE FROM {user_groups_table_name} WHERE group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
         (cohort_id,),
     )
