@@ -2035,7 +2035,7 @@ def get_user_organizations(user_id: int):
         f"""SELECT uo.org_id, o.name, uo.role
         FROM {user_organizations_table_name} uo
         JOIN organizations o ON uo.org_id = o.id 
-        WHERE uo.user_id = ? ORDER BY o.id DESC""",
+        WHERE uo.user_id = ? ORDER BY uo.id DESC""",
         (user_id,),
     )
     user_organizations = cursor.fetchall()
