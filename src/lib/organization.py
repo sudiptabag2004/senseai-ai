@@ -13,7 +13,6 @@ def show_create_org_dialog(user_id: int):
             org_name = st.text_input(
                 "Organization Name*",
                 key="org_name",
-                value=st.session_state.user["first_name"],
             )
 
         color = generate_random_color()
