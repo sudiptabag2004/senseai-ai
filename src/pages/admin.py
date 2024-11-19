@@ -814,6 +814,12 @@ tabs = st.tabs(tab_names)
 
 @st.fragment
 def show_tasks_tab():
+    if not st.session_state.cohorts:
+        st.error(
+            "No cohorts added yet. Please create a cohort from the `Cohorts` tab first!"
+        )
+        return
+
     cols = st.columns([1.5, 0.6, 3])
     cols[0].selectbox(
         "Select a cohort",
