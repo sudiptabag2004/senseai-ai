@@ -179,7 +179,6 @@ def create_tasks_table(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    org_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
                     answer TEXT NOT NULL,
@@ -188,9 +187,10 @@ def create_tasks_table(cursor):
                     generation_model TEXT NOT NULL,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    milestone_id INTEGER
-                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                    milestone_id INTEGER,
+                    cohort_id INTEGER NOT NULL,
+                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
+                    FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
                 )"""
     )
 
@@ -358,7 +358,7 @@ def store_task(
     verified: bool,
     tests: List[dict],
     milestone_id: int,
-    org_id: int,
+    cohort_id: int,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -368,7 +368,7 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, cohort_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -380,7 +380,7 @@ def store_task(
                 generation_model,
                 verified,
                 milestone_id,
-                org_id,
+                cohort_id,
             ),
         )
 
@@ -501,7 +501,7 @@ def convert_task_db_to_dict(task, tests):
     }
 
 
-def get_all_tasks(org_id: int = None):
+def get_all_tasks(cohort_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -514,9 +514,9 @@ def get_all_tasks(org_id: int = None):
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id"""
 
-    if org_id is not None:
-        query += f" WHERE t.org_id = ?"
-        query_params = (org_id,)
+    if cohort_id is not None:
+        query += f" WHERE t.cohort_id = ?"
+        query_params = (cohort_id,)
     else:
         query_params = ()
 
@@ -1178,7 +1178,7 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
 
             # Create user_group entries for learners
             for _, row in group_df.iterrows():
-                user_id = upsert_user(row["Learner Email"], cursor, conn)["id"]
+                user_id = upsert_user(row["Learner Email"], conn, cursor)["id"]
                 cursor.execute(
                     f"""
                     INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
@@ -1194,7 +1194,7 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
 
             # Create user_group entry for mentor
             mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = upsert_user(mentor_email, cursor, conn)["id"]
+            user_id = upsert_user(mentor_email, conn, cursor)["id"]
             cursor.execute(
                 f"""
                 INSERT INTO {user_groups_table_name} (user_id, group_id, role)
@@ -2148,14 +2148,28 @@ def delete_tag(tag_id: int):
     conn.close()
 
 
-def migrate_org_table():
+def migrate_tasks_table():
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
+        # Add cohort_id column
         cursor.execute(
-            f"ALTER TABLE {organizations_table_name} DROP COLUMN website_url"
+            f"ALTER TABLE {tasks_table_name} ADD COLUMN cohort_id INTEGER REFERENCES {cohorts_table_name}(id)"
         )
+
+        # Get first HyperVerge Academy cohort id
+        cursor.execute(
+            f"SELECT id FROM {cohorts_table_name} WHERE org_id = (SELECT id FROM {organizations_table_name} WHERE name = 'HyperVerge Academy') LIMIT 1"
+        )
+        cohort_id = cursor.fetchone()[0]
+
+        # Set cohort_id for all existing tasks
+        cursor.execute(f"UPDATE {tasks_table_name} SET cohort_id = ?", (cohort_id,))
+
+        # Drop org_id column
+        cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN org_id")
+
         conn.commit()
     except Exception as e:
         conn.rollback()

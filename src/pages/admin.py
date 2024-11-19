@@ -95,12 +95,12 @@ def show_profile_header():
 show_profile_header()
 
 
-def refresh_tasks():
-    st.session_state.tasks = get_all_tasks(st.session_state.org_id)
-
-
 def refresh_cohorts():
     st.session_state.cohorts = get_all_cohorts_for_org(st.session_state.org_id)
+
+
+def refresh_tasks():
+    st.session_state.tasks = get_all_tasks(st.session_state.selected_task_cohort["id"])
 
 
 def refresh_milestones():
@@ -110,9 +110,6 @@ def refresh_milestones():
 def refresh_tags():
     st.session_state.tags = get_all_tags_for_org(st.session_state.org_id)
 
-
-if "tasks" not in st.session_state:
-    refresh_tasks()
 
 if "cohorts" not in st.session_state:
     refresh_cohorts()
@@ -169,7 +166,7 @@ show_toast()
 #     format_func=lambda val: val["label"],
 # )
 
-model = ({"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},)
+model = {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"}
 
 
 async def generate_answer_for_task(task_name, task_description):
@@ -337,7 +334,7 @@ def add_verified_task_to_list(final_answer):
         True,
         st.session_state.tests,  # Add this line to include the tests
         st.session_state.milestone["id"] if st.session_state.milestone else None,
-        st.session_state.org_id,
+        st.session_state.selected_task_cohort["id"],
     )
     refresh_tasks()
 
@@ -450,7 +447,7 @@ def add_tests_to_task(
     # st.session_state.tests
 
 
-def update_tests_for_task_in_db(task_id, tests, toast_message: str = None):
+def update_tests_for_task_in_db(task_id: int, tests, toast_message: str = None):
     update_tests_for_task(task_id, tests)
     refresh_tasks()
     reset_tests()
@@ -458,7 +455,10 @@ def update_tests_for_task_in_db(task_id, tests, toast_message: str = None):
 
 
 @st.dialog("Edit tests for task")
-def edit_tests_for_task(df, task_id):
+def edit_tests_for_task(
+    df,
+    task_id,
+):
     task_details = df[df["id"] == task_id].iloc[0]
     if not st.session_state.tests:
         st.session_state.tests = deepcopy(task_details["tests"])
@@ -484,7 +484,9 @@ def edit_tests_for_task(df, task_id):
         ),
     ):
         update_tests_for_task_in_db(
-            task_id, st.session_state.tests, toast_message="Tests updated successfully!"
+            task_id,
+            st.session_state.tests,
+            toast_message="Tests updated successfully!",
         )
         st.rerun()
 
@@ -715,7 +717,7 @@ def show_bulk_upload_tasks_form():
                 False,
                 [],
                 milestone["id"] if milestone is not None else None,
-                st.session_state.org_id,
+                st.session_state.selected_task_cohort["id"],
             )
 
         refresh_tasks()
@@ -729,12 +731,16 @@ def delete_tasks_from_list(task_ids):
 
 
 @st.dialog("Delete tasks")
-def show_tasks_delete_confirmation(task_ids):
+def show_tasks_delete_confirmation(
+    task_ids,
+):
     st.write("Are you sure you want to delete the selected tasks?")
 
     confirm_col, cancel_col, _, _ = st.columns([1, 1, 2, 2])
     if confirm_col.button("Yes", use_container_width=True):
-        delete_tasks_from_list(task_ids)
+        delete_tasks_from_list(
+            task_ids,
+        )
         st.rerun()
 
     if cancel_col.button("No", use_container_width=True, type="primary"):
@@ -742,7 +748,9 @@ def show_tasks_delete_confirmation(task_ids):
 
 
 def update_tasks_with_new_value(
-    task_ids: List[int], column_to_update: str, new_value: str
+    task_ids: List[int],
+    column_to_update: str,
+    new_value: str,
 ):
     update_column_for_task_ids(task_ids, column_to_update, new_value)
     refresh_tasks()
@@ -789,22 +797,13 @@ def show_task_edit_dialog(task_ids):
 
 
 tasks_heading = "Tasks"
-tasks_description = ""
-
-num_tasks = len(st.session_state.tasks)
-
-if num_tasks > 0:
-    tasks_heading = f"Tasks ({num_tasks})"
-
-tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)"
-
 cohorts_heading = "Cohorts"
 num_cohorts = len(st.session_state.cohorts)
 
 if num_cohorts > 0:
     cohorts_heading = f"Cohorts ({num_cohorts})"
 
-tab_names = [tasks_heading, cohorts_heading, "Milestones", "Tags"]
+tab_names = [cohorts_heading, tasks_heading, "Milestones", "Tags"]
 
 is_hva_org = get_hva_org_id() == st.session_state.org_id
 if is_hva_org:
@@ -815,9 +814,20 @@ tabs = st.tabs(tab_names)
 
 @st.fragment
 def show_tasks_tab():
-    single_task_col, bulk_upload_tasks_col, _ = st.columns([1, 6, 2])
-    add_task = single_task_col.button("Add a new task")
-    bulk_upload_tasks = bulk_upload_tasks_col.button("Bulk upload tasks")
+    cols = st.columns([1.5, 0.6, 3])
+    cols[0].selectbox(
+        "Select a cohort",
+        st.session_state.cohorts,
+        format_func=lambda row: row["name"],
+        key="selected_task_cohort",
+        on_change=refresh_tasks,
+    )
+
+    cols[1].container(height=10, border=False)
+    add_task = cols[1].button("Add a new task")
+
+    cols[2].container(height=10, border=False)
+    bulk_upload_tasks = cols[2].button("Bulk upload tasks")
 
     if add_task:
         reset_tests()
@@ -828,13 +838,18 @@ def show_tasks_tab():
     if bulk_upload_tasks:
         show_bulk_upload_tasks_form()
 
-    st.write(tasks_description)
+    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)"
+
+    with st.expander("User Guide"):
+        st.write(tasks_description)
+
+    if "tasks" not in st.session_state:
+        refresh_tasks()
 
     if not st.session_state.tasks:
         st.error("No tasks added yet")
         return
 
-    st.divider()
     df = pd.DataFrame(st.session_state.tasks)
     df["coding_language"] = df["coding_language"].apply(
         lambda x: x.split(",") if isinstance(x, str) else x
@@ -975,16 +990,23 @@ def show_tasks_tab():
             task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
             if delete_col.button("Delete tasks"):
                 # import ipdb; ipdb.set_trace()
-                show_tasks_delete_confirmation(task_ids)
+                show_tasks_delete_confirmation(
+                    task_ids,
+                )
 
             if edit_col.button("Edit task attributes"):
                 # import ipdb; ipdb.set_trace()
-                show_task_edit_dialog(task_ids)
+                show_task_edit_dialog(
+                    task_ids,
+                )
 
             if add_tests_col.button("Add/Edit tests"):
                 if len(task_ids) == 1:
                     reset_tests()
-                    edit_tests_for_task(df, task_ids[0])
+                    edit_tests_for_task(
+                        df,
+                        task_ids[0],
+                    )
                 else:
                     st.error("Please select only one task to edit tests for.")
 
@@ -1013,7 +1035,7 @@ def show_tasks_tab():
             )
 
 
-with tabs[0]:
+with tabs[1]:
     show_tasks_tab()
 
 if "cohort_uploader_key" not in st.session_state:
@@ -1126,7 +1148,7 @@ def show_cohorts_tab():
         st.dataframe(learners_df, hide_index=True, use_container_width=True)
 
 
-with tabs[1]:
+with tabs[0]:
     show_cohorts_tab()
 
 
