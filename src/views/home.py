@@ -133,9 +133,11 @@ def show_home():
     is_mentor = False
 
     if user_cohorts:
-        if len(user_cohorts) == 1:
-            selected_cohort = user_cohorts[0]
-        else:
+        # if len(user_cohorts) == 1:
+        #     selected_cohort = user_cohorts[0]
+        # else:
+        cols = st.columns(2)
+        with cols[0]:
             selected_cohort = st.selectbox(
                 "Select a cohort",
                 user_cohorts,

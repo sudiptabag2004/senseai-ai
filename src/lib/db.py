@@ -1858,7 +1858,7 @@ def create_organization(name: str, conn=None, cursor=None):
         cursor.execute(
             f"""INSERT INTO {organizations_table_name} 
                 (slug, name, default_logo_color)
-                VALUES (?, ?, ?, ?)""",
+                VALUES (?, ?, ?)""",
             (slug, name, default_logo_color),
         )
         if should_close_conn:
