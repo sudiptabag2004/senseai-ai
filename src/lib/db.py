@@ -1219,6 +1219,62 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
         conn.close()
 
 
+def add_members_to_cohort(cohort_id: int, df: pd.DataFrame):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Create groups and user_group entries
+        for group_name, group_df in df.groupby("Group Name"):
+            # Create group
+            cursor.execute(
+                f"""
+                INSERT INTO {groups_table_name} (cohort_id, name)
+                VALUES (?, ?)
+                """,
+                (cohort_id, group_name),
+            )
+            group_id = cursor.lastrowid
+
+            # Create user_group entries for learners
+            for _, row in group_df.iterrows():
+                user_id = upsert_user(row["Learner Email"], conn, cursor)["id"]
+                cursor.execute(
+                    f"""
+                    INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        group_id,
+                        group_role_learner,
+                        row["Learner ID"],
+                    ),
+                )
+
+            # Create user_group entry for mentor
+            mentor_email = group_df["Mentor Email"].iloc[0]
+            user_id = upsert_user(mentor_email, conn, cursor)["id"]
+            cursor.execute(
+                f"""
+                INSERT INTO {user_groups_table_name} (user_id, group_id, role)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    user_id,
+                    group_id,
+                    group_role_mentor,
+                ),
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
 def add_user_to_cohort_group(user_id: int, group_id: int, role: str):
     conn = get_db_connection()
     cursor = conn.cursor()

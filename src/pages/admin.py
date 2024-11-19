@@ -48,6 +48,7 @@ from lib.db import (
     delete_milestone as delete_milestone_from_db,
     update_milestone_color as update_milestone_color_in_db,
     get_all_cv_review_usage,
+    add_members_to_cohort,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
@@ -1085,6 +1086,46 @@ def show_create_cohort_dialog():
             st.rerun()
 
 
+@st.dialog("Add Members to Cohort")
+def show_add_members_to_cohort_dialog(cohort_id: int, df: pd.DataFrame):
+    columns = ["Group Name", "Learner Email", "Learner ID", "Mentor Email"]
+    uploaded_file = st.file_uploader(
+        f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])}",
+        type="csv",
+        key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
+    )
+
+    if uploaded_file:
+        add_members_df = pd.read_csv(uploaded_file)
+
+        # if any of the emails in the uploaded file are already in the cohort,
+        # throw an error
+        if any(
+            email in df["Learner Email"].tolist()
+            or email in df["Mentor Email"].tolist()
+            for email in add_members_df["Learner Email"]
+        ):
+            st.error(
+                "The uploaded file contains learners or mentors that are already in the cohort"
+            )
+            return
+
+        if add_members_df.columns.tolist() != columns:
+            st.error("The uploaded file does not have the correct columns.")
+            return
+
+        st.dataframe(add_members_df, use_container_width=True)
+
+        if st.button(
+            "Add",
+            type="primary",
+        ):
+            add_members_to_cohort(cohort_id, add_members_df)
+            refresh_cohorts()
+            set_toast(f"Members added to cohort successfully!")
+            st.rerun()
+
+
 @st.fragment
 def show_cohorts_tab():
     create_cohort_col, _ = st.columns([2, 8])
@@ -1135,6 +1176,11 @@ def show_cohorts_tab():
 
         # Display the DataFrame
         st.subheader("Cohort Overview")
+
+        if st.button("Add Members"):
+            update_cohort_uploader_key()
+            show_add_members_to_cohort_dialog(selected_cohort["id"], df)
+
         st.dataframe(df, hide_index=True, use_container_width=True)
 
     else:
