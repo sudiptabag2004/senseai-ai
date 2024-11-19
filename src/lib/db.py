@@ -1182,7 +1182,9 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
 
             # Create user_group entries for learners
             for _, row in group_df.iterrows():
-                user_id = upsert_user(row["Learner Email"], conn, cursor)["id"]
+                user_id = insert_or_return_user(row["Learner Email"], conn, cursor)[
+                    "id"
+                ]
                 cursor.execute(
                     f"""
                     INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
@@ -1198,7 +1200,7 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
 
             # Create user_group entry for mentor
             mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = upsert_user(mentor_email, conn, cursor)["id"]
+            user_id = insert_or_return_user(mentor_email, conn, cursor)["id"]
             cursor.execute(
                 f"""
                 INSERT INTO {user_groups_table_name} (user_id, group_id, role)
@@ -1238,7 +1240,9 @@ def add_members_to_cohort(cohort_id: int, df: pd.DataFrame):
 
             # Create user_group entries for learners
             for _, row in group_df.iterrows():
-                user_id = upsert_user(row["Learner Email"], conn, cursor)["id"]
+                user_id = insert_or_return_user(row["Learner Email"], conn, cursor)[
+                    "id"
+                ]
                 cursor.execute(
                     f"""
                     INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
@@ -1254,7 +1258,7 @@ def add_members_to_cohort(cohort_id: int, df: pd.DataFrame):
 
             # Create user_group entry for mentor
             mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = upsert_user(mentor_email, conn, cursor)["id"]
+            user_id = insert_or_return_user(mentor_email, conn, cursor)["id"]
             cursor.execute(
                 f"""
                 INSERT INTO {user_groups_table_name} (user_id, group_id, role)
@@ -1539,7 +1543,7 @@ def convert_user_db_to_dict(user: Tuple) -> Dict:
     }
 
 
-def upsert_user(email: str, conn=None, cursor=None):
+def insert_or_return_user(email: str, conn=None, cursor=None):
     should_close_conn = False
     if conn is None:
         conn = get_db_connection()
@@ -1576,13 +1580,9 @@ def upsert_user(email: str, conn=None, cursor=None):
         user = convert_user_db_to_dict(cursor.fetchone())
 
         # create a new organization for the user (Personal Workspace)
-        new_org_id = create_organization(
-            name="Personal Workspace", conn=conn, cursor=cursor
-        )
-        add_user_to_organization(
+        create_organization_with_user(
+            org_name="Personal Workspace",
             user_id=user["id"],
-            organization_id=new_org_id,
-            role="owner",
             conn=conn,
             cursor=cursor,
         )
@@ -1904,9 +1904,9 @@ def drop_user_organizations_table():
         conn.close()
 
 
-def create_organization(name: str, conn=None, cursor=None):
+def create_organization(name: str, color: str = None, conn=None, cursor=None):
     slug = slugify(name) + "-" + str(uuid.uuid4())
-    default_logo_color = generate_random_color()
+    default_logo_color = color or generate_random_color()
 
     should_close_conn = False
     if conn is None:
@@ -1933,6 +1933,14 @@ def create_organization(name: str, conn=None, cursor=None):
             conn.close()
 
 
+def create_organization_with_user(
+    org_name: str, user_id: int, color: str = None, conn=None, cursor=None
+):
+    org_id = create_organization(org_name, color, conn, cursor)
+    add_user_to_org_by_user_id(user_id, org_id, "owner", conn, cursor)
+    return org_id
+
+
 def convert_org_db_to_dict(org: Tuple):
     return {
         "id": org[0],
@@ -1952,9 +1960,9 @@ def get_org_by_id(org_id: int):
     return convert_org_db_to_dict(org_details)
 
 
-def add_user_to_organization(
+def add_user_to_org_by_user_id(
     user_id: int,
-    organization_id: int,
+    org_id: int,
     role: Literal["owner", "admin"],
     conn=None,
     cursor=None,
@@ -1970,7 +1978,7 @@ def add_user_to_organization(
             f"""INSERT INTO {user_organizations_table_name}
                 (user_id, org_id, role)
                 VALUES (?, ?, ?)""",
-            (user_id, organization_id, role),
+            (user_id, org_id, role),
         )
         if should_close_conn:
             conn.commit()
@@ -1982,6 +1990,32 @@ def add_user_to_organization(
     finally:
         if should_close_conn:
             conn.close()
+
+
+def add_user_to_org_by_email(
+    email: str,
+    org_id: int,
+    role: Literal["owner", "admin"],
+):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        user = insert_or_return_user(email, conn, cursor)
+
+        cursor.execute(
+            f"""INSERT INTO {user_organizations_table_name}
+                (user_id, org_id, role)
+                VALUES (?, ?, ?)""",
+            (user["id"], org_id, role),
+        )
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def convert_user_organization_db_to_dict(user_organization: Tuple):
@@ -1998,17 +2032,44 @@ def get_user_organizations(user_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        f"""SELECT uo.org_id, o.name 
+        f"""SELECT uo.org_id, o.name, uo.role
         FROM {user_organizations_table_name} uo
         JOIN organizations o ON uo.org_id = o.id 
-        WHERE uo.user_id = ?""",
+        WHERE uo.user_id = ? ORDER BY o.id DESC""",
         (user_id,),
     )
     user_organizations = cursor.fetchall()
 
     return [
-        {"id": user_organization[0], "name": user_organization[1]}
+        {
+            "id": user_organization[0],
+            "name": user_organization[1],
+            "role": user_organization[2],
+        }
         for user_organization in user_organizations
+    ]
+
+
+def get_org_users(org_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""SELECT uo.user_id, u.email, uo.role 
+        FROM {user_organizations_table_name} uo
+        JOIN users u ON uo.user_id = u.id 
+        WHERE uo.org_id = ?""",
+        (org_id,),
+    )
+    org_users = cursor.fetchall()
+
+    return [
+        {
+            "id": org_user[0],
+            "email": org_user[1],
+            "role": org_user[2],
+        }
+        for org_user in org_users
     ]
 
 
@@ -2023,77 +2084,6 @@ def get_all_user_organizations():
         convert_user_organization_db_to_dict(user_organization)
         for user_organization in user_organizations
     ]
-
-
-def seed_organizations_for_each_user():
-    users = get_all_users()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    user_organizations = get_all_user_organizations()
-    user_ids_with_org = set(
-        [user_organization["user_id"] for user_organization in user_organizations]
-    )
-
-    try:
-        for user in users:
-            # org already exists for this user
-            if user["id"] in user_ids_with_org:
-                print("Skipping user", user["id"])
-                continue
-
-            print("Creating org for user", user["id"])
-
-            # create a new org for this user
-            new_org_id = create_organization(
-                name="Personal Workspace", conn=conn, cursor=cursor
-            )
-            add_user_to_organization(
-                user["id"], new_org_id, "owner", conn=conn, cursor=cursor
-            )
-
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
-
-
-def seed_hva_organization():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        # Create HyperVerge Academy organization
-        org_id = create_organization(
-            name="HyperVerge Academy", conn=conn, cursor=cursor
-        )
-
-        # Get users by email
-        cursor.execute(
-            f"SELECT id FROM {users_table_name} WHERE email = ?",
-            ("gayathri@hyperverge.co",),
-        )
-        owner_id = cursor.fetchone()[0]
-
-        cursor.execute(
-            f"SELECT id FROM {users_table_name} WHERE email = ?",
-            ("amandalmia18@gmail.com",),
-        )
-        admin_id = cursor.fetchone()[0]
-
-        # Add users to organization with roles
-        add_user_to_organization(owner_id, org_id, "owner", conn=conn, cursor=cursor)
-        add_user_to_organization(admin_id, org_id, "admin", conn=conn, cursor=cursor)
-
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
 
 
 def drop_task_tags_table():
@@ -2206,33 +2196,3 @@ def delete_tag(tag_id: int):
     cursor.execute(f"DELETE FROM {tags_table_name} WHERE id = ?", (tag_id,))
     conn.commit()
     conn.close()
-
-
-def migrate_tasks_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        # Add cohort_id column
-        cursor.execute(
-            f"ALTER TABLE {tasks_table_name} ADD COLUMN cohort_id INTEGER REFERENCES {cohorts_table_name}(id)"
-        )
-
-        # Get first HyperVerge Academy cohort id
-        cursor.execute(
-            f"SELECT id FROM {cohorts_table_name} WHERE org_id = (SELECT id FROM {organizations_table_name} WHERE name = 'HyperVerge Academy') LIMIT 1"
-        )
-        cohort_id = cursor.fetchone()[0]
-
-        # Set cohort_id for all existing tasks
-        cursor.execute(f"UPDATE {tasks_table_name} SET cohort_id = ?", (cohort_id,))
-
-        # Drop org_id column
-        cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN org_id")
-
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()

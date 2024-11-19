@@ -7,7 +7,7 @@ from functools import partial
 import numpy as np
 import streamlit as st
 import json
-import time
+from email_validator import validate_email, EmailNotValidError
 
 st.set_page_config(
     page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed"
@@ -49,11 +49,14 @@ from lib.db import (
     update_milestone_color as update_milestone_color_in_db,
     get_all_cv_review_usage,
     add_members_to_cohort,
+    get_org_users,
+    add_user_to_org_by_email,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
 from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
+from lib.toast import set_toast, show_toast
 from auth import (
     redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
@@ -134,26 +137,6 @@ if "ai_answer" not in st.session_state:
 
 if "final_answer" not in st.session_state:
     st.session_state.final_answer = ""
-
-if "show_toast" not in st.session_state:
-    st.session_state.show_toast = False
-
-if "toast_message" not in st.session_state:
-    st.session_state.toast_message = ""
-
-
-def set_toast(message: str):
-    if not message:
-        return
-
-    st.session_state.show_toast = True
-    st.session_state.toast_message = message
-
-
-def show_toast():
-    if st.session_state.show_toast:
-        st.toast(st.session_state.toast_message)
-        st.session_state.show_toast = False
 
 
 show_toast()
@@ -810,6 +793,8 @@ is_hva_org = get_hva_org_id() == st.session_state.org_id
 if is_hva_org:
     tab_names.append("Analytics")
 
+tab_names.append("Settings")
+
 tabs = st.tabs(tab_names)
 
 
@@ -1455,3 +1440,45 @@ def show_analytics_tab():
 if is_hva_org:
     with tabs[4]:
         show_analytics_tab()
+
+
+@st.dialog("Add Member")
+def show_add_member_dialog():
+    with st.form("add_member_form", border=False):
+        member_email = st.text_input("Enter email")
+        role = st.selectbox("Select role", ["admin"], disabled=True)
+
+        submit_button = st.form_submit_button(
+            "Add Member",
+            use_container_width=True,
+            type="primary",
+        )
+        if submit_button:
+            try:
+                # Check that the email address is valid
+                member_email = validate_email(member_email)
+                add_user_to_org_by_email(
+                    member_email.normalized, st.session_state.org_id, role
+                )
+                set_toast("Member added successfully")
+                st.rerun()
+            except EmailNotValidError as e:
+                # The exception message is human-readable explanation of why it's
+                # not a valid (or deliverable) email address.
+                st.error("Invalid email")
+
+
+def show_settings_tab():
+    st.markdown("#### Members")
+
+    st.button("Add Member", on_click=show_add_member_dialog)
+
+    org_users = get_org_users(st.session_state.org_id)
+    df = pd.DataFrame(org_users)
+    st.dataframe(
+        df, use_container_width=True, hide_index=True, column_order=["email", "role"]
+    )
+
+
+with tabs[-1]:
+    show_settings_tab()

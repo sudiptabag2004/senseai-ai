@@ -1,7 +1,8 @@
 import streamlit as st
 from typing import Dict
 import os
-from lib.url import update_query_params
+from lib.organization import show_create_org_dialog
+from lib.toast import set_toast, show_toast
 from auth import get_hva_org_id
 
 
@@ -88,11 +89,22 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
             label="Your Profile",
             icon="👔",
         )
-        selected_org = st.sidebar.selectbox(
+        cols = st.sidebar.columns([6, 1])
+        selected_org = cols[0].selectbox(
             f'`{st.session_state["email"]}`',
             st.session_state.user_orgs,
-            format_func=lambda val: val["name"],
+            format_func=lambda val: f"{val['name']} ({val['role']})",
         )
+
+        cols[1].container(height=10, border=False)
+        cols[1].button(
+            "",
+            icon="➕",
+            help="Create an organization",
+            on_click=show_create_org_dialog,
+            args=(logged_in_user["id"],),
+        )
+
         st.page_link(
             f"{os.environ.get('APP_URL')}/admin?id={logged_in_user['id']}&org_id={selected_org['id']}",
             label="Admin Panel",
@@ -132,6 +144,7 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
 
 
 def menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: bool):
+    show_toast()
     menu_header()
     if logged_in_user:
         authenticated_menu(logged_in_user, selected_cohort, is_mentor)

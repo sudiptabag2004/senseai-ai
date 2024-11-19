@@ -3,7 +3,7 @@ import time
 from typing import Literal, Dict
 from email_validator import validate_email, EmailNotValidError
 from lib.db import (
-    upsert_user,
+    insert_or_return_user,
     get_user_by_email,
     get_user_by_id,
     get_user_organizations,
@@ -13,16 +13,20 @@ from lib.db import (
 from lib.profile import get_display_name_for_user
 
 
+def update_user_orgs(user: Dict):
+    st.session_state.user_orgs = get_user_organizations(user["id"])
+
+
 def set_logged_in_user_orgs(user: Dict):
     if "user_orgs" in st.session_state:
         return
 
-    st.session_state.user_orgs = get_user_organizations(user["id"])
+    update_user_orgs(user)
 
 
 def login_or_signup_user(email: str):
     st.session_state.email = email
-    st.session_state.user = upsert_user(email)
+    st.session_state.user = insert_or_return_user(email)
     set_logged_in_user_orgs(st.session_state.user)
 
 
