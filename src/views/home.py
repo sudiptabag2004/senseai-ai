@@ -17,7 +17,7 @@ from menu import menu
 from views.roadmap import show_roadmap
 
 
-def learner_view():
+def learner_view(selected_cohort: Dict):
     if "view" in st.query_params:
         st.session_state.view = st.query_params["view"]
     else:
@@ -25,11 +25,11 @@ def learner_view():
 
     cols = st.columns([4, 0.1, 3])
     with cols[0]:
-        show_roadmap()
+        show_roadmap(selected_cohort["id"])
 
     with cols[-1]:
-        show_streak()
-        show_leaderboard()
+        show_streak(selected_cohort["id"])
+        show_leaderboard(selected_cohort["id"])
 
 
 def mentor_view(selected_cohort: Dict):
@@ -60,7 +60,9 @@ def mentor_view(selected_cohort: Dict):
         if not selected_learner:
             return
 
-        all_milestone_data = get_all_milestone_progress(selected_learner["id"])
+        all_milestone_data = get_all_milestone_progress(
+            selected_learner["id"], cohort_id=selected_cohort["id"]
+        )
         rows = []
 
         for milestone_data in all_milestone_data:
@@ -119,7 +121,7 @@ def mentor_view(selected_cohort: Dict):
         milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
         df_actions.link_button(
             "Yes",
-            f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&mode=review",
+            f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&mode=review",
         )
         # print()
         # delete_tasks(event.selection['rows'])
@@ -153,7 +155,7 @@ def show_home():
         if is_mentor:
             mentor_view(selected_cohort)
         else:
-            learner_view()
+            learner_view(selected_cohort)
 
     else:
         st.info(

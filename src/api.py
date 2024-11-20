@@ -24,8 +24,8 @@ async def get_chat_history() -> List[ChatMessage]:
     "/tasks",
     response_model=List[Task],
 )
-async def get_tasks() -> List[Task]:
-    return get_all_tasks()
+async def get_tasks(cohort_id: int = None) -> List[Task]:
+    return get_all_tasks(cohort_id=cohort_id)
 
 
 @app.get(
@@ -33,9 +33,10 @@ async def get_tasks() -> List[Task]:
     response_model=Streaks,
 )
 async def get_all_streaks(
+    cohort_id: int = None,
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> Streaks:
-    streak_data = get_streaks(view=view)
+    streak_data = get_streaks(view=view, cohort_id=cohort_id)
     # only retain the count
     return [
         (value["user"]["id"], value["user"]["email"], value["count"])
@@ -49,6 +50,7 @@ async def get_all_streaks(
 )
 async def get_tasks_completed_for_user(
     user_id: int,
+    cohort_id: int,
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> List[int]:
-    return get_solved_tasks_for_user(user_id, view)
+    return get_solved_tasks_for_user(user_id, cohort_id, view)

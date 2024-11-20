@@ -32,18 +32,20 @@ def show_user_info(name, email, streak, tasks, rank, show_separator=False):
         )
 
 
-def get_top_performers(view_type: LeaderboardViewType):
+def get_top_performers(view_type: LeaderboardViewType, cohort_id: int):
     if view_type not in leaderboard_view_types:
         raise ValueError(f"Invalid view type: {view_type}")
 
-    streaks = get_streaks(view_type)
+    streaks = get_streaks(view_type, cohort_id=cohort_id)
 
     users_data = []
     for streak_data in streaks:
         if not streak_data["count"]:
             continue
 
-        solved_tasks = get_solved_tasks_for_user(streak_data["user"]["id"], view_type)
+        solved_tasks = get_solved_tasks_for_user(
+            streak_data["user"]["id"], cohort_id, view_type
+        )
         tasks_completed = len(solved_tasks)
         users_data.append(
             (
@@ -80,7 +82,7 @@ def get_top_performers(view_type: LeaderboardViewType):
     return top_performers
 
 
-def show_leaderboard():
+def show_leaderboard(cohort_id: int):
     set_box_style()
 
     with st.container(border=True):
@@ -90,7 +92,9 @@ def show_leaderboard():
 
         for tab_index, tab in enumerate(tabs):
             with tab:
-                top_performers = get_top_performers(leaderboard_view_types[tab_index])
+                top_performers = get_top_performers(
+                    leaderboard_view_types[tab_index], cohort_id
+                )
                 is_logged_in_user_top_performer = False
 
                 for index, (
@@ -114,11 +118,14 @@ def show_leaderboard():
                 if not is_logged_in_user_top_performer:
                     logged_in_user = get_logged_in_user()
 
-                    streak_count = len(get_user_streak(logged_in_user["id"])) or 0
+                    streak_count = (
+                        len(get_user_streak(logged_in_user["id"], cohort_id)) or 0
+                    )
                     tasks_completed = (
                         len(
                             get_solved_tasks_for_user(
                                 logged_in_user["id"],
+                                cohort_id,
                                 leaderboard_view_types[tab_index],
                             ),
                         )

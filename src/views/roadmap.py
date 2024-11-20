@@ -1,3 +1,4 @@
+from typing import Dict
 import streamlit as st
 import pandas as pd
 from lib.db import (
@@ -9,27 +10,33 @@ from components.milestone_learner_view import show_milestone_card
 from auth import get_logged_in_user
 
 
-def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_id: int = None):
-    st.write("Select a task by clicking beside the `id` of the task")
+def show_empty_error_message(is_review_mode: bool = False):
+    if is_review_mode:
+        error_message = "No tasks added yet!"
+    else:
+        error_message = "No tasks added yet. Ask your admin to add tasks!"
 
+    st.error(error_message)
+
+
+def show_roadmap_as_list(
+    tasks,
+    is_review_mode: bool = False,
+    learner_id: int = None,
+):
     df = pd.DataFrame(tasks)
 
-    if is_review_mode:
-        empty_error_message = "No tasks added yet."
-    else:
-        empty_error_message = "No tasks added yet. Ask your mentors/teachers to add tasks for you to solve."
-
     if not len(df):
-        st.error(empty_error_message)
-        st.stop()
+        return show_empty_error_message(is_review_mode)
 
     df["status"] = df.apply(lambda x: "✅" if x["completed"] else "", axis=1)
 
     filtered_df = df[df["verified"]][["status", "id", "name", "description", "tags"]]
 
     if not len(filtered_df):
-        st.error(empty_error_message)
-        st.stop()
+        return show_empty_error_message(is_review_mode)
+
+    st.write("Select a task by clicking beside the `id` of the task")
 
     df_actions = st.container(border=True)
 
@@ -73,8 +80,15 @@ def show_roadmap_as_list(tasks, is_review_mode: bool = False, learner_id: int = 
         # delete_tasks(event.selection['rows'])
 
 
-def show_roadmap_by_milestone(all_tasks, user_id: int):
-    all_milestone_data = get_all_milestone_progress(user_id)
+def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int):
+    if not all_tasks:
+        return show_empty_error_message()
+
+    all_milestone_data = get_all_milestone_progress(user_id, cohort_id)
+
+    if not all_milestone_data:
+        return show_empty_error_message()
+
     for milestone_data in all_milestone_data:
         milestone_tasks = [
             task
@@ -100,9 +114,11 @@ def update_task_view():
     st.query_params.view = "list" if st.session_state.show_list_view else "milestone"
 
 
-def get_tasks_with_completion_status(user_id: int, milestone_id: int = None):
-    all_tasks = get_all_verified_tasks(milestone_id)
-    solved_task_ids = get_solved_tasks_for_user(user_id)
+def get_tasks_with_completion_status(
+    user_id: int, cohort_id: int, milestone_id: int = None
+):
+    all_tasks = get_all_verified_tasks(cohort_id, milestone_id)
+    solved_task_ids = get_solved_tasks_for_user(user_id, cohort_id)
 
     for task in all_tasks:
         if task["id"] in solved_task_ids:
@@ -113,9 +129,9 @@ def get_tasks_with_completion_status(user_id: int, milestone_id: int = None):
     return all_tasks
 
 
-def show_roadmap():
+def show_roadmap(cohort_id: int):
     logged_in_user = get_logged_in_user()
-    all_tasks = get_tasks_with_completion_status(logged_in_user["id"])
+    all_tasks = get_tasks_with_completion_status(logged_in_user["id"], cohort_id)
 
     st.toggle(
         "Show List View",
@@ -127,4 +143,6 @@ def show_roadmap():
     if st.session_state.show_list_view:
         show_roadmap_as_list(all_tasks)
     else:
-        show_roadmap_by_milestone(all_tasks, user_id=logged_in_user["id"])
+        show_roadmap_by_milestone(
+            all_tasks, user_id=logged_in_user["id"], cohort_id=cohort_id
+        )
