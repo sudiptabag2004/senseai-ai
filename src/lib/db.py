@@ -497,6 +497,9 @@ def convert_task_db_to_dict(task, tests):
         "timestamp": task[9],
         "milestone_id": task[10],
         "milestone_name": task[11],
+        "cohort_id": task[12],
+        "cohort_name": task[13],
+        "org_name": task[14],
         "tests": tests,
     }
 
@@ -508,11 +511,13 @@ def get_all_tasks(cohort_id: int = None):
     query = f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.cohort_id, c.name as cohort_name, o.name as org_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
-    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id"""
+    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
+    LEFT JOIN {cohorts_table_name} c ON t.cohort_id = c.id
+    LEFT JOIN {organizations_table_name} o ON c.org_id = o.id"""
 
     if cohort_id is not None:
         query += f" WHERE t.cohort_id = ?"
@@ -552,8 +557,8 @@ def get_all_tasks(cohort_id: int = None):
     return tasks_dicts
 
 
-def get_all_verified_tasks(milestone_id: int):
-    tasks = get_all_tasks()
+def get_all_verified_tasks(cohort_id: int, milestone_id: int):
+    tasks = get_all_tasks(cohort_id)
     verified_tasks = [task for task in tasks if task["verified"]]
     if milestone_id:
         return [task for task in verified_tasks if task["milestone_id"] == milestone_id]
@@ -568,11 +573,13 @@ def get_task_by_id(task_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.cohort_id, c.name as cohort_name, o.name as org_name
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
+    LEFT JOIN {cohorts_table_name} c ON t.cohort_id = c.id
+    LEFT JOIN {organizations_table_name} o ON c.org_id = o.id
     WHERE t.id = ?
     GROUP BY t.id
     """,
@@ -792,7 +799,9 @@ def get_task_chat_history_for_user(task_id: int, user_id: int):
 
 
 def get_solved_tasks_for_user(
-    user_id: int, view_type: LeaderboardViewType = LeaderboardViewType.ALL_TIME
+    user_id: int,
+    cohort_id: int,
+    view_type: LeaderboardViewType = LeaderboardViewType.ALL_TIME,
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -800,9 +809,12 @@ def get_solved_tasks_for_user(
     if view_type == LeaderboardViewType.ALL_TIME:
         cursor.execute(
             f"""
-        SELECT DISTINCT task_id FROM {chat_history_table_name} WHERE user_id = ? AND is_solved = 1
+        SELECT DISTINCT ch.task_id 
+        FROM {chat_history_table_name} ch
+        JOIN {tasks_table_name} t ON t.id = ch.task_id
+        WHERE ch.user_id = ? AND ch.is_solved = 1 AND t.cohort_id = ?
         """,
-            (user_id,),
+            (user_id, cohort_id),
         )
     else:
         ist = timezone(timedelta(hours=5, minutes=30))
@@ -816,16 +828,17 @@ def get_solved_tasks_for_user(
         cursor.execute(
             f"""
         WITH FirstSolved AS (
-            SELECT task_id, MIN(datetime(timestamp, '+5 hours', '+30 minutes')) as first_solved_time
-            FROM {chat_history_table_name}
-            WHERE user_id = ? AND is_solved = 1
-            GROUP BY task_id
+            SELECT ch.task_id, MIN(datetime(ch.timestamp, '+5 hours', '+30 minutes')) as first_solved_time
+            FROM {chat_history_table_name} ch
+            JOIN {tasks_table_name} t ON t.id = ch.task_id
+            WHERE ch.user_id = ? AND ch.is_solved = 1 AND t.cohort_id = ?
+            GROUP BY ch.task_id
         )
         SELECT DISTINCT task_id 
         FROM FirstSolved
         WHERE first_solved_time >= ?
         """,
-            (user_id, start_date),
+            (user_id, cohort_id, start_date),
         )
 
     return [task[0] for task in cursor.fetchall()]
@@ -913,7 +926,7 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     return current_streak
 
 
-def get_user_activity_last_n_days(user_id: int, n: int):
+def get_user_activity_last_n_days(user_id: int, n: int, cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -922,11 +935,11 @@ def get_user_activity_last_n_days(user_id: int, n: int):
         f"""
     SELECT DATE(datetime(timestamp, '+5 hours', '+30 minutes')), COUNT(*)
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days')
+    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND task_id IN (SELECT id FROM {tasks_table_name} WHERE cohort_id = ?)
     GROUP BY DATE(timestamp)
     ORDER BY DATE(timestamp)
     """,
-        (user_id,),
+        (user_id, cohort_id),
     )
 
     activity_per_day = cursor.fetchall()
@@ -941,7 +954,7 @@ def get_user_activity_last_n_days(user_id: int, n: int):
     return active_days
 
 
-def get_user_streak(user_id: int):
+def get_user_streak(user_id: int, cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -950,11 +963,11 @@ def get_user_streak(user_id: int):
         f"""
     SELECT MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
     FROM {chat_history_table_name}
-    WHERE user_id = ?
+    WHERE user_id = ? AND task_id IN (SELECT id FROM {tasks_table_name} WHERE cohort_id = ?)
     GROUP BY DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
     ORDER BY timestamp DESC
     """,
-        (user_id,),
+        (user_id, cohort_id),
     )
 
     user_usage_dates = cursor.fetchall()
@@ -965,7 +978,9 @@ def get_user_streak(user_id: int):
     )
 
 
-def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
+def get_streaks(
+    view: LeaderboardViewType = LeaderboardViewType.ALL_TIME, cohort_id: int = None
+):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -989,13 +1004,14 @@ def get_streaks(view: LeaderboardViewType = LeaderboardViewType.ALL_TIME):
     FROM (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
-        WHERE 1=1 {date_filter}
+        WHERE 1=1 {date_filter} AND task_id IN (SELECT id FROM {tasks_table_name} WHERE cohort_id = ?)
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
     ) t
     JOIN users u ON u.id = t.user_id
     GROUP BY u.email, u.first_name, u.middle_name, u.last_name
-    """
+    """,
+        (cohort_id,),
     )
 
     usage_per_user = cursor.fetchall()
@@ -1389,6 +1405,15 @@ def get_cohort_by_id(cohort_id: int):
     finally:
         conn.close()
 
+def delete_user_from_cohort(user_id: int, cohort_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {user_groups_table_name} WHERE user_id = ? AND group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)", (user_id, cohort_id))
+    
+    conn.commit()
+    conn.close()
+
 
 def get_cohort_group_learners(group_id: int):
     conn = get_db_connection()
@@ -1476,7 +1501,7 @@ def delete_milestone(milestone_id: int):
     conn.close()
 
 
-def get_all_milestone_progress(user_id: int):
+def get_all_milestone_progress(user_id: int, cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1500,12 +1525,12 @@ def get_all_milestone_progress(user_id: int):
         FROM 
             {chat_history_table_name}
         WHERE 
-            user_id = ?
+            user_id = ? AND task_id IN (SELECT id FROM {tasks_table_name} WHERE cohort_id = ?)
         GROUP BY 
             task_id, user_id
     ) task_solved ON t.id = task_solved.task_id
     WHERE 
-        t.verified = 1
+        t.verified = 1 AND t.cohort_id = ?
     GROUP BY 
         m.id, m.name, m.color
     HAVING 
@@ -1514,7 +1539,7 @@ def get_all_milestone_progress(user_id: int):
         incomplete_tasks DESC
     """
 
-    cursor.execute(query, (user_id,))
+    cursor.execute(query, (user_id, cohort_id, cohort_id))
     results = cursor.fetchall()
 
     conn.close()
@@ -1592,7 +1617,8 @@ def insert_or_return_user(email: str, conn=None, cursor=None):
         return user
 
     except Exception as e:
-        conn.rollback()
+        if should_close_conn:
+            conn.rollback()
         raise e
     finally:
         if should_close_conn:

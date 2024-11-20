@@ -131,7 +131,7 @@ if "is_ai_running" not in st.session_state:
 
 
 def refresh_streak():
-    st.session_state.user_streak = get_user_streak(task_user_id)
+    st.session_state.user_streak = get_user_streak(task_user_id, task["cohort_id"])
 
 
 refresh_streak()
@@ -141,9 +141,9 @@ if "badges_to_show" not in st.session_state:
 
 if st.session_state.badges_to_show:
     if len(st.session_state.badges_to_show) == 1:
-        show_badge_dialog(st.session_state.badges_to_show[0])
+        show_badge_dialog(st.session_state.badges_to_show[0], task["cohort_name"], task['org_name'])
     else:
-        show_multiple_badges_dialog(st.session_state.badges_to_show)
+        show_multiple_badges_dialog(st.session_state.badges_to_show, task["cohort_name"], task['org_name'])
     st.session_state.badges_to_show = []
 
 task_name_container_background_color = None

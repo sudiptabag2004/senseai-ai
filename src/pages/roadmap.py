@@ -14,6 +14,7 @@ if (
     "mode" not in st.query_params
     or st.query_params["mode"] != "review"
     or "learner" not in st.query_params
+    or "cohort" not in st.query_params
 ):
     unauthorized_redirect_to_home()
 
@@ -26,8 +27,11 @@ if "milestone_id" in st.query_params:
 else:
     milestone_id = None
 
+cohort_id = int(st.query_params["cohort"])
+
 all_tasks = get_tasks_with_completion_status(
     st.query_params["learner"],
+    cohort_id,
     milestone_id,
 )
 

@@ -1,5 +1,4 @@
-from typing import List
-import random
+from typing import List, Dict
 import streamlit as st
 from datetime import datetime, timedelta, timezone
 from .base import set_box_style, show_box_header
@@ -62,12 +61,14 @@ def display_day_level_streak(user_activity: List[datetime]):
         cols[i].markdown(day_box(day, is_active), unsafe_allow_html=True)
 
 
-def show_streak():
+def show_streak(cohort_id: int):
     logged_in_user = get_logged_in_user()
-    user_streak = get_user_streak(logged_in_user["id"])
+    user_streak = get_user_streak(logged_in_user["id"], cohort_id)
     # Get the user's activity for the last 3 days as we are displaying a week's activity
     # with the current day in the center
-    user_week_activity = get_user_activity_last_n_days(logged_in_user["id"], 3)
+    user_week_activity = get_user_activity_last_n_days(
+        logged_in_user["id"], 3, cohort_id
+    )
 
     streak_count = len(user_streak)
 

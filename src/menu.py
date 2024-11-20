@@ -89,33 +89,34 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
             label="Your Profile",
             icon="👔",
         )
-        cols = st.sidebar.columns([6, 1])
-        selected_org = cols[0].selectbox(
-            f'`{st.session_state["email"]}`',
-            st.session_state.user_orgs,
-            format_func=lambda val: f"{val['name']} ({val['role']})",
-        )
-
-        cols[1].container(height=10, border=False)
-        cols[1].button(
-            "",
-            icon="➕",
-            help="Create an organization",
-            on_click=show_create_org_dialog,
-            args=(logged_in_user["id"],),
-        )
-
-        st.page_link(
-            f"{os.environ.get('APP_URL')}/admin?id={logged_in_user['id']}&org_id={selected_org['id']}",
-            label="Admin Panel",
-            icon="⚙️",
-        )
 
         if (
             is_mentor
             or selected_cohort is None
             or selected_cohort["org_id"] != get_hva_org_id()
         ):
+            cols = st.sidebar.columns([6, 1])
+            selected_org = cols[0].selectbox(
+                f'`{st.session_state["email"]}`',
+                st.session_state.user_orgs,
+                format_func=lambda val: f"{val['name']} ({val['role']})",
+            )
+
+            cols[1].container(height=10, border=False)
+            cols[1].button(
+                "",
+                icon="➕",
+                help="Create an organization",
+                on_click=show_create_org_dialog,
+                args=(logged_in_user["id"],),
+            )
+
+            st.page_link(
+                f"{os.environ.get('APP_URL')}/admin?id={logged_in_user['id']}&org_id={selected_org['id']}",
+                label="Admin Panel",
+                icon="⚙️",
+            )
+
             return
 
         st.divider()

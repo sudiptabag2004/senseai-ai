@@ -1,9 +1,10 @@
-import streamlit as st
 import io
 from os.path import join
 import random
 from typing import Dict, List
 from pathlib import Path
+
+import streamlit as st
 from streamlit_extras.let_it_rain import rain
 
 from lib.db import (
@@ -137,14 +138,16 @@ def get_badge_html(
     badge_type: str,
     badge_view: str,
     badge_params: Dict,
+    cohort_name: str,
+    org_name: str,
     width: int = 300,
     height: int = 300,
 ):
-    hva_logo_embed_code = get_image_embed_for_html(
-        root_dir + "/assets/hva_logo.jpeg", custom_class="logo", width=100
-    )
+    # hva_logo_embed_code = get_image_embed_for_html(
+    #     root_dir + "/assets/hva_logo.jpeg", custom_class="logo", width=100
+    # )
     logo_embed_code = get_image_embed_for_html(
-        root_dir + "/assets/logo.png", custom_class="logo", width=100
+        root_dir + "/assets/logo.png", custom_class="logo sensai-logo", width=100
     )
     badge_embed_code = get_image_embed_for_html(
         badge_params["image_path"],
@@ -157,8 +160,16 @@ def get_badge_html(
 
     html_content = f"""
     <div class="badge" style="background-color: {badge_params['bg_color']};">
-        {hva_logo_embed_code}
-        {logo_embed_code}
+        
+        
+        <div class="badge-container">
+           <div class="logo org-logo" style="width: 100px;">
+                <p style="margin: 0;">{cohort_name}</p>
+                <p style="margin: 0;">@{org_name}</p>
+            </div>
+            {logo_embed_code}
+        </div>
+
         <div class="content">
             {badge_embed_code}
             <div class="text-overlay">
@@ -189,19 +200,24 @@ def get_badge_html(
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }}
-        .logo:first-of-type {{
+        .badge-container {{
+            position: relative;
+            width: 100%;
+            height: 20%;
+        }}
+        .logo {{
             position: absolute;
-            top: {10 * y_multiplier}px;
-            left: {10 * x_multiplier}px;
-            width: {40 * x_multiplier}px;
+            max-width: 120px;  /* Adjust size as needed */
             height: auto;
         }}
-        .logo:last-of-type {{
-            position: absolute;
-            top: {10 * y_multiplier}px;
-            right: {10 * x_multiplier}px;
-            width: {80 * x_multiplier}px;
-            height: auto;
+        .logo.org-logo {{
+            left: 0px;
+            top: 10px;
+            font-size: 12px;
+        }}
+        .logo.sensai-logo {{
+            right: 0px;
+            top: 10px;
         }}
         .content {{
             position: relative;
@@ -252,6 +268,8 @@ def show_badge(
     badge_type: str,
     badge_view: str,
     badge_params: Dict,
+    cohort_name: str,
+    org_name: str,
     width: int = 350,
     height: int = 350,
 ):
@@ -260,6 +278,8 @@ def show_badge(
         badge_type,
         badge_view,
         badge_params,
+        cohort_name,
+        org_name,
         width * 0.85,
         height * 0.85,
     )
@@ -268,9 +288,16 @@ def show_badge(
 
 @st.cache_data(show_spinner=False)
 def generate_badge_image(
-    emphasis_value: str, badge_type: str, badge_view: str, badge_params: Dict
+    emphasis_value: str,
+    badge_type: str,
+    badge_view: str,
+    badge_params: Dict,
+    cohort_name: str,
+    org_name: str,
 ):
-    badge_html = get_badge_html(emphasis_value, badge_type, badge_view, badge_params)
+    badge_html = get_badge_html(
+        emphasis_value, badge_type, badge_view, badge_params, cohort_name, org_name
+    )
     return convert_html_to_image(badge_html)
 
 
@@ -307,14 +334,19 @@ def show_share_badge_prompt():
 
 
 def show_download_badge_button(
-    emphasis_value: str, badge_type: str, badge_params: Dict, key: str = None
+    emphasis_value: str,
+    badge_type: str,
+    badge_params: Dict,
+    cohort_name: str,
+    org_name: str,
+    key: str = None,
 ):
     # Convert the image to bytes
     buffered = io.BytesIO()
 
     with st.spinner("Preparing for download..."):
         badge_share_image = generate_badge_image(
-            emphasis_value, badge_type, "share", badge_params
+            emphasis_value, badge_type, "share", badge_params, cohort_name, org_name
         )
 
     badge_share_image.save(buffered, format="PNG")
@@ -342,7 +374,9 @@ def _rain_emoji():
     )
 
 
-def _show_badge_in_dialog_box(badge_details: Dict, key: str = None):
+def _show_badge_in_dialog_box(
+    badge_details: Dict, cohort_name: str, org_name: str, key: str = None
+):
     badge_params = {
         "image_path": badge_details["image_path"],
         "bg_color": badge_details["bg_color"],
@@ -357,20 +391,27 @@ def _show_badge_in_dialog_box(badge_details: Dict, key: str = None):
                 badge_details["type"],
                 "learner",
                 badge_params,
+                cohort_name,
+                org_name,
             )
 
         show_share_badge_prompt()
 
         show_download_badge_button(
-            badge_details["value"], badge_details["type"], badge_params, key=key
+            badge_details["value"],
+            badge_details["type"],
+            badge_params,
+            cohort_name,
+            org_name,
+            key=key,
         )
 
 
 @st.dialog(f"You unlocked a new badge! {generate_emoji()}")
-def show_badge_dialog(badge_id: int):
+def show_badge_dialog(badge_id: int, cohort_name: str, org_name: str):
     _rain_emoji()
     badge_details = get_badge_by_id(badge_id)
-    _show_badge_in_dialog_box(badge_details)
+    _show_badge_in_dialog_box(badge_details, cohort_name, org_name)
 
 
 def get_badge_type_to_tab_details(badge_type: str) -> Dict:
@@ -388,7 +429,7 @@ def get_badge_type_to_tab_details(badge_type: str) -> Dict:
 
 
 @st.dialog(f"You unlocked new badges! {generate_emoji()}")
-def show_multiple_badges_dialog(badge_ids: List[int]):
+def show_multiple_badges_dialog(badge_ids: List[int], cohort_name: str, org_name: str):
     _rain_emoji()
 
     # st.markdown("You can view all your badges any time in your profile")
@@ -415,19 +456,44 @@ def show_multiple_badges_dialog(badge_ids: List[int]):
     for index, tab in enumerate(tabs):
         with tab:
             st.markdown(all_tab_details[index]["help_text"])
-            _show_badge_in_dialog_box(all_badge_details[index], key=f"{index}")
+            _show_badge_in_dialog_box(
+                all_badge_details[index], cohort_name, org_name, key=f"{index}"
+            )
 
 
 def standardize_badge_image(image_path: str):
     standardize_image_size(image_path, image_path, 600, 600)
 
 
-if __name__ == "__main__":
-    root_dir = "../lib"
+def test_badge_image():
     badge_params = get_badge_params()
-    show_badge(
+    image = generate_badge_image(
         "HTML",
-        "milestone_target",
+        "streak",
         "learner",
         badge_params,
+        "HVA 2024",
+        "HyperVerge Academy",
     )
+    image.save("test.png")
+
+
+def test_badge_html():
+    badge_params = get_badge_params()
+    html = get_badge_html(
+        "HTML",
+        "streak",
+        "learner",
+        badge_params,
+        "HVA 2024",
+        "HyperVerge Academy",
+    )
+    with open("test.html", "w") as f:
+        f.write(html)
+
+    im = convert_html_to_image(html)
+    im.save("test.png")
+
+
+if __name__ == "__main__":
+    root_dir = "../lib"

@@ -835,8 +835,7 @@ def show_tasks_tab():
     with st.expander("User Guide"):
         st.write(tasks_description)
 
-    if "tasks" not in st.session_state:
-        refresh_tasks()
+    refresh_tasks()
 
     if not st.session_state.tasks:
         st.error("No tasks added yet")
@@ -1067,6 +1066,8 @@ def show_create_cohort_dialog():
         ):
             create_cohort(cohort_name, cohort_df, st.session_state.org_id)
             refresh_cohorts()
+            if "tasks" in st.session_state and st.session_state.tasks:
+                refresh_tasks()
             set_toast(f"Cohort `{cohort_name}` created successfully!")
             st.rerun()
 
