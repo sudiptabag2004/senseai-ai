@@ -122,7 +122,7 @@ def create_cohort_tables(cursor):
         f"""CREATE TABLE IF NOT EXISTS {groups_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cohort_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
+                name TEXT,
                 FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
     )
