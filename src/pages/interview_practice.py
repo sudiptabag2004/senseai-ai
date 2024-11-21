@@ -19,6 +19,9 @@ from lib.init import init_env_vars
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
+from streamlit_mic_recorder import mic_recorder
+
+
 init_env_vars()
 
 redirect_if_not_logged_in(key="id")
@@ -125,7 +128,7 @@ with cols[-1]:
         )
 
 
-def get_wave_data_from_file_upload(audio_file):
+def get_wav_data_from_file_upload(audio_file):
     with st.spinner("Processing audio..."):
         import io
         from pydub import AudioSegment
@@ -139,8 +142,8 @@ def get_wave_data_from_file_upload(audio_file):
     return wav_data
 
 
-def get_wave_data_from_audio_input(audio_value):
-    return audio_value.read()
+# def get_wav_data_from_audio_input(audio_value):
+#     return audio_value.read()
 
 
 def show_ai_report():
@@ -258,6 +261,14 @@ def reset_params():
     del st.session_state.audio_data
 
 
+def audio_recording_callback():
+    if not st.session_state.my_recorder_output:
+        return
+
+    st.session_state.audio_data = st.session_state.my_recorder_output["bytes"]
+    st.rerun()
+
+
 if st.session_state.audio_data:
     user_input_col, _, ai_report_col = st.columns([1, 0.1, 1.5])
     with user_input_col:
@@ -300,9 +311,22 @@ else:
             st.info(
                 f"To record in browser (only required for testing locally):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
             )
-        audio_value = st.experimental_audio_input(
-            "Record a voice message by pressing on the mic icon"
+        # audio_value = st.audio_input(
+        #     "Record a voice message by pressing on the mic icon"
+        # )
+
+        mic_recorder(
+            start_prompt="Start recording",
+            stop_prompt="Stop recording",
+            just_once=False,
+            use_container_width=False,
+            format="wav",
+            callback=audio_recording_callback,
+            args=(),
+            kwargs={},
+            key="my_recorder",
         )
+
     else:
         audio_value = st.file_uploader(
             "Upload your answer (audio)",
@@ -310,12 +334,9 @@ else:
             type=["wav", "mp3", "mov"],
         )
 
-    if audio_value:
-        if is_recording:
-            st.session_state.audio_data = get_wave_data_from_audio_input(audio_value)
-        else:
-            st.session_state.audio_data = get_wave_data_from_file_upload(audio_value)
+        if audio_value:
+            st.session_state.audio_data = get_wav_data_from_file_upload(audio_value)
 
-        update_file_uploader_key()
-        toggle_ai_running()
-        st.rerun()
+            update_file_uploader_key()
+            toggle_ai_running()
+            st.rerun()
