@@ -6,6 +6,7 @@ import pandas as pd
 from lib.db import (
     get_all_milestone_progress,
     get_user_cohorts,
+    get_cohorts_for_org,
     get_cohort_group_learners,
 )
 
@@ -132,7 +133,15 @@ def show_home():
 
     user_cohorts = get_user_cohorts(logged_in_user["id"])
 
+    if "selected_org" not in st.session_state:
+        st.session_state["selected_org"] = st.session_state.user_orgs[0]
+
+    org_cohorts = get_cohorts_for_org(st.session_state["selected_org"]["id"])
+
+    user_cohorts += org_cohorts
+
     is_mentor = False
+    role = None
 
     if user_cohorts:
         # if len(user_cohorts) == 1:
@@ -147,7 +156,11 @@ def show_home():
                 index=0,
             )
 
-        role = selected_cohort["groups"][0]["role"]
+        if "groups" in selected_cohort:
+            role = selected_cohort["groups"][0]["role"]
+        else:
+            role = "admin"
+
         if role == "mentor":
             is_mentor = st.toggle("Switch to mentor view", key="is_mentor", value=True)
             st.markdown("----")
@@ -155,12 +168,14 @@ def show_home():
         if is_mentor:
             mentor_view(selected_cohort)
         else:
-            learner_view(selected_cohort)
+            if role == "admin":
+                st.info("You are seeing the learner view")
 
+            learner_view(selected_cohort)
     else:
         st.info(
             "You are currently not a member of any cohort. Please ask your admin to add you to one!"
         )
         selected_cohort = None
 
-    menu(logged_in_user, selected_cohort, is_mentor)
+    menu(logged_in_user, selected_cohort, role)

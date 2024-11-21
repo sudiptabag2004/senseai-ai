@@ -55,11 +55,11 @@ def clear_auth():
     st.rerun()
 
 
-def menu_footer(selected_cohort: Dict, is_mentor: bool):
+def menu_footer(selected_cohort: Dict, role: str):
     st.sidebar.divider()
 
     if (
-        not is_mentor
+        role == "learner"
         and selected_cohort is not None
         and selected_cohort["org_id"] == get_hva_org_id()
     ):
@@ -75,7 +75,7 @@ def menu_footer(selected_cohort: Dict, is_mentor: bool):
             clear_auth()
 
 
-def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: bool):
+def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
     with st.sidebar:
         # display_name = get_logged_in_user_display_name("first")
         # st.markdown(
@@ -91,7 +91,7 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
         )
 
         if (
-            is_mentor
+            role != "learner"
             or selected_cohort is None
             or selected_cohort["org_id"] != get_hva_org_id()
         ):
@@ -99,6 +99,7 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
             selected_org = cols[0].selectbox(
                 f'`{st.session_state["email"]}`',
                 st.session_state.user_orgs,
+                key="selected_org",
                 format_func=lambda val: f"{val['name']} ({val['role']})",
             )
 
@@ -144,11 +145,11 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: b
         )
 
 
-def menu(logged_in_user: Dict, selected_cohort: Dict, is_mentor: bool):
+def menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
     show_toast()
     menu_header()
     if logged_in_user:
-        authenticated_menu(logged_in_user, selected_cohort, is_mentor)
+        authenticated_menu(logged_in_user, selected_cohort, role)
 
-    menu_footer(selected_cohort, is_mentor)
+    menu_footer(selected_cohort, role)
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

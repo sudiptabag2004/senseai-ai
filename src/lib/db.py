@@ -1405,12 +1405,16 @@ def get_cohort_by_id(cohort_id: int):
     finally:
         conn.close()
 
+
 def delete_user_from_cohort(user_id: int, cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"DELETE FROM {user_groups_table_name} WHERE user_id = ? AND group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)", (user_id, cohort_id))
-    
+    cursor.execute(
+        f"DELETE FROM {user_groups_table_name} WHERE user_id = ? AND group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
+        (user_id, cohort_id),
+    )
+
     conn.commit()
     conn.close()
 
@@ -1716,6 +1720,32 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
         )
 
     return list(cohorts.values())
+
+
+def get_cohorts_for_org(org_id: int) -> List[Dict]:
+    """Get all cohorts that belong to an organization"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all cohorts and groups the user is a member of
+    cursor.execute(
+        f"""
+        SELECT c.id, c.name, o.id, o.name
+        FROM {cohorts_table_name} c
+        JOIN {organizations_table_name} o ON o.id = c.org_id
+        WHERE o.id = ?
+    """,
+        (org_id,),
+    )
+
+    results = cursor.fetchall()
+    conn.close()
+
+    # Convert results into nested dict structure
+    return [
+        {"id": cohort_id, "name": cohort_name, "org_id": org_id, "org_name": org_name}
+        for cohort_id, cohort_name, org_id, org_name in results
+    ]
 
 
 def create_badge_for_user(
