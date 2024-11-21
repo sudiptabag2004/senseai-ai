@@ -19,7 +19,8 @@ from lib.init import init_env_vars
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
-from streamlit_mic_recorder import mic_recorder
+# from streamlit_mic_recorder import mic_recorder
+from audiorecorder import audiorecorder
 
 
 init_env_vars()
@@ -261,12 +262,12 @@ def reset_params():
     del st.session_state.audio_data
 
 
-def audio_recording_callback():
-    if not st.session_state.my_recorder_output:
-        return
+# def audio_recording_callback():
+#     if not st.session_state.my_recorder_output:
+#         return
 
-    st.session_state.audio_data = st.session_state.my_recorder_output["bytes"]
-    st.rerun()
+#     st.session_state.audio_data = st.session_state.my_recorder_output["bytes"]
+#     st.rerun()
 
 
 if st.session_state.audio_data:
@@ -315,16 +316,27 @@ else:
         #     "Record a voice message by pressing on the mic icon"
         # )
 
-        mic_recorder(
-            start_prompt="Start recording",
-            stop_prompt="Stop recording",
-            just_once=False,
-            use_container_width=False,
-            format="wav",
-            callback=audio_recording_callback,
-            args=(),
-            kwargs={},
-            key="my_recorder",
+        # mic_recorder(
+        #     start_prompt="Start recording",
+        #     stop_prompt="Stop recording",
+        #     just_once=False,
+        #     use_container_width=False,
+        #     format="wav",
+        #     callback=audio_recording_callback,
+        #     args=(),
+        #     kwargs={},
+        #     key="my_recorder",
+        # )
+        audio_value = audiorecorder(
+            "",
+            "",
+            pause_prompt="",
+            custom_style={"color": "black"},
+            start_style={},
+            pause_style={},
+            stop_style={},
+            show_visualizer=True,
+            key=None,
         )
 
     else:
@@ -334,9 +346,12 @@ else:
             type=["wav", "mp3", "mov"],
         )
 
-        if audio_value:
+    if audio_value:
+        if is_recording:
+            st.session_state.audio_data = audio_value.export(format="wav").read()
+        else:
             st.session_state.audio_data = get_wav_data_from_file_upload(audio_value)
 
-            update_file_uploader_key()
-            toggle_ai_running()
-            st.rerun()
+        update_file_uploader_key()
+        toggle_ai_running()
+        st.rerun()
