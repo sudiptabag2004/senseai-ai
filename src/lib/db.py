@@ -1236,16 +1236,80 @@ def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
         conn.close()
 
 
-def add_user_to_cohort_group(user_id: int, group_id: int, role: str):
+def add_user_to_cohort_group(user_id: int, group_id: int, conn=None, cursor=None):
+    is_master_connection = False
+    if conn is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        is_master_connection = True
+
+    try:
+        cursor.execute(
+            f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
+            (user_id, group_id),
+        )
+        if is_master_connection:
+            conn.commit()
+    except Exception as e:
+        if is_master_connection:
+            conn.rollback()
+        raise e
+    finally:
+        if is_master_connection:
+            conn.close()
+
+
+def create_cohort_group(
+    name: str, cohort_id: int, mentors: List[str], learners: List[str]
+):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"INSERT INTO {user_groups_table_name} (user_id, group_id, role) VALUES (?, ?, ?)",
-        (user_id, group_id, role),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        # Create the group
+        cursor.execute(
+            f"""
+            INSERT INTO {groups_table_name} (name, cohort_id)
+            VALUES (?, ?)
+            """,
+            (name, cohort_id),
+        )
+        group_id = cursor.lastrowid
+
+        # Add mentors and learners to group
+        for mentor in mentors:
+            user = insert_or_return_user(mentor, conn, cursor)
+            add_user_to_cohort_group(user["id"], group_id, conn, cursor)
+
+        for learner in learners:
+            user = insert_or_return_user(learner, conn, cursor)
+            add_user_to_cohort_group(user["id"], group_id, conn, cursor)
+
+        conn.commit()
+        return group_id
+
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def delete_cohort_group_from_db(group_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"DELETE FROM {user_groups_table_name} WHERE group_id = ?", (group_id,)
+        )
+        cursor.execute(f"DELETE FROM {groups_table_name} WHERE id = ?", (group_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def get_all_cohorts_for_org(org_id: int):
@@ -1553,11 +1617,11 @@ def convert_user_db_to_dict(user: Tuple) -> Dict:
 
 
 def insert_or_return_user(email: str, conn=None, cursor=None):
-    should_close_conn = False
+    is_master_connection = False
     if conn is None:
         conn = get_db_connection()
         cursor = conn.cursor()
-        should_close_conn = True
+        is_master_connection = True
 
     try:
         # if user exists, no need to do anything, just return the user
@@ -1595,17 +1659,17 @@ def insert_or_return_user(email: str, conn=None, cursor=None):
             conn=conn,
             cursor=cursor,
         )
-        if should_close_conn:
+        if is_master_connection:
             conn.commit()
 
         return user
 
     except Exception as e:
-        if should_close_conn:
+        if is_master_connection:
             conn.rollback()
         raise e
     finally:
-        if should_close_conn:
+        if is_master_connection:
             conn.close()
 
 
@@ -1937,11 +2001,11 @@ def create_organization(name: str, color: str = None, conn=None, cursor=None):
     slug = slugify(name) + "-" + str(uuid.uuid4())
     default_logo_color = color or generate_random_color()
 
-    should_close_conn = False
+    is_master_connection = False
     if conn is None:
         conn = get_db_connection()
         cursor = conn.cursor()
-        should_close_conn = True
+        is_master_connection = True
 
     try:
         cursor.execute(
@@ -1950,7 +2014,7 @@ def create_organization(name: str, color: str = None, conn=None, cursor=None):
                 VALUES (?, ?, ?)""",
             (slug, name, default_logo_color),
         )
-        if should_close_conn:
+        if is_master_connection:
             conn.commit()
 
         return cursor.lastrowid
@@ -1958,7 +2022,7 @@ def create_organization(name: str, color: str = None, conn=None, cursor=None):
         conn.rollback()
         raise e
     finally:
-        if should_close_conn:
+        if is_master_connection:
             conn.close()
 
 
@@ -1996,11 +2060,11 @@ def add_user_to_org_by_user_id(
     conn=None,
     cursor=None,
 ):
-    should_close_conn = False
+    is_master_connection = False
     if conn is None:
         conn = get_db_connection()
         cursor = conn.cursor()
-        should_close_conn = True
+        is_master_connection = True
 
     try:
         cursor.execute(
@@ -2009,7 +2073,7 @@ def add_user_to_org_by_user_id(
                 VALUES (?, ?, ?)""",
             (user_id, org_id, role),
         )
-        if should_close_conn:
+        if is_master_connection:
             conn.commit()
 
         return cursor.lastrowid
@@ -2017,7 +2081,7 @@ def add_user_to_org_by_user_id(
         conn.rollback()
         raise e
     finally:
-        if should_close_conn:
+        if is_master_connection:
             conn.close()
 
 

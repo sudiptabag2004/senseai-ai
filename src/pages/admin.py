@@ -52,6 +52,8 @@ from lib.db import (
     get_org_users,
     add_user_to_org_by_email,
     add_members_to_cohort,
+    create_cohort_group,
+    delete_cohort_group_from_db,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
@@ -1152,6 +1154,75 @@ def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
             st.rerun()
 
 
+@st.dialog("Create Cohort Groups")
+def show_create_groups_dialog(cohort_id: int, cohort_info: dict):
+    with st.form("create_groups_form", border=False):
+        group_name = st.text_input("Enter group name", key="cohort_group_name")
+        learners = st.multiselect(
+            "Select learners",
+            [
+                member["email"]
+                for member in cohort_info["members"]
+                if member["role"] == group_role_learner
+            ],
+            key="cohort_group_learners",
+        )
+        mentors = st.multiselect(
+            "Select mentors",
+            [
+                member["email"]
+                for member in cohort_info["members"]
+                if member["role"] == group_role_mentor
+            ],
+            key="cohort_group_mentors",
+        )
+
+        if st.form_submit_button(
+            "Create Group",
+            use_container_width=True,
+            type="primary",
+        ):
+            if not group_name:
+                st.error("Enter a group name")
+                return
+
+            if not learners:
+                st.error("Select at least one learner")
+                return
+
+            if not mentors:
+                st.error("Select at least one mentor")
+                return
+
+            create_cohort_group(
+                group_name,
+                cohort_id,
+                learners,
+                mentors,
+            )
+            refresh_cohorts()
+            set_toast(f"Cohort group created successfully!")
+            st.rerun()
+
+
+@st.dialog("Delete Cohort Group Confirmation")
+def show_delete_cohort_group_confirmation_dialog(group):
+    st.markdown(f"Are you sure you want to delete the group: `{group['name']}`?")
+    (
+        confirm_col,
+        cancel_col,
+    ) = st.columns([1.5, 6])
+
+    if confirm_col.button("Confirm", type="primary"):
+        delete_cohort_group_from_db(group["id"])
+        refresh_cohorts()
+        set_toast("Cohort group deleted successfully!")
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
 @st.fragment
 def show_cohorts_tab():
     # create_cohort_col, _ = st.columns([2, 8])
@@ -1176,21 +1247,10 @@ def show_cohorts_tab():
         if cols[0].button("Add Members"):
             show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
         if cols[1].button("Create Groups"):
-            st.toast("Coming soon!")
-
-        # TODO: add support for creating groups
-
-    # cohort_groups = [{"name": "All", "id": None}] + cohort_info["groups"]
-
-    # selected_group = cols[1].selectbox(
-    #     "Select a group", cohort_groups, format_func=lambda group: group["name"]
-    # )
+            show_create_groups_dialog(selected_cohort["id"], cohort_info)
 
     learners = []
     mentors = []
-
-    # Create a list to store all group data
-    all_group_data = []
 
     # Iterate through all groups in the cohort
     for member in cohort_info["members"]:
@@ -1235,6 +1295,13 @@ def show_cohorts_tab():
             "Select a group",
             cohort_info["groups"],
             format_func=lambda group: group["name"],
+        )
+        cols[1].container(height=10, border=False)
+        cols[1].button(
+            "Delete Group",
+            type="primary",
+            on_click=show_delete_cohort_group_confirmation_dialog,
+            args=(selected_group,),
         )
 
         cols = st.columns([2, 0.2, 1])
