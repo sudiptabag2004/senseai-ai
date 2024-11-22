@@ -1,6 +1,7 @@
 import os
 from os.path import exists
 import json
+import traceback
 import sqlite3
 import uuid
 from unidecode import unidecode
@@ -15,6 +16,7 @@ from lib.config import (
     cohorts_table_name,
     groups_table_name,
     user_groups_table_name,
+    user_cohorts_table_name,
     group_role_learner,
     group_role_mentor,
     milestones_table_name,
@@ -112,8 +114,20 @@ def create_cohort_tables(cursor):
         f"""CREATE TABLE IF NOT EXISTS {cohorts_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+            )"""
+    )
+
+    # Create a table to store user_cohorts
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {user_cohorts_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                cohort_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
     )
 
@@ -130,10 +144,9 @@ def create_cohort_tables(cursor):
     # Create a table to store user_groups
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 group_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                learner_id TEXT,
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
             )"""
@@ -276,7 +289,7 @@ def init_db():
             create_badges_table(cursor)
             conn.commit()
 
-        if not check_table_exists(cohorts_table_name, cursor):
+        if not check_table_exists(user_cohorts_table_name, cursor):
             create_cohort_tables(cursor)
             conn.commit()
 
@@ -1148,6 +1161,9 @@ def delete_cohort(cohort_id: int):
         (cohort_id,),
     )
     cursor.execute(f"DELETE FROM {groups_table_name} WHERE cohort_id = ?", (cohort_id,))
+    cursor.execute(
+        f"DELETE FROM {user_cohorts_table_name} WHERE cohort_id = ?", (cohort_id,)
+    )
     cursor.execute(f"DELETE FROM {cohorts_table_name} WHERE id = ?", (cohort_id,))
     conn.commit()
     conn.close()
@@ -1169,12 +1185,11 @@ def drop_cohorts_table():
         conn.close()
 
 
-def create_cohort(name: str, df: pd.DataFrame, org_id: int):
+def create_cohort(name: str, org_id: int) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Create cohort
         cursor.execute(
             f"""
             INSERT INTO {cohorts_table_name} (name, org_id)
@@ -1183,53 +1198,9 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
             (name, org_id),
         )
         cohort_id = cursor.lastrowid
-
-        # Create groups and user_group entries
-        for group_name, group_df in df.groupby("Group Name"):
-            # Create group
-            cursor.execute(
-                f"""
-                INSERT INTO {groups_table_name} (cohort_id, name)
-                VALUES (?, ?)
-                """,
-                (cohort_id, group_name),
-            )
-            group_id = cursor.lastrowid
-
-            # Create user_group entries for learners
-            for _, row in group_df.iterrows():
-                user_id = insert_or_return_user(row["Learner Email"], conn, cursor)[
-                    "id"
-                ]
-                cursor.execute(
-                    f"""
-                    INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        user_id,
-                        group_id,
-                        group_role_learner,
-                        row["Learner ID"],
-                    ),
-                )
-
-            # Create user_group entry for mentor
-            mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = insert_or_return_user(mentor_email, conn, cursor)["id"]
-            cursor.execute(
-                f"""
-                INSERT INTO {user_groups_table_name} (user_id, group_id, role)
-                VALUES (?, ?, ?)
-                """,
-                (
-                    user_id,
-                    group_id,
-                    group_role_mentor,
-                ),
-            )
-
         conn.commit()
+
+        return cohort_id
     except Exception as e:
         conn.rollback()
         raise e
@@ -1237,57 +1208,27 @@ def create_cohort(name: str, df: pd.DataFrame, org_id: int):
         conn.close()
 
 
-def add_members_to_cohort(cohort_id: int, df: pd.DataFrame):
+def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Create groups and user_group entries
-        for group_name, group_df in df.groupby("Group Name"):
-            # Create group
-            cursor.execute(
-                f"""
-                INSERT INTO {groups_table_name} (cohort_id, name)
-                VALUES (?, ?)
-                """,
-                (cohort_id, group_name),
-            )
-            group_id = cursor.lastrowid
+        users_to_add = []
+        for email in emails:
+            # Get or create user
+            user = insert_or_return_user(email, conn, cursor)
+            users_to_add.append(user["id"])
 
-            # Create user_group entries for learners
-            for _, row in group_df.iterrows():
-                user_id = insert_or_return_user(row["Learner Email"], conn, cursor)[
-                    "id"
-                ]
-                cursor.execute(
-                    f"""
-                    INSERT INTO {user_groups_table_name} (user_id, group_id, role, learner_id)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        user_id,
-                        group_id,
-                        group_role_learner,
-                        row["Learner ID"],
-                    ),
-                )
-
-            # Create user_group entry for mentor
-            mentor_email = group_df["Mentor Email"].iloc[0]
-            user_id = insert_or_return_user(mentor_email, conn, cursor)["id"]
-            cursor.execute(
-                f"""
-                INSERT INTO {user_groups_table_name} (user_id, group_id, role)
-                VALUES (?, ?, ?)
-                """,
-                (
-                    user_id,
-                    group_id,
-                    group_role_mentor,
-                ),
-            )
-
+        # Add users to cohort
+        cursor.executemany(
+            f"""
+            INSERT INTO {user_cohorts_table_name} (user_id, cohort_id, role)
+            VALUES (?, ?, ?)
+            """,
+            [(user_id, cohort_id, role) for user_id, role in zip(users_to_add, roles)],
+        )
         conn.commit()
+
     except Exception as e:
         conn.rollback()
         raise e
@@ -1314,15 +1255,9 @@ def get_all_cohorts_for_org(org_id: int):
     try:
         cursor.execute(
             f"""
-            SELECT c.id, c.name,
-                   COUNT(DISTINCT g.id) AS num_batches,
-                   COUNT(DISTINCT CASE WHEN ug.role = '{group_role_learner}' THEN ug.user_id END) AS num_learners,
-                   COUNT(DISTINCT CASE WHEN ug.role = '{group_role_mentor}' THEN ug.user_id END) AS num_mentors
+            SELECT c.id, c.name
             FROM {cohorts_table_name} c
-            LEFT JOIN {groups_table_name} g ON c.id = g.cohort_id
-            LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
             WHERE c.org_id = ?
-            GROUP BY c.id, c.name
             ORDER BY c.id DESC
             """,
             (org_id,),
@@ -1330,19 +1265,7 @@ def get_all_cohorts_for_org(org_id: int):
 
         cohorts = cursor.fetchall()
 
-        cohorts_list = []
-        for row in cohorts:
-            cohorts_list.append(
-                {
-                    "id": row[0],
-                    "name": row[1],
-                    "num_batches": row[2],
-                    "num_learners": row[3],
-                    "num_mentors": row[4],
-                }
-            )
-
-        return cohorts_list
+        return [{"id": row[0], "name": row[1]} for row in cohorts]
     except Exception as e:
         print(f"Error fetching cohorts: {e}")
         return []
@@ -1364,35 +1287,59 @@ def get_cohort_by_id(cohort_id: int):
         if not cohort:
             return None
 
-        # Fetch groups and their members
         cursor.execute(
             f"""
-            SELECT g.id, g.name,
-                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN u_learner.email END) AS learner_emails,
-                   GROUP_CONCAT(CASE WHEN ug.role = '{group_role_learner}' THEN ug.learner_id END) AS learner_ids,
-                   MAX(CASE WHEN ug.role = '{group_role_mentor}' THEN u_mentor.email END) AS mentor_email
+            SELECT 
+                g.id,
+                g.name,
+                GROUP_CONCAT(u.id) as user_ids,
+                GROUP_CONCAT(u.email) as user_emails,
+                GROUP_CONCAT(uc.role) as user_roles
             FROM {groups_table_name} g
-            LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id
-            LEFT JOIN {users_table_name} u_learner ON ug.user_id = u_learner.id AND ug.role = '{group_role_learner}'
-            LEFT JOIN {users_table_name} u_mentor ON ug.user_id = u_mentor.id AND ug.role = '{group_role_mentor}'
+            LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id 
+            LEFT JOIN {users_table_name} u ON ug.user_id = u.id
+            LEFT JOIN {user_cohorts_table_name} uc ON uc.user_id = u.id AND uc.cohort_id = g.cohort_id
             WHERE g.cohort_id = ?
             GROUP BY g.id, g.name
-        """,
+            ORDER BY g.id
+            """,
+            (cohort_id,),
+        )
+        groups = cursor.fetchall()
+
+        # Get all users and their roles in the cohort
+        cursor.execute(
+            f"""
+            SELECT DISTINCT u.id, u.email, uc.role
+            FROM {users_table_name} u
+            JOIN {user_cohorts_table_name} uc ON u.id = uc.user_id 
+            WHERE uc.cohort_id = ?
+            ORDER BY uc.role
+            """,
             (cohort_id,),
         )
 
-        groups = cursor.fetchall()
+        members = cursor.fetchall()
 
         cohort_data = {
             "id": cohort[0],
             "name": cohort[1],
+            "members": [
+                {"id": member[0], "email": member[1], "role": member[2]}
+                for member in members
+            ],
             "groups": [
                 {
                     "id": group[0],
                     "name": group[1],
-                    "learner_emails": group[2].split(",") if group[2] else [],
-                    "learner_ids": group[3].split(",") if group[3] else [],
-                    "mentor_email": group[4],
+                    "members": [
+                        {"id": user_id, "email": user_email, "role": user_role}
+                        for user_id, user_email, user_role in zip(
+                            group[2].split(","),
+                            group[3].split(","),
+                            group[4].split(","),
+                        )
+                    ],
                 }
                 for group in groups
             ],
@@ -1401,6 +1348,7 @@ def get_cohort_by_id(cohort_id: int):
         return cohort_data
     except Exception as e:
         print(f"Error fetching cohort details: {e}")
+        traceback.print_exc()
         return None
     finally:
         conn.close()
@@ -1414,25 +1362,57 @@ def delete_user_from_cohort(user_id: int, cohort_id: int):
         f"DELETE FROM {user_groups_table_name} WHERE user_id = ? AND group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
         (user_id, cohort_id),
     )
+    cursor.execute(
+        f"DELETE FROM {user_cohorts_table_name} WHERE user_id = ? AND cohort_id = ?",
+        (user_id, cohort_id),
+    )
 
     conn.commit()
     conn.close()
 
 
-def get_cohort_group_learners(group_id: int):
+def format_user_cohort_group(group: Tuple):
+    learners = []
+    for id, email in zip(group[2].split(","), group[3].split(",")):
+        learners.append({"id": id, "email": email})
+
+    return {
+        "id": group[0],
+        "name": group[1],
+        "learners": learners,
+    }
+
+
+def get_user_cohort_groups(user_id: int, cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        f"""SELECT u.id, u.email 
-        FROM {user_groups_table_name} ug
-        JOIN {users_table_name} u ON ug.user_id = u.id 
-        WHERE ug.group_id = ? AND ug.role = '{group_role_learner}'""",
-        (group_id,),
+        f"""
+        WITH mentor_groups AS (
+            SELECT g.id as group_id, g.name as group_name, g.cohort_id as cohort_id
+            FROM {user_groups_table_name} ug
+            JOIN {groups_table_name} g ON ug.group_id = g.id
+            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = g.cohort_id
+            WHERE ug.user_id = ? AND uc.role = '{group_role_mentor}' AND g.cohort_id = ?
+        ),
+        learners AS (
+            SELECT mg.group_id, mg.group_name, GROUP_CONCAT(u.email) as learner_emails, GROUP_CONCAT(u.id) as learner_ids
+            FROM mentor_groups mg
+            JOIN {user_groups_table_name} ug ON ug.group_id = mg.group_id 
+            JOIN {users_table_name} u ON u.id = ug.user_id
+            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = mg.cohort_id
+            WHERE uc.role = '{group_role_learner}'
+            GROUP BY mg.group_id, mg.group_name
+        )
+        SELECT group_id, group_name, learner_ids, learner_emails
+        FROM learners
+        """,
+        (user_id, cohort_id),
     )
-    learners = cursor.fetchall()
+    groups = cursor.fetchall()
 
-    return [{"id": learner[0], "email": learner[1]} for learner in learners]
+    return [format_user_cohort_group(group) for group in groups]
 
 
 def convert_milestone_db_to_dict(milestone: Tuple) -> Dict:
@@ -1690,12 +1670,11 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
     # Get all cohorts and groups the user is a member of
     cursor.execute(
         f"""
-        SELECT c.id, c.name, g.id, g.name, ug.role, o.id, o.name
+        SELECT c.id, c.name, uc.role, o.id, o.name
         FROM {cohorts_table_name} c
-        JOIN {groups_table_name} g ON g.cohort_id = c.id
-        JOIN {user_groups_table_name} ug ON ug.group_id = g.id
+        JOIN {user_cohorts_table_name} uc ON uc.cohort_id = c.id
         JOIN {organizations_table_name} o ON o.id = c.org_id
-        WHERE ug.user_id = ?
+        WHERE uc.user_id = ?
     """,
         (user_id,),
     )
@@ -1704,22 +1683,16 @@ def get_user_cohorts(user_id: int) -> List[Dict]:
     conn.close()
 
     # Convert results into nested dict structure
-    cohorts = {}
-    for cohort_id, cohort_name, group_id, group_name, role, org_id, org_name in results:
-        if cohort_id not in cohorts:
-            cohorts[cohort_id] = {
-                "id": cohort_id,
-                "name": cohort_name,
-                "org_id": org_id,
-                "org_name": org_name,
-                "groups": [],
-            }
-
-        cohorts[cohort_id]["groups"].append(
-            {"id": group_id, "name": group_name, "role": role}
-        )
-
-    return list(cohorts.values())
+    return [
+        {
+            "id": cohort_id,
+            "name": cohort_name,
+            "org_id": org_id,
+            "org_name": org_name,
+            "role": role,
+        }
+        for cohort_id, cohort_name, role, org_id, org_name in results
+    ]
 
 
 def get_cohorts_for_org(org_id: int) -> List[Dict]:
@@ -2250,5 +2223,106 @@ def delete_tag(tag_id: int):
     cursor = conn.cursor()
 
     cursor.execute(f"DELETE FROM {tags_table_name} WHERE id = ?", (tag_id,))
+    conn.commit()
+    conn.close()
+
+
+def transfer_badge_to_user(prev_user_id: int, new_user_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {badges_table_name} SET user_id = ? WHERE user_id = ?",
+        (new_user_id, prev_user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def transfer_chat_history_to_user(prev_user_id: int, new_user_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {chat_history_table_name} SET user_id = ? WHERE user_id = ?",
+        (new_user_id, prev_user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def drop_user_cohorts_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DROP TABLE IF EXISTS {user_cohorts_table_name}")
+    conn.commit()
+    conn.close()
+
+
+def seed_user_cohorts_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all cohorts
+    cursor.execute(f"SELECT id FROM {cohorts_table_name}")
+    cohorts = [value[0] for value in cursor.fetchall()]
+
+    for cohort_id in cohorts:
+        # Get all users in groups for this cohort (both learners and mentors)
+        cursor.execute(
+            f"""
+            SELECT DISTINCT user_id, role
+            FROM {user_groups_table_name} ug
+            JOIN {groups_table_name} g ON ug.group_id = g.id
+            WHERE g.cohort_id = ?
+        """,
+            (cohort_id,),
+        )
+        users = cursor.fetchall()
+
+        # Create user_cohort entries for each user
+        for user_id, role in users:
+            cursor.execute(
+                f"""
+                INSERT INTO {user_cohorts_table_name} (user_id, cohort_id, role)
+                VALUES (?, ?, ?)
+            """,
+                (user_id, cohort_id, role),
+            )
+
+    conn.commit()
+    conn.close()
+
+
+def migrate_user_groups_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Create a temporary table with the new schema
+    cursor.execute(
+        f"""CREATE TABLE {user_groups_table_name}_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
+            FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+        )"""
+    )
+
+    # Copy data from old table to new table
+    cursor.execute(
+        f"""INSERT INTO {user_groups_table_name}_new (user_id, group_id)
+            SELECT user_id, group_id FROM {user_groups_table_name}"""
+    )
+
+    # Drop the old table
+    cursor.execute(f"DROP TABLE {user_groups_table_name}")
+
+    # Rename the new table to the original name
+    cursor.execute(
+        f"ALTER TABLE {user_groups_table_name}_new RENAME TO {user_groups_table_name}"
+    )
+
     conn.commit()
     conn.close()

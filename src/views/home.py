@@ -7,7 +7,7 @@ from lib.db import (
     get_all_milestone_progress,
     get_user_cohorts,
     get_cohorts_for_org,
-    get_cohort_group_learners,
+    get_user_cohort_groups,
 )
 
 from components.streak import show_streak
@@ -33,99 +33,104 @@ def learner_view(selected_cohort: Dict):
         show_leaderboard(selected_cohort["id"])
 
 
+@st.cache_data
+def get_mentor_groups(user_id: int, cohort_id: int):
+    return get_user_cohort_groups(user_id, cohort_id)
+
+
 def mentor_view(selected_cohort: Dict):
+    logged_in_user = get_logged_in_user()
+
     cols = st.columns(2)
 
     selected_group = None
     selected_learner = None
 
-    if selected_cohort:
-        with cols[0]:
-            selected_group = st.selectbox(
-                "Select a group",
-                selected_cohort["groups"],
-                format_func=lambda x: x["name"],
+    if not selected_cohort:
+        return
+
+    mentor_groups = get_mentor_groups(logged_in_user["id"], selected_cohort["id"])
+
+    with cols[0]:
+        selected_group = st.selectbox(
+            "Select a group",
+            mentor_groups,
+            format_func=lambda x: x["name"],
+            index=0,
+        )
+
+    if selected_group:
+        with cols[1]:
+            selected_learner = st.selectbox(
+                "Select a learner",
+                selected_group["learners"],
+                format_func=lambda val: val["email"],
                 index=0,
             )
 
-        if selected_group:
-            group_learners = get_cohort_group_learners(selected_group["id"])
-            with cols[1]:
-                selected_learner = st.selectbox(
-                    "Select a learner",
-                    group_learners,
-                    format_func=lambda val: val["email"],
-                    index=0,
-                )
+    if not selected_learner:
+        return
 
-        if not selected_learner:
-            return
+    all_milestone_data = get_all_milestone_progress(
+        selected_learner["id"], cohort_id=selected_cohort["id"]
+    )
+    rows = []
 
-        all_milestone_data = get_all_milestone_progress(
-            selected_learner["id"], cohort_id=selected_cohort["id"]
+    for milestone_data in all_milestone_data:
+        milestone_data["percent_completed"] = np.round(
+            (milestone_data["completed_tasks"] / milestone_data["total_tasks"]) * 100,
+            2,
         )
-        rows = []
-
-        for milestone_data in all_milestone_data:
-            milestone_data["percent_completed"] = np.round(
-                (milestone_data["completed_tasks"] / milestone_data["total_tasks"])
-                * 100,
-                2,
-            )
-            rows.append(
-                [
-                    milestone_data["milestone_id"],
-                    milestone_data["milestone_name"],
-                    milestone_data["completed_tasks"],
-                    milestone_data["total_tasks"],
-                    milestone_data["percent_completed"],
-                ]
-            )
-
-        df = pd.DataFrame(
-            rows,
-            columns=[
-                "milestone_id",
-                "milestone_name",
-                "tasks_completed",
-                "total_tasks",
-                "% completed",
-            ],
+        rows.append(
+            [
+                milestone_data["milestone_id"],
+                milestone_data["milestone_name"],
+                milestone_data["completed_tasks"],
+                milestone_data["total_tasks"],
+                milestone_data["percent_completed"],
+            ]
         )
 
-        df_actions = st.container(border=True)
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "milestone_id",
+            "milestone_name",
+            "tasks_completed",
+            "total_tasks",
+            "% completed",
+        ],
+    )
 
-        event = st.dataframe(
-            df,
-            on_select="rerun",
-            selection_mode="single-row",
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "milestone_id": None,
-                "milestone_name": st.column_config.TextColumn("Milestone"),
-                "tasks_completed": st.column_config.NumberColumn(
-                    "Tasks Completed", width="small"
-                ),
-                "total_tasks": st.column_config.NumberColumn(
-                    "Total Tasks", width="small"
-                ),
-                "% completed": st.column_config.NumberColumn(
-                    "% Completed", width="small"
-                ),
-            },
-        )
-        if not len(event.selection["rows"]):
-            return
+    df_actions = st.container(border=True)
 
-        df_actions.write("Do you want to dig deeper into this milestone?")
-        milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
-        df_actions.link_button(
-            "Yes",
-            f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&mode=review",
-        )
-        # print()
-        # delete_tasks(event.selection['rows'])
+    event = st.dataframe(
+        df,
+        on_select="rerun",
+        selection_mode="single-row",
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "milestone_id": None,
+            "milestone_name": st.column_config.TextColumn("Milestone"),
+            "tasks_completed": st.column_config.NumberColumn(
+                "Tasks Completed", width="small"
+            ),
+            "total_tasks": st.column_config.NumberColumn("Total Tasks", width="small"),
+            "% completed": st.column_config.NumberColumn("% Completed", width="small"),
+        },
+    )
+    if not len(event.selection["rows"]):
+        return
+
+    df_actions.write("Do you want to dig deeper into this milestone?")
+    milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
+    df_actions.link_button(
+        "Yes",
+        f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&mode=review",
+    )
+    # print()
+    # delete_tasks(event.selection['rows'])
 
 
 def show_home():
@@ -156,14 +161,17 @@ def show_home():
                 index=0,
             )
 
-        if "groups" in selected_cohort:
-            role = selected_cohort["groups"][0]["role"]
+        if "role" in selected_cohort:
+            role = selected_cohort["role"]
         else:
             role = "admin"
 
         if role == "mentor":
-            is_mentor = st.toggle("Switch to mentor view", key="is_mentor", value=True)
-            st.markdown("----")
+            cols[1].container(height=2, border=False)
+            is_mentor = cols[1].toggle(
+                "Switch to mentor view", key="is_mentor", value=True
+            )
+            st.divider()
 
         if is_mentor:
             mentor_view(selected_cohort)

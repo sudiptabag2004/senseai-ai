@@ -28,6 +28,7 @@ from lib.llm import (
     call_llm_and_parse_output,
     COMMON_INSTRUCTIONS,
 )
+from lib.config import group_role_learner, group_role_mentor
 from lib.init import init_env_vars, init_db
 from lib.db import (
     get_all_tasks,
@@ -48,9 +49,9 @@ from lib.db import (
     delete_milestone as delete_milestone_from_db,
     update_milestone_color as update_milestone_color_in_db,
     get_all_cv_review_usage,
-    add_members_to_cohort,
     get_org_users,
     add_user_to_org_by_email,
+    add_members_to_cohort,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
@@ -1039,151 +1040,262 @@ def update_cohort_uploader_key():
 
 @st.dialog("Create Cohort")
 def show_create_cohort_dialog():
-    st.markdown("Hit `Enter` after entering the cohort name")
-    cohort_name = st.text_input("Enter cohort name")
+    with st.form("create_cohort_form", border=False):
+        cohort_name = st.text_input("Enter cohort name")
 
-    columns = ["Group Name", "Learner Email", "Learner ID", "Mentor Email"]
-    uploaded_file = st.file_uploader(
-        f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])}",
-        type="csv",
-        key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
-    )
-
-    if uploaded_file:
-        cohort_df = pd.read_csv(uploaded_file)
-        if cohort_df.columns.tolist() != columns:
-            st.error("The uploaded file does not have the correct columns.")
-            return
-
-        st.dataframe(cohort_df, use_container_width=True)
-
-        is_create_disabled = not cohort_name
-        if st.button(
+        if st.form_submit_button(
             "Create",
             type="primary",
-            disabled=is_create_disabled,
-            help="Enter a cohort name" if is_create_disabled else None,
+            use_container_width=True,
         ):
-            create_cohort(cohort_name, cohort_df, st.session_state.org_id)
+            if not cohort_name:
+                st.error("Enter a cohort name")
+                return
+
+            create_cohort(cohort_name, st.session_state.org_id)
             refresh_cohorts()
             if "tasks" in st.session_state and st.session_state.tasks:
                 refresh_tasks()
+
             set_toast(f"Cohort `{cohort_name}` created successfully!")
             st.rerun()
 
 
 @st.dialog("Add Members to Cohort")
-def show_add_members_to_cohort_dialog(cohort_id: int, df: pd.DataFrame):
-    columns = ["Group Name", "Learner Email", "Learner ID", "Mentor Email"]
-    uploaded_file = st.file_uploader(
-        f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])}",
-        type="csv",
-        key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
-    )
+def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
+    existing_members = set([member["email"] for member in cohort_info["members"]])
 
-    if uploaded_file:
-        add_members_df = pd.read_csv(uploaded_file)
+    tabs = st.tabs(["Add Members", "Bulk Upload Members"])
 
-        # if any of the emails in the uploaded file are already in the cohort,
-        # throw an error
-        if any(
-            email in df["Learner Email"].tolist()
-            or email in df["Mentor Email"].tolist()
-            for email in add_members_df["Learner Email"]
-        ):
-            st.error(
-                "The uploaded file contains learners or mentors that are already in the cohort"
+    with tabs[0]:
+        with st.form("add_cohort_member_form", border=False):
+            member_email = st.text_input("Enter email", key="cohort_member_email")
+            role = st.selectbox("Select role", [group_role_learner, group_role_mentor])
+
+            submit_button = st.form_submit_button(
+                "Add Member",
+                use_container_width=True,
+                type="primary",
             )
+            if submit_button:
+                try:
+                    # Check that the email address is valid
+                    member_email = validate_email(member_email)
+
+                    if member_email.normalized in existing_members:
+                        st.error(
+                            f"Member {member_email.normalized} already exists in cohort"
+                        )
+                        return
+
+                    add_members_to_cohort(cohort_id, [member_email.normalized], [role])
+                    refresh_cohorts()
+                    set_toast("Member added successfully")
+                    st.rerun()
+                except EmailNotValidError as e:
+                    # The exception message is human-readable explanation of why it's
+                    # not a valid (or deliverable) email address.
+                    st.error("Invalid email")
+
+    with tabs[1]:
+        columns = [
+            "Email",
+            "Role",
+        ]
+        uploaded_file = st.file_uploader(
+            f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])} (can be either `{group_role_learner}` or `{group_role_mentor}`)",
+            type="csv",
+            key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
+        )
+
+        if not uploaded_file:
             return
 
-        if add_members_df.columns.tolist() != columns:
+        cohort_df = pd.read_csv(uploaded_file)
+        if cohort_df.columns.tolist() != columns:
             st.error("The uploaded file does not have the correct columns.")
             return
 
-        st.dataframe(add_members_df, use_container_width=True)
+        if not cohort_df["Role"].isin([group_role_learner, group_role_mentor]).all():
+            st.error(
+                f"The uploaded file contains invalid roles. Please ensure that the `Role` column only contains `{group_role_learner}` or `{group_role_mentor}`."
+            )
+            return
+
+        for email in cohort_df["Email"].tolist():
+            try:
+                validate_email(email)
+            except EmailNotValidError as e:
+                st.error(f"Invalid email: {email}")
+                return
+
+            if email in existing_members:
+                st.error(f"Member {email} already exists in cohort")
+                return
+
+        st.dataframe(cohort_df, hide_index=True, use_container_width=True)
 
         if st.button(
-            "Add",
+            "Add Members",
+            use_container_width=True,
+            key="bulk_upload_cohort_members",
             type="primary",
         ):
-            add_members_to_cohort(cohort_id, add_members_df)
+            add_members_to_cohort(
+                cohort_id,
+                cohort_df["Email"].tolist(),
+                cohort_df["Role"].tolist(),
+            )
             refresh_cohorts()
             set_toast(f"Members added to cohort successfully!")
+            update_cohort_uploader_key()
             st.rerun()
 
 
 @st.fragment
 def show_cohorts_tab():
-    create_cohort_col, _ = st.columns([2, 8])
-    st.session_state.bulk_upload_cohort = None
-    if create_cohort_col.button("Create Cohort"):
-        update_cohort_uploader_key()
+    # create_cohort_col, _ = st.columns([2, 8])
+
+    cols = st.columns([1.2, 0.5, 3])
+    selected_cohort = cols[0].selectbox(
+        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
+    )
+
+    cols[1].container(height=10, border=False)
+    if cols[1].button("Create Cohort", type="primary"):
         show_create_cohort_dialog()
 
     if not len(st.session_state.cohorts):
         st.error("No cohorts added yet")
         return
 
-    cols = st.columns(4)
-    selected_cohort = cols[0].selectbox(
-        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
-    )
-
     cohort_info = get_cohort_by_id(selected_cohort["id"])
-    cohort_groups = [{"name": "All", "id": None}] + cohort_info["groups"]
 
-    selected_group = cols[1].selectbox(
-        "Select a group", cohort_groups, format_func=lambda group: group["name"]
-    )
+    if selected_cohort:
+        cols = st.columns([1, 9])
+        if cols[0].button("Add Members"):
+            show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+        if cols[1].button("Create Groups"):
+            st.toast("Coming soon!")
 
-    st.divider()
+        # TODO: add support for creating groups
 
-    if selected_group["name"] == "All":
-        # Create a list to store all group data
-        all_group_data = []
+    # cohort_groups = [{"name": "All", "id": None}] + cohort_info["groups"]
 
-        # Iterate through all groups in the cohort
-        for group in cohort_info["groups"]:
-            # For each learner in the group, create a row
-            for learner_email, learner_id in zip(
-                group["learner_emails"], group["learner_ids"]
-            ):
-                all_group_data.append(
-                    {
-                        "Group Name": group["name"],
-                        "Mentor Email": group["mentor_email"],
-                        "Learner Email": learner_email,
-                        "Learner ID": learner_id,
-                    }
-                )
+    # selected_group = cols[1].selectbox(
+    #     "Select a group", cohort_groups, format_func=lambda group: group["name"]
+    # )
 
-        # Create DataFrame from the collected data
-        df = pd.DataFrame(all_group_data)
+    learners = []
+    mentors = []
 
-        # Display the DataFrame
-        st.subheader("Cohort Overview")
+    # Create a list to store all group data
+    all_group_data = []
 
-        if st.button("Add Members"):
-            update_cohort_uploader_key()
-            show_add_members_to_cohort_dialog(selected_cohort["id"], df)
+    # Iterate through all groups in the cohort
+    for member in cohort_info["members"]:
+        if member["role"] == group_role_learner:
+            learners.append(member["email"])
+        elif member["role"] == group_role_mentor:
+            mentors.append(member["email"])
 
-        st.dataframe(df, hide_index=True, use_container_width=True)
+    tab_names = ["Learners", "Mentors", "Groups"]
 
-    else:
-        # Display mentor email
-        st.subheader("Mentor")
-        st.text(selected_group["mentor_email"])
+    tabs = st.tabs(tab_names)
 
-        # Create DataFrame of learner IDs and emails
-        learners_data = {
-            "Learner ID": selected_group["learner_ids"],
-            "Learner Email": selected_group["learner_emails"],
-        }
-        learners_df = pd.DataFrame(learners_data)
+    def show_learners_tab():
+        if not learners:
+            st.info("No learners in this cohort")
+            return
 
-        # Display the DataFrame
-        st.subheader("Learners")
-        st.dataframe(learners_df, hide_index=True, use_container_width=True)
+        st.dataframe(
+            pd.DataFrame(learners, columns=["email"]),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    def show_mentors_tab():
+        if not mentors:
+            st.info("No mentors in this cohort")
+            return
+
+        st.dataframe(
+            pd.DataFrame(mentors, columns=["email"]),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    def show_groups_tab():
+        if not cohort_info["groups"]:
+            st.info("No groups in this cohort")
+            return
+
+        cols = st.columns(3)
+        selected_group = cols[0].selectbox(
+            "Select a group",
+            cohort_info["groups"],
+            format_func=lambda group: group["name"],
+        )
+
+        cols = st.columns([2, 0.2, 1])
+
+        with cols[0]:
+            learners = {
+                "email": [
+                    member["email"]
+                    for member in selected_group["members"]
+                    if member["role"] == group_role_learner
+                ],
+            }
+            learners_df = pd.DataFrame(learners)
+
+            st.subheader("Learners")
+            st.dataframe(learners_df, hide_index=True, use_container_width=True)
+
+        with cols[-1]:
+            st.subheader("Mentors")
+            mentors = {
+                "email": [
+                    member["email"]
+                    for member in selected_group["members"]
+                    if member["role"] == group_role_mentor
+                ],
+            }
+            mentors_df = pd.DataFrame(mentors)
+            st.dataframe(mentors_df, hide_index=True, use_container_width=True)
+
+    with tabs[0]:
+        show_learners_tab()
+
+    with tabs[1]:
+        show_mentors_tab()
+
+    with tabs[2]:
+        show_groups_tab()
+
+        # For each learner in the group, create a row
+        # for learner_email, learner_id in zip(
+        #     group["learner_emails"], group["learner_ids"]
+        # ):
+        #     all_group_data.append(
+        #         {
+        #             "Group Name": group["name"],
+        #             "Mentor Email": group["mentor_email"],
+        #             "Learner Email": learner_email,
+        #             "Learner ID": learner_id,
+        #         }
+        #     )
+
+    # Create DataFrame from the collected data
+    # df = pd.DataFrame(all_group_data)
+
+    # # Display the DataFrame
+    # st.subheader("Cohort Overview")
+
+    # st.dataframe(df, hide_index=True, use_container_width=True)
+
+    # else:
+    #     # Display mentor email
 
 
 with tabs[0]:
