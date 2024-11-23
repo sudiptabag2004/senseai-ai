@@ -147,10 +147,6 @@ def get_wav_data_from_file_upload(audio_file):
     return wav_data
 
 
-# def get_wav_data_from_audio_input(audio_value):
-#     return audio_value.read()
-
-
 def show_ai_report():
     df = pd.DataFrame(
         st.session_state.ai_response_rows, columns=["Category", "Feedback"]
@@ -306,43 +302,22 @@ if st.session_state.audio_data:
         else:
             give_feedback_on_audio_input()
 else:
-    input_type = st.radio(
-        "How would you like to respond?", ["Record my answer", "Upload my answer"]
-    )
-    is_recording = input_type == "Record my answer"
+    is_recording = True
+    if "localhost" in os.environ["APP_URL"]:
+        # the choice to upload answer is solely for development purpose
+        input_type = st.radio(
+            "How would you like to respond?", ["Record my answer", "Upload my answer"]
+        )
+        is_recording = input_type == "Record my answer"
 
     if is_recording:
         if "localhost" in os.environ["APP_URL"]:
             st.info(
                 f"To record in browser (only required for testing locally):\n1. type the url `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in your browser\n2. Enter {os.environ['APP_URL']} in the textarea\n3. Choose `Enabled` and relaunch the browser"
             )
-        # audio_value = st.audio_input(
-        #     "Record a voice message by pressing on the mic icon"
-        # )
-
-        # mic_recorder(
-        #     start_prompt="Start recording",
-        #     stop_prompt="Stop recording",
-        #     just_once=False,
-        #     use_container_width=False,
-        #     format="wav",
-        #     callback=audio_recording_callback,
-        #     args=(),
-        #     kwargs={},
-        #     key="my_recorder",
-        # )
-        audio_value = audiorecorder(
-            "",
-            "",
-            pause_prompt="",
-            custom_style={"color": "black"},
-            start_style={},
-            pause_style={},
-            stop_style={},
-            show_visualizer=True,
-            key=None,
+        audio_value = st.audio_input(
+            "Record a voice message by pressing on the mic icon"
         )
-
     else:
         audio_value = st.file_uploader(
             "Upload your answer (audio)",
@@ -352,7 +327,17 @@ else:
 
     if audio_value:
         if is_recording:
-            st.session_state.audio_data = audio_value.export(format="wav").read()
+            file_size = audio_value.size  # Size in bytes
+            max_size = 20 * 1024 * 1024  # 10MB in bytes
+
+            if file_size > max_size:
+                st.error(
+                    f"File size ({file_size/1024/1024:.1f}MB) exceeds maximum allowed size (20MB)"
+                )
+                st.stop()
+
+            # st.session_state.audio_data = audio_value.export(format="wav").read()
+            st.session_state.audio_data = audio_value.read()
         else:
             st.session_state.audio_data = get_wav_data_from_file_upload(audio_value)
 
