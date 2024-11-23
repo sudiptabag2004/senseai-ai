@@ -1259,9 +1259,66 @@ def add_user_to_cohort_group(user_id: int, group_id: int, conn=None, cursor=None
             conn.close()
 
 
-def create_cohort_group(
-    name: str, cohort_id: int, mentors: List[str], learners: List[str]
+def update_cohort_group_name(group_id: int, new_name: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"UPDATE {groups_table_name} SET name = ? WHERE id = ?",
+            (new_name, group_id),
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def add_members_to_cohort_group(
+    group_id: int, member_ids: List[int], conn=None, cursor=None
 ):
+    is_master_connection = False
+    if conn is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        is_master_connection = True
+
+    try:
+        cursor.executemany(
+            f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
+            [(member_id, group_id) for member_id in member_ids],
+        )
+        if is_master_connection:
+            conn.commit()
+    except Exception as e:
+        if is_master_connection:
+            conn.rollback()
+        raise e
+    finally:
+        if is_master_connection:
+            conn.close()
+
+
+def remove_members_from_cohort_group(group_id: int, member_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"DELETE FROM {user_groups_table_name} WHERE group_id = ? AND user_id IN ({','.join(['?' for _ in member_ids])})",
+            (group_id, *member_ids),
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def create_cohort_group(name: str, cohort_id: int, member_ids: List[int]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1276,14 +1333,7 @@ def create_cohort_group(
         )
         group_id = cursor.lastrowid
 
-        # Add mentors and learners to group
-        for mentor in mentors:
-            user = insert_or_return_user(mentor, conn, cursor)
-            add_user_to_cohort_group(user["id"], group_id, conn, cursor)
-
-        for learner in learners:
-            user = insert_or_return_user(learner, conn, cursor)
-            add_user_to_cohort_group(user["id"], group_id, conn, cursor)
+        add_members_to_cohort_group(group_id, member_ids, conn, cursor)
 
         conn.commit()
         return group_id
@@ -1304,6 +1354,40 @@ def delete_cohort_group_from_db(group_id: int):
             f"DELETE FROM {user_groups_table_name} WHERE group_id = ?", (group_id,)
         )
         cursor.execute(f"DELETE FROM {groups_table_name} WHERE id = ?", (group_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def remove_members_from_cohort(cohort_id: int, member_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Remove users from cohort groups
+        cursor.execute(
+            f"""
+            DELETE FROM {user_groups_table_name} 
+            WHERE user_id IN ({','.join(['?' for _ in member_ids])})
+            AND group_id IN (
+                SELECT id FROM {groups_table_name} 
+                WHERE cohort_id = ?
+            )
+            """,
+            (*member_ids, cohort_id),
+        )
+        # Remove users from cohort
+        cursor.execute(
+            f"""
+            DELETE FROM {user_cohorts_table_name}
+            WHERE user_id IN ({','.join(['?' for _ in member_ids])})
+            AND cohort_id = ?
+            """,
+            (*member_ids, cohort_id),
+        )
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -1356,9 +1440,9 @@ def get_cohort_by_id(cohort_id: int):
             SELECT 
                 g.id,
                 g.name,
-                GROUP_CONCAT(u.id) as user_ids,
-                GROUP_CONCAT(u.email) as user_emails,
-                GROUP_CONCAT(uc.role) as user_roles
+                GROUP_CONCAT(COALESCE(u.id, '')) as user_ids,
+                GROUP_CONCAT(COALESCE(u.email, '')) as user_emails,
+                GROUP_CONCAT(COALESCE(uc.role, '')) as user_roles
             FROM {groups_table_name} g
             LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id 
             LEFT JOIN {users_table_name} u ON ug.user_id = u.id
@@ -1397,12 +1481,13 @@ def get_cohort_by_id(cohort_id: int):
                     "id": group[0],
                     "name": group[1],
                     "members": [
-                        {"id": user_id, "email": user_email, "role": user_role}
+                        {"id": int(user_id), "email": user_email, "role": user_role}
                         for user_id, user_email, user_role in zip(
                             group[2].split(","),
                             group[3].split(","),
                             group[4].split(","),
                         )
+                        if user_id != ""
                     ],
                 }
                 for group in groups
@@ -1438,7 +1523,7 @@ def delete_user_from_cohort(user_id: int, cohort_id: int):
 def format_user_cohort_group(group: Tuple):
     learners = []
     for id, email in zip(group[2].split(","), group[3].split(",")):
-        learners.append({"id": id, "email": email})
+        learners.append({"id": int(id), "email": email})
 
     return {
         "id": group[0],

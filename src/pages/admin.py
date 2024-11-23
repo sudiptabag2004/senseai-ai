@@ -54,6 +54,10 @@ from lib.db import (
     add_members_to_cohort,
     create_cohort_group,
     delete_cohort_group_from_db,
+    remove_members_from_cohort,
+    update_cohort_group_name,
+    add_members_to_cohort_group,
+    remove_members_from_cohort_group,
 )
 from lib.strings import *
 from lib.utils import load_json, save_json, generate_random_color
@@ -1154,55 +1158,142 @@ def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
             st.rerun()
 
 
-@st.dialog("Create Cohort Groups")
-def show_create_groups_dialog(cohort_id: int, cohort_info: dict):
-    with st.form("create_groups_form", border=False):
-        group_name = st.text_input("Enter group name", key="cohort_group_name")
-        learners = st.multiselect(
-            "Select learners",
-            [
-                member["email"]
-                for member in cohort_info["members"]
-                if member["role"] == group_role_learner
-            ],
-            key="cohort_group_learners",
-        )
-        mentors = st.multiselect(
-            "Select mentors",
-            [
-                member["email"]
-                for member in cohort_info["members"]
-                if member["role"] == group_role_mentor
-            ],
-            key="cohort_group_mentors",
+def group_create_edit_form(
+    key: str,
+    cohort_id: int,
+    cohort_info: dict,
+    mode: Literal["create", "edit"] = "create",
+    group_id: int = None,
+    group_name: str = "",
+    learners: List[Dict] = [],
+    mentors: List[Dict] = [],
+):
+    with st.form(key, border=False):
+        new_group_name = st.text_input(
+            "Enter group name", key="cohort_group_name", value=group_name
         )
 
+        learner_options = [
+            member
+            for member in cohort_info["members"]
+            if member["role"] == group_role_learner
+        ]
+        default_learners = [learner["id"] for learner in learners]
+        default_learners_selected = [
+            learner for learner in learner_options if learner["id"] in default_learners
+        ]
+
+        selected_learners = st.multiselect(
+            "Select learners",
+            learner_options,
+            key="cohort_group_learners",
+            format_func=lambda x: x["email"],
+            default=default_learners_selected,
+        )
+
+        mentor_options = [
+            member
+            for member in cohort_info["members"]
+            if member["role"] == group_role_mentor
+        ]
+        default_mentors = [mentor["id"] for mentor in mentors]
+        default_mentors_selected = [
+            mentor for mentor in mentor_options if mentor["id"] in default_mentors
+        ]
+
+        selected_mentors = st.multiselect(
+            "Select mentors",
+            mentor_options,
+            key="cohort_group_mentors",
+            format_func=lambda x: x["email"],
+            default=default_mentors_selected,
+        )
+
+        form_submit_button_text = "Create Group" if mode == "create" else "Save Changes"
+
         if st.form_submit_button(
-            "Create Group",
+            form_submit_button_text,
             use_container_width=True,
             type="primary",
         ):
-            if not group_name:
+            if not new_group_name:
                 st.error("Enter a group name")
                 return
 
-            if not learners:
+            if not selected_learners:
                 st.error("Select at least one learner")
                 return
 
-            if not mentors:
+            if not selected_mentors:
                 st.error("Select at least one mentor")
                 return
 
-            create_cohort_group(
-                group_name,
-                cohort_id,
-                learners,
-                mentors,
-            )
+            if mode == "create":
+                create_cohort_group(
+                    new_group_name,
+                    cohort_id,
+                    [member["id"] for member in selected_learners + selected_mentors],
+                )
+                set_toast(f"Cohort group created successfully!")
+            else:
+                if new_group_name != group_name:
+                    update_cohort_group_name(group_id, new_group_name)
+
+                if selected_learners != learners or selected_mentors != mentors:
+                    existing_member_ids = [learner["id"] for learner in learners] + [
+                        mentor["id"] for mentor in mentors
+                    ]
+                    new_member_ids = [
+                        learner["id"] for learner in selected_learners
+                    ] + [mentor["id"] for mentor in selected_mentors]
+
+                    member_ids_to_add = [
+                        member_id
+                        for member_id in new_member_ids
+                        if member_id not in existing_member_ids
+                    ]
+                    add_members_to_cohort_group(group_id, member_ids_to_add)
+
+                    member_ids_to_remove = [
+                        member_id
+                        for member_id in existing_member_ids
+                        if member_id not in new_member_ids
+                    ]
+                    remove_members_from_cohort_group(group_id, member_ids_to_remove)
+
+                set_toast(f"Cohort group updated successfully!")
+
             refresh_cohorts()
-            set_toast(f"Cohort group created successfully!")
             st.rerun()
+
+
+@st.dialog("Create Cohort Groups")
+def show_create_groups_dialog(cohort_id: int, cohort_info: dict):
+    group_create_edit_form(
+        "create_groups_form",
+        cohort_id,
+        cohort_info,
+    )
+
+
+@st.dialog("Edit Cohort Group")
+def show_edit_cohort_group_dialog(
+    cohort_id: int,
+    cohort_info: dict,
+    group: Dict,
+    learners: List[Dict],
+    mentors: List[Dict],
+):
+    group_create_edit_form(
+        "edit_groups_form",
+        cohort_id,
+        cohort_info,
+        mode="edit",
+        group_id=group["id"],
+        group_name=group["name"],
+        learners=learners,
+        mentors=mentors,
+    )
 
 
 @st.dialog("Delete Cohort Group Confirmation")
@@ -1223,10 +1314,28 @@ def show_delete_cohort_group_confirmation_dialog(group):
         st.rerun()
 
 
+@st.dialog("Remove Members from Cohort Confirmation")
+def show_cohort_members_delete_confirmation_dialog(cohort_id: int, members: List[Dict]):
+    st.markdown(
+        f"Are you sure you want to delete the following members from cohort: {', '.join([member['email'] for member in members])}?"
+    )
+    (
+        confirm_col,
+        cancel_col,
+    ) = st.columns([1.5, 6])
+
+    if confirm_col.button("Confirm", type="primary"):
+        remove_members_from_cohort(cohort_id, [member["id"] for member in members])
+        refresh_cohorts()
+        set_toast("Members removed from cohort successfully!")
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
 @st.fragment
 def show_cohorts_tab():
-    # create_cohort_col, _ = st.columns([2, 8])
-
     cols = st.columns([1.2, 0.5, 3])
     selected_cohort = cols[0].selectbox(
         "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
@@ -1255,49 +1364,109 @@ def show_cohorts_tab():
     # Iterate through all groups in the cohort
     for member in cohort_info["members"]:
         if member["role"] == group_role_learner:
-            learners.append(member["email"])
+            learners.append(member)
         elif member["role"] == group_role_mentor:
-            mentors.append(member["email"])
+            mentors.append(member)
 
     tab_names = ["Learners", "Mentors", "Groups"]
 
     tabs = st.tabs(tab_names)
+
+    def _show_users_tab(users: List[Dict], key: str):
+        selection_action_container = st.container(
+            key=f"selected_cohort_members_actions_{key}"
+        )
+
+        event = st.dataframe(
+            pd.DataFrame(users, columns=["email"]),
+            on_select="rerun",
+            selection_mode="multi-row",
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        if len(event.selection["rows"]):
+            if selection_action_container.button(
+                "Remove members", key=f"remove_cohort_members_{key}"
+            ):
+                show_cohort_members_delete_confirmation_dialog(
+                    selected_cohort["id"],
+                    [users[i] for i in event.selection["rows"]],
+                )
 
     def show_learners_tab():
         if not learners:
             st.info("No learners in this cohort")
             return
 
-        st.dataframe(
-            pd.DataFrame(learners, columns=["email"]),
-            hide_index=True,
-            use_container_width=True,
-        )
+        _show_users_tab(learners, "learners")
 
     def show_mentors_tab():
         if not mentors:
             st.info("No mentors in this cohort")
             return
 
-        st.dataframe(
-            pd.DataFrame(mentors, columns=["email"]),
-            hide_index=True,
-            use_container_width=True,
-        )
+        _show_users_tab(mentors, "mentors")
 
-    def show_groups_tab():
+    def show_groups_tab(cohort_info):
         if not cohort_info["groups"]:
             st.info("No groups in this cohort")
             return
 
-        cols = st.columns(3)
+        cols = st.columns([1, 0.3, 2])
+
+        # NOTE: DO NOT REMOVE THIS FORMATTING FOR THE DROPDOWN
+        # OTHERWISE CHANGES IN THE COHORT LIKE ADDING/REMOVING MEMBERS
+        # FROM THE WHOLE COHORT OR FROM A GROUP WILL NOT REFLECT IN THE DROPDOWN
+        # WITHOUT AN EXPLICIT RERUN
+        # FOR SOME REASON, ALTHOUGH cohort_info['groups'] IS UPDATED,
+        # THE GROUP VIEW DOES NOT UPDATE UNLESS THE MEMBER INFO OF THE GROUP IS
+        # USED IN THE FORMATTING OF THE DROPDOWN OPTIONS
+        def format_group(group):
+            group_mentors = [
+                member
+                for member in group["members"]
+                if member["role"] == group_role_mentor
+            ]
+            group_learners = [
+                member
+                for member in group["members"]
+                if member["role"] == group_role_learner
+            ]
+            return f'{group["name"]} ({len(group_learners)} learners, {len(group_mentors)} mentors)'
+
         selected_group = cols[0].selectbox(
             "Select a group",
             cohort_info["groups"],
-            format_func=lambda group: group["name"],
+            format_func=format_group,
         )
+
+        learners = [
+            member
+            for member in selected_group["members"]
+            if member["role"] == group_role_learner
+        ]
+
+        mentors = [
+            member
+            for member in selected_group["members"]
+            if member["role"] == group_role_mentor
+        ]
+
         cols[1].container(height=10, border=False)
         cols[1].button(
+            "Edit Group",
+            on_click=show_edit_cohort_group_dialog,
+            args=(
+                selected_cohort["id"],
+                cohort_info,
+                selected_group,
+                learners,
+                mentors,
+            ),
+        )
+        cols[2].container(height=10, border=False)
+        cols[2].button(
             "Delete Group",
             type="primary",
             on_click=show_delete_cohort_group_confirmation_dialog,
@@ -1307,29 +1476,25 @@ def show_cohorts_tab():
         cols = st.columns([2, 0.2, 1])
 
         with cols[0]:
-            learners = {
-                "email": [
-                    member["email"]
-                    for member in selected_group["members"]
-                    if member["role"] == group_role_learner
-                ],
-            }
             learners_df = pd.DataFrame(learners)
 
             st.subheader("Learners")
-            st.dataframe(learners_df, hide_index=True, use_container_width=True)
+            st.dataframe(
+                learners_df,
+                hide_index=True,
+                use_container_width=True,
+                column_order=["email"],
+            )
 
         with cols[-1]:
             st.subheader("Mentors")
-            mentors = {
-                "email": [
-                    member["email"]
-                    for member in selected_group["members"]
-                    if member["role"] == group_role_mentor
-                ],
-            }
             mentors_df = pd.DataFrame(mentors)
-            st.dataframe(mentors_df, hide_index=True, use_container_width=True)
+            st.dataframe(
+                mentors_df,
+                hide_index=True,
+                use_container_width=True,
+                column_order=["email"],
+            )
 
     with tabs[0]:
         show_learners_tab()
@@ -1338,31 +1503,7 @@ def show_cohorts_tab():
         show_mentors_tab()
 
     with tabs[2]:
-        show_groups_tab()
-
-        # For each learner in the group, create a row
-        # for learner_email, learner_id in zip(
-        #     group["learner_emails"], group["learner_ids"]
-        # ):
-        #     all_group_data.append(
-        #         {
-        #             "Group Name": group["name"],
-        #             "Mentor Email": group["mentor_email"],
-        #             "Learner Email": learner_email,
-        #             "Learner ID": learner_id,
-        #         }
-        #     )
-
-    # Create DataFrame from the collected data
-    # df = pd.DataFrame(all_group_data)
-
-    # # Display the DataFrame
-    # st.subheader("Cohort Overview")
-
-    # st.dataframe(df, hide_index=True, use_container_width=True)
-
-    # else:
-    #     # Display mentor email
+        show_groups_tab(cohort_info)
 
 
 with tabs[0]:
