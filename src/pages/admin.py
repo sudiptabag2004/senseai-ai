@@ -329,7 +329,7 @@ def add_verified_task_to_list(final_answer):
         True,
         st.session_state.tests,  # Add this line to include the tests
         st.session_state.milestone["id"] if st.session_state.milestone else None,
-        st.session_state.selected_task_cohort["id"],
+        st.session_state.org_id,
     )
     refresh_tasks()
 
@@ -712,7 +712,7 @@ def show_bulk_upload_tasks_form():
                 False,
                 [],
                 milestone["id"] if milestone is not None else None,
-                st.session_state.selected_task_cohort["id"],
+                st.session_state.org_id
             )
 
         refresh_tasks()

@@ -383,7 +383,7 @@ def store_task(
     verified: bool,
     tests: List[dict],
     milestone_id: int,
-    cohort_id: int,
+    org_id: int,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -393,7 +393,7 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, cohort_id)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -405,7 +405,7 @@ def store_task(
                 generation_model,
                 verified,
                 milestone_id,
-                cohort_id,
+                org_id,
             ),
         )
 
@@ -1713,7 +1713,7 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
     null_milestone_query = f"""
     SELECT 
         NULL AS milestone_id,
-        'Unassigned' AS milestone_name,
+        'Uncategorized' AS milestone_name,
         '#808080' AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
         SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
