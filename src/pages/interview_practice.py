@@ -19,10 +19,6 @@ from lib.init import init_env_vars
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
-# from streamlit_mic_recorder import mic_recorder
-from audiorecorder import audiorecorder
-
-
 init_env_vars()
 
 redirect_if_not_logged_in(key="id")
