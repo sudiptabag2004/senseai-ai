@@ -1676,6 +1676,44 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
     cursor.execute(query, (user_id, cohort_id, cohort_id))
     results = cursor.fetchall()
 
+    # Get tasks with null milestone_id
+    null_milestone_query = f"""
+    SELECT 
+        NULL AS milestone_id,
+        'Unassigned' AS milestone_name,
+        '#808080' AS milestone_color,
+        COUNT(DISTINCT t.id) AS total_tasks,
+        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
+        COUNT(DISTINCT t.id) - SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
+    FROM 
+        {tasks_table_name} t
+    LEFT JOIN (
+        SELECT 
+            task_id,
+            user_id,
+            MAX(CASE WHEN is_solved = 1 THEN 1 ELSE 0 END) AS is_solved
+        FROM 
+            {chat_history_table_name}
+        WHERE 
+            user_id = ? AND task_id IN (SELECT id FROM {tasks_table_name} WHERE cohort_id = ?)
+        GROUP BY 
+            task_id, user_id
+    ) task_solved ON t.id = task_solved.task_id
+    WHERE 
+        t.milestone_id IS NULL 
+        AND t.verified = 1 
+        AND t.cohort_id = ?
+    HAVING
+        COUNT(DISTINCT t.id) > 0
+    ORDER BY 
+        incomplete_tasks DESC
+    """
+
+    cursor.execute(null_milestone_query, (user_id, cohort_id, cohort_id))
+    null_milestone_results = cursor.fetchall()
+
+    results.extend(null_milestone_results)
+
     conn.close()
 
     return [
