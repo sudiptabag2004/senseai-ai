@@ -54,6 +54,7 @@ from lib.db import (
     add_members_to_cohort,
     create_cohort_group,
     delete_cohort_group_from_db,
+    delete_cohort,
     remove_members_from_cohort,
     update_cohort_group_name,
     add_members_to_cohort_group,
@@ -1334,6 +1335,24 @@ def show_cohort_members_delete_confirmation_dialog(cohort_id: int, members: List
         st.rerun()
 
 
+@st.dialog("Delete Cohort Confirmation")
+def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
+    st.markdown(f"Are you sure you want to delete the cohort: `{cohort_info['name']}`?")
+    (
+        confirm_col,
+        cancel_col,
+    ) = st.columns([1.5, 6])
+
+    if confirm_col.button("Confirm", type="primary"):
+        delete_cohort(cohort_id)
+        refresh_cohorts()
+        set_toast("Cohort deleted successfully!")
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
 @st.fragment
 def show_cohorts_tab():
     cols = st.columns([1.2, 0.5, 3])
@@ -1352,11 +1371,13 @@ def show_cohorts_tab():
     cohort_info = get_cohort_by_id(selected_cohort["id"])
 
     if selected_cohort:
-        cols = st.columns([1, 9])
+        cols = st.columns([1, 1, 7.5])
         if cols[0].button("Add Members"):
             show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
         if cols[1].button("Create Groups"):
             show_create_groups_dialog(selected_cohort["id"], cohort_info)
+        if cols[2].button("🗑️", help="Delete Cohort"):
+            show_delete_cohort_confirmation_dialog(selected_cohort["id"], cohort_info)
 
     learners = []
     mentors = []

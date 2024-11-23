@@ -1152,6 +1152,7 @@ def delete_cohort(cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # TODO: remove this once we have many to many relationship between cohorts and tasks
     cursor.execute(
         f"DELETE FROM {tasks_table_name} WHERE cohort_id = ?",
         (cohort_id,),
