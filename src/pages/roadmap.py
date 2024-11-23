@@ -36,5 +36,5 @@ all_tasks = get_tasks_with_completion_status(
 )
 
 show_roadmap_as_list(
-    all_tasks, is_review_mode=True, learner_id=st.query_params["learner"]
+    all_tasks, cohort_id, is_review_mode=True, learner_id=st.query_params["learner"]
 )

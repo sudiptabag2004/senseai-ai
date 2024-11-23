@@ -28,11 +28,13 @@ def generate_progress_bar_background_color(header_background_color: str):
     return progress_color
 
 
-def get_task_view(task: Dict):
+def get_task_view(task: Dict, cohort_id: int):
     progress_icon_name = "green_tick.svg" if task["completed"] else "border_circle.svg"
     progress_icon = open(f"lib/assets/{progress_icon_name}").read()
 
-    task_url = f"/task?id={task['id']}&email={st.session_state.email}"
+    task_url = (
+        f"/task?id={task['id']}&email={st.session_state.email}&cohort={cohort_id}"
+    )
 
     # Escape HTML characters in task name and description
     task_name = html.escape(task["name"].strip())
@@ -45,7 +47,11 @@ def get_task_view(task: Dict):
 
 
 def show_milestone_card(
-    milestone: Dict, completed_tasks: int, total_tasks: int, tasks: List[Dict]
+    milestone: Dict,
+    completed_tasks: int,
+    total_tasks: int,
+    tasks: List[Dict],
+    cohort_id: int,
 ):
     # Calculate the progress percentage
     progress_percentage = (completed_tasks / total_tasks) * 100
@@ -56,7 +62,7 @@ def show_milestone_card(
     # Generate a unique class name based on the milestone name
     milestone_class = f"milestone-{milestone['id']}"
 
-    task_list_view = "".join(get_task_view(task) for task in tasks)
+    task_list_view = "".join(get_task_view(task, cohort_id) for task in tasks)
 
     st.markdown(
         f"""

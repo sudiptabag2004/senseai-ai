@@ -21,6 +21,7 @@ def show_empty_error_message(is_review_mode: bool = False):
 
 def show_roadmap_as_list(
     tasks,
+    cohort_id: int,
     is_review_mode: bool = False,
     learner_id: int = None,
 ):
@@ -67,7 +68,7 @@ def show_roadmap_as_list(
 
         df_actions.write(confirmation_message)
         task_id = filtered_df.iloc[event.selection["rows"][0]]["id"]
-        link = f"/task?id={task_id}&email={st.session_state.email}"
+        link = f"/task?id={task_id}&email={st.session_state.email}&cohort={cohort_id}"
 
         if is_review_mode:
             link += f"&learner={learner_id}&mode=review"
@@ -107,6 +108,7 @@ def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int):
             milestone_data["completed_tasks"],
             milestone_data["total_tasks"],
             milestone_tasks,
+            cohort_id,
         )
 
 
@@ -141,7 +143,7 @@ def show_roadmap(cohort_id: int):
     )
 
     if st.session_state.show_list_view:
-        show_roadmap_as_list(all_tasks)
+        show_roadmap_as_list(all_tasks, cohort_id)
     else:
         show_roadmap_by_milestone(
             all_tasks, user_id=logged_in_user["id"], cohort_id=cohort_id
