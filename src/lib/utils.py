@@ -58,3 +58,17 @@ def convert_utc_to_ist(utc_dt: datetime) -> datetime:
     ist_dt = utc_dt.astimezone(ist)
 
     return ist_dt
+
+
+def find_intersection(list_of_lists):
+    if not list_of_lists:
+        return []
+
+    # Convert first list to set
+    result = set(list_of_lists[0])
+
+    # Intersect with each subsequent list
+    for lst in list_of_lists[1:]:
+        result.intersection_update(lst)
+
+    return list(result)

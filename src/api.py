@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from models import ChatMessage, Task, Streaks, LeaderboardViewType
 from lib.db import (
     get_all_chat_history,
-    get_all_tasks,
+    get_all_tasks_for_org_or_cohort,
     get_streaks,
     get_solved_tasks_for_user,
 )
@@ -24,8 +24,8 @@ async def get_chat_history() -> List[ChatMessage]:
     "/tasks",
     response_model=List[Task],
 )
-async def get_tasks(cohort_id: int = None) -> List[Task]:
-    return get_all_tasks(cohort_id=cohort_id)
+async def get_tasks(org_id: int = None) -> List[Task]:
+    return get_all_tasks_for_org_or_cohort(org_id=org_id)
 
 
 @app.get(

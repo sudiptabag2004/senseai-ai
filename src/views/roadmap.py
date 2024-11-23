@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from lib.db import (
     get_all_milestone_progress,
-    get_all_verified_tasks,
+    get_all_verified_tasks_for_cohort,
     get_solved_tasks_for_user,
 )
 from components.milestone_learner_view import show_milestone_card
@@ -117,7 +117,7 @@ def update_task_view():
 def get_tasks_with_completion_status(
     user_id: int, cohort_id: int, milestone_id: int = None
 ):
-    all_tasks = get_all_verified_tasks(cohort_id, milestone_id)
+    all_tasks = get_all_verified_tasks_for_cohort(cohort_id, milestone_id)
     solved_task_ids = get_solved_tasks_for_user(user_id, cohort_id)
 
     for task in all_tasks:

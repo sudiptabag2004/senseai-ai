@@ -31,7 +31,7 @@ from lib.llm import (
 from lib.config import group_role_learner, group_role_mentor
 from lib.init import init_env_vars, init_db
 from lib.db import (
-    get_all_tasks,
+    get_all_tasks_for_org_or_cohort,
     store_task as store_task_to_db,
     delete_tasks as delete_tasks_from_db,
     update_task as update_task_in_db,
@@ -59,9 +59,12 @@ from lib.db import (
     update_cohort_group_name,
     add_members_to_cohort_group,
     remove_members_from_cohort_group,
+    get_cohorts_for_org,
+    add_tasks_to_cohorts,
+    remove_tasks_from_cohorts,
 )
 from lib.strings import *
-from lib.utils import load_json, save_json, generate_random_color
+from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
 from lib.toast import set_toast, show_toast
@@ -112,7 +115,7 @@ def refresh_cohorts():
 
 
 def refresh_tasks():
-    st.session_state.tasks = get_all_tasks(st.session_state.selected_task_cohort["id"])
+    st.session_state.tasks = get_all_tasks_for_org_or_cohort(st.session_state.org_id)
 
 
 def refresh_milestones():
@@ -788,6 +791,60 @@ def show_task_edit_dialog(task_ids):
         st.rerun()
 
 
+@st.dialog("Assign tasks to cohort")
+def show_tasks_assign_to_cohort_dialog(row_ids, task_ids, tasks_df):
+    task_cohorts = []
+    for _, row in tasks_df.iloc[row_ids].iterrows():
+        task_cohorts.append([cohort["id"] for cohort in row["cohorts"]])
+
+    common_cohort_ids = find_intersection(task_cohorts)
+
+    org_cohorts = get_cohorts_for_org(st.session_state.org_id)
+
+    default_cohorts = [
+        cohort for cohort in org_cohorts if cohort["id"] in common_cohort_ids
+    ]
+
+    with st.form("assign_tasks_to_cohort_form", border=False):
+        selected_cohorts = st.multiselect(
+            "Select cohorts to assign tasks to",
+            org_cohorts,
+            format_func=lambda x: x["name"],
+            default=default_cohorts,
+        )
+
+        st.container(height=30, border=False)
+
+        if st.form_submit_button("Update", use_container_width=True, type="primary"):
+            cohort_tasks_to_add = []
+            cohort_tasks_to_remove = []
+
+            for row_id, task_id in zip(row_ids, task_ids):
+                new_cohort_ids = [cohort["id"] for cohort in selected_cohorts]
+                existing_cohort_ids = [
+                    cohort["id"] for cohort in tasks_df.iloc[row_id]["cohorts"]
+                ]
+
+                added_cohort_ids = list(set(new_cohort_ids) - set(existing_cohort_ids))
+                deleted_cohort_ids = list(
+                    set(existing_cohort_ids) - set(new_cohort_ids)
+                )
+
+                for cohort_id in added_cohort_ids:
+                    cohort_tasks_to_add.append((task_id, cohort_id))
+
+                for cohort_id in deleted_cohort_ids:
+                    cohort_tasks_to_remove.append((task_id, cohort_id))
+
+            if cohort_tasks_to_add:
+                add_tasks_to_cohorts(cohort_tasks_to_add)
+
+            if cohort_tasks_to_remove:
+                remove_tasks_from_cohorts(cohort_tasks_to_remove)
+
+            st.rerun()
+
+
 tasks_heading = "Tasks"
 cohorts_heading = "Cohorts"
 num_cohorts = len(st.session_state.cohorts)
@@ -808,26 +865,11 @@ tabs = st.tabs(tab_names)
 
 @st.fragment
 def show_tasks_tab():
-    if not st.session_state.cohorts:
-        st.error(
-            "No cohorts added yet. Please create a cohort from the `Cohorts` tab first!"
-        )
-        return
+    cols = st.columns([1, 8])
 
-    cols = st.columns([1.5, 0.6, 3])
-    cols[0].selectbox(
-        "Select a cohort",
-        st.session_state.cohorts,
-        format_func=lambda row: row["name"],
-        key="selected_task_cohort",
-        on_change=refresh_tasks,
-    )
+    add_task = cols[0].button("Add a new task", type="primary")
 
-    cols[1].container(height=10, border=False)
-    add_task = cols[1].button("Add a new task")
-
-    cols[2].container(height=10, border=False)
-    bulk_upload_tasks = cols[2].button("Bulk upload tasks")
+    bulk_upload_tasks = cols[1].button("Bulk upload tasks")
 
     if add_task:
         reset_tests()
@@ -838,7 +880,7 @@ def show_tasks_tab():
     if bulk_upload_tasks:
         show_bulk_upload_tasks_form()
 
-    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Delete tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)"
+    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Update the cohort for the selected tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)\n\n- Delete tasks"
 
     with st.expander("User Guide"):
         st.write(tasks_description)
@@ -874,15 +916,6 @@ def show_tasks_tab():
     if verified_filter != "All":
         df = df[df["verified"] == (verified_filter == "Verified")]
 
-    # type_filter = cols[2].radio(
-    #     "Filter by task type",
-    #     ["All", "Coding", "Text"],
-    #     horizontal=True,
-    # )
-
-    # if type_filter != "All":
-    #     df = df[df["type"] == type_filter.lower()]
-
     # milestones = [milestone["id"] for milestone in st.session_state.milestones]
     filtered_milestones = cols[2].multiselect(
         "Filter by milestone",
@@ -893,23 +926,6 @@ def show_tasks_tab():
     if filtered_milestones:
         filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
         df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
-
-    # coding_languages_filter = cols[3].multiselect(
-    #     "Filter by coding language",
-    #     coding_languages_supported,
-    #     help="Select one or more coding languages to filter tasks",
-    # )
-
-    # if coding_languages_filter:
-    #     df = df[
-    #         df["coding_language"].apply(
-    #             lambda x: (
-    #                 any(lang in x for lang in coding_languages_filter)
-    #                 if isinstance(x, list)
-    #                 else False
-    #             )
-    #         )
-    #     ]
 
     (
         edit_mode_col,
@@ -930,6 +946,8 @@ def show_tasks_tab():
         "milestone_name": st.column_config.TextColumn(label="milestone"),
     }
 
+    df["cohort_names"] = df["cohorts"].apply(lambda x: [cohort["name"] for cohort in x])
+
     column_order = [
         "id",
         "verified",
@@ -939,6 +957,7 @@ def show_tasks_tab():
         "answer",
         "tags",
         "milestone_name",
+        "cohort_names",
         "type",
         "coding_language",
         "generation_model",
@@ -973,7 +992,9 @@ def show_tasks_tab():
         # st.rerun()
 
     if not is_edit_mode:
-        delete_col, edit_col, add_tests_col, _ = st.columns([1.5, 2, 4, 7])
+        delete_col, assign_cohort_col, edit_col, add_tests_col = st.columns(
+            [0.4, 1, 1.2, 6]
+        )
 
         event = st.dataframe(
             df,
@@ -987,10 +1008,17 @@ def show_tasks_tab():
 
         if len(event.selection["rows"]):
             task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
-            if delete_col.button("Delete tasks"):
+
+            if delete_col.button("🗑️", help="Delete selected tasks"):
                 # import ipdb; ipdb.set_trace()
                 show_tasks_delete_confirmation(
                     task_ids,
+                )
+
+            if assign_cohort_col.button("Update cohort"):
+                # import ipdb; ipdb.set_trace()
+                show_tasks_assign_to_cohort_dialog(
+                    event.selection["rows"], task_ids, df
                 )
 
             if edit_col.button("Edit task attributes"):
@@ -999,15 +1027,16 @@ def show_tasks_tab():
                     task_ids,
                 )
 
-            if add_tests_col.button("Add/Edit tests"):
-                if len(task_ids) == 1:
+            if (
+                len(task_ids) == 1
+                and df.iloc[event.selection["rows"]]["type"].tolist()[0] == "coding"
+            ):
+                if add_tests_col.button("Add/Edit tests"):
                     reset_tests()
                     edit_tests_for_task(
                         df,
                         task_ids[0],
                     )
-                else:
-                    st.error("Please select only one task to edit tests for.")
 
     else:
         edited_df = st.data_editor(
