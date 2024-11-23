@@ -35,6 +35,10 @@ questions = [
     "Tell us your strengths and weakness",
     "Why do you have a career gap?",
     "Do you have any questions for us?",
+    "How do you deal with criticism/ constructive feedback? Think of real world examples.",
+    "How do you deal with challenges? Think of real world examples.",
+    "Why should a company hire you?",
+    "What are your major achievements?",
 ]
 
 if "interview_started" not in st.session_state:
