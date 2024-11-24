@@ -6,6 +6,8 @@ import streamlit as st
 import asyncio
 import json
 import streamlit.components.v1 as components
+import sqlite3
+import pandas as pd
 
 
 def show_react_help_text():
@@ -15,6 +17,16 @@ def show_react_help_text():
 
         st.markdown(
             f"A few guidelines to follow:\n- Avoid importing `React` or `useState`. Directly use `React.useState` and so on.\n- Structure your code to adhere to the initial code template provided.\n- If your code does not produce the desired output, check if it follows these principles (refer to the example below).\n\nHere is a code sample that produces the desired output.\n\n```jsx\n{working_code_sample}\n```\nBut the following code does not:\n\n```jsx\n{failing_code_sample}\n```"
+        )
+
+
+def show_sql_help_text():
+    with st.expander("Learn More"):
+        st.markdown(
+            "When writing SQL code, **don't forget to add a semicolon (`;`)** at the end of each statement.\n\n"
+            "Semicolons are used to **separate multiple SQL statements** so that each one can be recognized and executed independently.\n\n"
+            "Without using semicolons, your SQL code might fail or produce unexpected results.\n\n"
+            "It's a good habit to always use semicolons to avoid errors when executing multiple SQL commands."
         )
 
 
@@ -113,6 +125,40 @@ def run_react_code(jsx_code: str, css_code: str) -> str:
     return react_template
 
 
+def run_sql_code(code: str) -> list:
+    try:
+        # Connect to an in-memory SQLite database
+        connection = sqlite3.connect(":memory:")
+        cursor = connection.cursor()
+
+        # Split the code into individual statements
+        statements = re.split(r";\s*", code.strip())
+        results = []
+
+        for statement in statements:
+            statement = statement.strip()
+            if not statement:
+                continue
+
+            try:
+                cursor.execute(statement)
+                # If the statement is a SELECT query, fetch and store results
+                if statement.lower().startswith("select"):
+                    rows = cursor.fetchall()
+                    columns = [desc[0] for desc in cursor.description]
+                    results.append((rows, columns))
+                else:
+                    # For other statements, commit the changes
+                    connection.commit()
+            except sqlite3.Error as e:
+                return f"SQL Error in statement `{statement}`: {str(e)}"
+        return results
+    except sqlite3.Error as e:
+        return f"SQL Error: {str(e)}"
+    finally:
+        connection.close()
+
+
 def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
     """Run code based on language and display output."""
     if lang == "NodeJS" or lang == "Javascript":
@@ -159,6 +205,8 @@ def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
         output = asyncio.run(run_python_code_with_timeout(code))
     elif lang == "React":
         output = run_react_code(code, st.session_state.css_code)
+    elif lang == "SQL":
+        output = run_sql_code(code)
     else:
         output = "Unsupported language for execution."
 
@@ -166,6 +214,20 @@ def execute_code(code: str, lang: str, width: int = 600, height: int = 300):
     st.write("### Output")
     if lang == "React":
         components.html(output, width=width, height=height, scrolling=True)
+    elif lang == "SQL":
+        if isinstance(output, list):
+            if not output:
+                st.write("No results found.")
+                return
+
+            for index, (rows, columns) in enumerate(output):
+                if rows and columns:
+                    df = pd.DataFrame(rows, columns=columns)
+                    st.dataframe(df, width=width, height=height)
+                else:
+                    st.write(f"Result {index + 1}: No results found or empty columns.")
+        else:
+            st.text(output)
     else:
         st.code(output, language="python" if lang == "Python" else "javascript")
 
@@ -202,4 +264,17 @@ function App() {
 
 const rootElement = document.getElementById('root');
 ReactDOM.render(<App />, rootElement);
+"""
+
+sql_default_code = """
+-- Write your SQL queries here; remember to add a 
+-- semicolon (`;`) at the end of each statement; 
+-- an example is provided below
+
+-- create the table
+CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT, age INTEGER);
+-- insert some data
+INSERT INTO students (name, age) VALUES ('Alice', 22);
+-- query that data
+SELECT * FROM students;
 """
