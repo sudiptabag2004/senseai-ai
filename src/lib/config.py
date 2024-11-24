@@ -36,7 +36,7 @@ user_organizations_table_name = "user_organizations"
 group_role_learner = "learner"
 group_role_mentor = "mentor"
 
-coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python", "React"]
+coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python", "React", "SQL"]
 leaderboard_view_types = [
     str(LeaderboardViewType.ALL_TIME),
     str(LeaderboardViewType.WEEKLY),

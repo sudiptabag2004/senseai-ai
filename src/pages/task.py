@@ -47,6 +47,8 @@ from components.code_execution import (
     run_tests,
     react_default_code,
     show_react_help_text,
+    sql_default_code,
+    show_sql_help_text
 )
 from components.badge import show_badge_dialog, show_multiple_badges_dialog
 
@@ -496,6 +498,7 @@ supported_language_keys = [
     "nodejs_code",
     "python_code",
     "react_code",
+    "sql_code",
 ]
 
 
@@ -515,6 +518,7 @@ def is_any_code_present():
         or st.session_state.get("nodejs_code", "")
         or st.session_state.get("python_code", "")
         or st.session_state.get("react_code", "")
+        or st.session_state.get("sql_code", "")
     )
 
 
@@ -573,6 +577,8 @@ def get_code_for_ai_feedback():
         )
     if st.session_state.react_code:
         combined_code.append(f"```jsx\n{clean_code(st.session_state.react_code)}\n```")
+    if st.session_state.sql_code:
+        combined_code.append(f"```sql\n{clean_code(st.session_state.sql_code)}\n```")
 
     # st.session_state.js_code
 
@@ -631,6 +637,8 @@ for lang, code in restored_code_snippets.items():
 if task["type"] == "coding" and not st.session_state.is_review_mode:
     if "React" in task["coding_language"] and "react_code" not in st.session_state:
         st.session_state["react_code"] = react_default_code
+    if "SQL" in task["coding_language"] and "sql_code" not in st.session_state:
+        st.session_state["sql_code"] = sql_default_code
 
     with code_input_container:
         for lang in supported_language_keys:
@@ -649,6 +657,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                 "NodeJS": "NodeJS",
                 "Python": "Python",
                 "React": "React",
+                "SQL": "SQL",
             }
             tab_name_to_language = {
                 "HTML": "html",
@@ -657,6 +666,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                 "NodeJS": "javascript",
                 "Python": "python",
                 "React": "jsx",
+                "SQL": "sql",
             }
             tab_names = []
             for lang in task["coding_language"]:
@@ -677,7 +687,9 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
 
                         if tab_name == "react":
                             show_react_help_text()
-
+                        elif tab_name == "sql":
+                            show_sql_help_text()
+                            
                         st_ace(
                             min_lines=15,
                             theme="monokai",
@@ -796,6 +808,8 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                                 width=width,
                                 height=height,
                             )
+                        elif "SQL" in task["coding_language"]:
+                            execute_code(st.session_state.sql_code, "SQL", width=width, height=height)
                         else:
                             st.write("**No output to show**")
                         # TODO: support for only JS
