@@ -669,7 +669,7 @@ def show_bulk_upload_tasks_form():
     milestone = milestone_selector()
 
     uploaded_file = st.file_uploader(
-        "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags`, `Answer` (optional)",
+        "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional), `Answer` (optional)",
         type="csv",
         key="bulk_upload_tasks",
     )
@@ -680,26 +680,33 @@ def show_bulk_upload_tasks_form():
         if "Answer" not in tasks_df.columns:
             tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
 
-        unique_tags = list(
-            set(
-                list(
-                    itertools.chain(
-                        *tasks_df["Tags"]
-                        .apply(lambda val: [tag.strip() for tag in val.split(",")])
-                        .tolist()
+        has_tags = "Tags" in tasks_df.columns
+
+        if has_tags:
+            unique_tags = list(
+                set(
+                    list(
+                        itertools.chain(
+                            *tasks_df["Tags"]
+                            .apply(lambda val: [tag.strip() for tag in val.split(",")])
+                            .tolist()
+                        )
                     )
                 )
             )
-        )
-        has_new_tags = create_bulk_tags(unique_tags)
-        if has_new_tags:
-            refresh_tags()
+            has_new_tags = create_bulk_tags(unique_tags)
+            if has_new_tags:
+                refresh_tags()
 
         for _, row in tasks_df.iterrows():
-            task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
-            task_tags = [
-                tag for tag in st.session_state.tags if tag["name"] in task_tag_names
-            ]
+            task_tags = []
+            if has_tags:
+                task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
+                task_tags = [
+                    tag
+                    for tag in st.session_state.tags
+                    if tag["name"] in task_tag_names
+                ]
 
             store_task_to_db(
                 row["Name"],
@@ -712,7 +719,7 @@ def show_bulk_upload_tasks_form():
                 False,
                 [],
                 milestone["id"] if milestone is not None else None,
-                st.session_state.org_id
+                st.session_state.org_id,
             )
 
         refresh_tasks()
