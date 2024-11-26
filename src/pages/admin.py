@@ -321,7 +321,7 @@ def add_verified_task_to_list(final_answer):
         error_text = "Please enter a task name"
     elif not st.session_state.task_description:
         error_text = "Please enter a task description"
-    elif st.session_state.show_code_editor and not st.session_state.tests:
+    elif st.session_state.show_code_editor and not st.session_state.coding_languages:
         error_text = "Please add at least one coding language"
     elif not final_answer:
         error_text = "Please enter an answer"
