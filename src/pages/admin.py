@@ -316,9 +316,23 @@ def update_test_in_session_state(test_index):
 
 
 def add_verified_task_to_list(final_answer):
+    error_text = ""
+    if not st.session_state.task_name:
+        error_text = "Please enter a task name"
+    elif not st.session_state.task_description:
+        error_text = "Please enter a task description"
+    elif st.session_state.show_code_editor and not st.session_state.tests:
+        error_text = "Please add at least one coding language"
+    elif not final_answer:
+        error_text = "Please enter an answer"
+
+    if error_text:
+        st.error(error_text)
+        return
+
     task_type = get_task_type(st.session_state.show_code_editor)
 
-    store_task_to_db(
+    task_id = store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
         final_answer,
@@ -331,7 +345,15 @@ def add_verified_task_to_list(final_answer):
         st.session_state.milestone["id"] if st.session_state.milestone else None,
         st.session_state.org_id,
     )
+
+    if st.session_state.task_cohort:
+        add_tasks_to_cohorts(
+            [[task_id, st.session_state.task_cohort["id"]]]
+        )
+
     refresh_tasks()
+    reset_tests()
+    st.rerun()
 
 
 def add_tests_to_task(
@@ -506,10 +528,21 @@ def milestone_selector():
     )
 
 
+def cohort_selector():
+    return st.selectbox(
+        "Cohort",
+        st.session_state.cohorts,
+        key="task_cohort",
+        format_func=lambda row: row["name"],
+        index=None,
+        help="If you don't see the cohort you want, you can create a new one from the `Cohorts` tab",
+    )
+
+
 def task_type_selector():
     return st.checkbox(
         admin_show_code_editor_label,
-        value=True,
+        value=False,
         help=admin_show_code_editor_help,
         key="show_code_editor",
     )
@@ -527,25 +560,11 @@ def coding_language_selector():
 
 @st.dialog("Add a new task")
 def show_task_form():
-    st.text_input("*Name", key="task_name", value="Greet function")
+    st.text_input("Name", key="task_name")
     st.text_area(
-        "*Description",
+        "Description",
         key="task_description",
-        value="""Write a python code to take user input and display it.""",
     )
-
-    cols = st.columns(2)
-    cols[0].multiselect(
-        "Tags",
-        st.session_state.tags,
-        key="task_tags",
-        default=None,
-        format_func=lambda tag: tag["name"],
-        help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
-    )
-
-    with cols[1]:
-        milestone_selector()
 
     if task_type_selector():
         if (
@@ -566,7 +585,7 @@ def show_task_form():
             mode="add",
         )
 
-    st.subheader("*Answer")
+    st.subheader("Answer")
     cols = st.columns([3.5, 1])
 
     if cols[-1].button(
@@ -591,29 +610,29 @@ def show_task_form():
     if not final_answer and st.session_state.ai_answer:
         final_answer = st.session_state.ai_answer
 
-    disabled_help_text = ""
-    if not st.session_state.task_name:
-        disabled_help_text = "Please enter a task name"
-    elif not st.session_state.task_description:
-        disabled_help_text = "Please enter a task description"
-    elif not final_answer:
-        disabled_help_text = "Please enter an answer"
-    is_submit_disabled = disabled_help_text != ""
+    st.multiselect(
+        "Tags",
+        st.session_state.tags,
+        key="task_tags",
+        default=None,
+        format_func=lambda tag: tag["name"],
+        help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
+    )
 
-    if final_answer and st.button(
+    cols = st.columns(2)
+    with cols[0]:
+        milestone_selector()
+
+    with cols[1]:
+        cohort_selector()
+
+    if st.button(
         "Verify and Add",
-        on_click=add_verified_task_to_list,
-        args=(final_answer,),
         use_container_width=True,
         type="primary",
-        disabled=is_submit_disabled,
-        help=disabled_help_text,
     ):
         # st.session_state.vote = {"item": item, "reason": reason}
-        reset_tests()
-        st.rerun()
-
-    st.info("**Note:** Fields marked with an asterisk (*) are required")
+        add_verified_task_to_list(final_answer)
 
 
 async def generate_answer_for_bulk_task(task_id, task_name, task_description):
@@ -668,6 +687,8 @@ def show_bulk_upload_tasks_form():
 
     milestone = milestone_selector()
 
+    cohort = cohort_selector()
+
     uploaded_file = st.file_uploader(
         "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional), `Answer` (optional)",
         type="csv",
@@ -698,6 +719,7 @@ def show_bulk_upload_tasks_form():
             if has_new_tags:
                 refresh_tags()
 
+        new_task_ids = []
         for _, row in tasks_df.iterrows():
             task_tags = []
             if has_tags:
@@ -708,7 +730,7 @@ def show_bulk_upload_tasks_form():
                     if tag["name"] in task_tag_names
                 ]
 
-            store_task_to_db(
+            task_id = store_task_to_db(
                 row["Name"],
                 row["Description"],
                 row["Answer"],
@@ -720,6 +742,12 @@ def show_bulk_upload_tasks_form():
                 [],
                 milestone["id"] if milestone is not None else None,
                 st.session_state.org_id,
+            )
+            new_task_ids.append(task_id)
+
+        if cohort:
+            add_tasks_to_cohorts(
+                [(task_id, cohort["id"]) for task_id in new_task_ids]
             )
 
         refresh_tasks()

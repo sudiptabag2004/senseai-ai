@@ -437,6 +437,8 @@ def store_task(
             )
 
         conn.commit()
+
+        return task_id
     except Exception as e:
         conn.rollback()
         raise e
@@ -660,6 +662,30 @@ def delete_task(task_id: int):
             (task_id,),
         )
 
+        # Delete entries from cohort_tasks table
+        cursor.execute(
+            f"""
+        DELETE FROM {cohort_tasks_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
+
+        # Delete entries from task_tags table
+        cursor.execute(
+            f"""
+        DELETE FROM {task_tags_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
+
+        # Delete entries from chat_history table
+        cursor.execute(
+            f"""
+        DELETE FROM {chat_history_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
+
         # Then delete the task
         cursor.execute(
             f"""
@@ -680,18 +706,41 @@ def delete_tasks(task_ids: List[int]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    task_ids_as_str = serialise_list_to_str(map(str, task_ids))
+
     try:
         # Delete associated tests first
         cursor.execute(
             f"""
-        DELETE FROM {tests_table_name} WHERE task_id IN ({','.join(map(str, task_ids))})
+        DELETE FROM {tests_table_name} WHERE task_id IN ({task_ids_as_str})
+        """
+        )
+
+        # Delete entries from cohort_tasks table
+        cursor.execute(
+            f"""
+        DELETE FROM {cohort_tasks_table_name} WHERE task_id IN ({task_ids_as_str})
+        """
+        )
+
+        # Delete entries from task_tags table
+        cursor.execute(
+            f"""
+        DELETE FROM {task_tags_table_name} WHERE task_id IN ({task_ids_as_str})
+        """
+        )
+
+        # Delete entries from chat_history table
+        cursor.execute(
+            f"""
+        DELETE FROM {chat_history_table_name} WHERE task_id IN ({task_ids_as_str})
         """
         )
 
         # Then delete the tasks
         cursor.execute(
             f"""
-        DELETE FROM {tasks_table_name} WHERE id IN ({','.join(map(str, task_ids))})
+        DELETE FROM {tasks_table_name} WHERE id IN ({task_ids_as_str})
         """
         )
 

@@ -48,7 +48,7 @@ from components.code_execution import (
     react_default_code,
     show_react_help_text,
     sql_default_code,
-    show_sql_help_text
+    show_sql_help_text,
 )
 from components.badge import show_badge_dialog, show_multiple_badges_dialog
 
@@ -196,7 +196,7 @@ else:
     description_col, chat_col = st.columns(2)
 
     description_container = description_col.container(border=True)
-    chat_container = chat_col.container(border=True)
+    chat_container = chat_col.container(border=True, height=425)
 
     chat_input_container = None
 
@@ -290,8 +290,14 @@ def display_user_message(user_response: str, message_index: int):
 # st.session_state.chat_history
 # st.session_state.ai_chat_history
 
-if st.session_state.is_review_mode and not st.session_state.chat_history:
-    chat_container.warning("No chat history found")
+if not st.session_state.chat_history:
+    empty_container = None
+    if st.session_state.is_review_mode:
+        chat_container.warning("No task history found")
+    else:
+        empty_container = chat_container.empty()
+        with empty_container:
+            st.warning("Your task history will appear here!")
 
 # Display chat messages from history on app rerun
 for index, message in enumerate(st.session_state.chat_history):
@@ -417,6 +423,9 @@ def check_for_badges_unlocked():
 
 def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     # import ipdb; ipdb.set_trace()
+    if not st.session_state.chat_history:
+        empty_container.empty()
+
     display_user_message(user_response, len(st.session_state.chat_history))
 
     user_message = {"role": "user", "content": user_response}
@@ -689,7 +698,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                             show_react_help_text()
                         elif tab_name == "sql":
                             show_sql_help_text()
-                            
+
                         st_ace(
                             min_lines=15,
                             theme="monokai",
@@ -809,7 +818,12 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                                 height=height,
                             )
                         elif "SQL" in task["coding_language"]:
-                            execute_code(st.session_state.sql_code, "SQL", width=width, height=height)
+                            execute_code(
+                                st.session_state.sql_code,
+                                "SQL",
+                                width=width,
+                                height=height,
+                            )
                         else:
                             st.write("**No output to show**")
                         # TODO: support for only JS
