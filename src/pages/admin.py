@@ -347,9 +347,7 @@ def add_verified_task_to_list(final_answer):
     )
 
     if st.session_state.task_cohort:
-        add_tasks_to_cohorts(
-            [[task_id, st.session_state.task_cohort["id"]]]
-        )
+        add_tasks_to_cohorts([[task_id, st.session_state.task_cohort["id"]]])
 
     refresh_tasks()
     reset_tests()
@@ -554,7 +552,6 @@ def coding_language_selector():
         coding_languages_supported,
         help=admin_code_editor_language_help,
         key="coding_languages",
-        default=["Python"],
     )
 
 
@@ -746,9 +743,7 @@ def show_bulk_upload_tasks_form():
             new_task_ids.append(task_id)
 
         if cohort:
-            add_tasks_to_cohorts(
-                [(task_id, cohort["id"]) for task_id in new_task_ids]
-            )
+            add_tasks_to_cohorts([(task_id, cohort["id"]) for task_id in new_task_ids])
 
         refresh_tasks()
         st.rerun()
