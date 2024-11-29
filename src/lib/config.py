@@ -21,6 +21,7 @@ tasks_table_name = "tasks"
 tests_table_name = "tests"
 cohorts_table_name = "cohorts"
 cohort_tasks_table_name = "cohort_tasks"
+task_scoring_criteria_table_name = "task_scoring_criteria"
 groups_table_name = "groups"
 user_cohorts_table_name = "user_cohorts"
 user_groups_table_name = "user_groups"
@@ -36,11 +37,26 @@ user_organizations_table_name = "user_organizations"
 group_role_learner = "learner"
 group_role_mentor = "mentor"
 
-coding_languages_supported = ["HTML", "CSS", "Javascript", "NodeJS", "Python", "React", "SQL"]
+coding_languages_supported = [
+    "HTML",
+    "CSS",
+    "Javascript",
+    "NodeJS",
+    "Python",
+    "React",
+    "SQL",
+]
 leaderboard_view_types = [
     str(LeaderboardViewType.ALL_TIME),
     str(LeaderboardViewType.WEEKLY),
     str(LeaderboardViewType.MONTHLY),
 ]
+task_input_types = ["coding", "text"]
+task_ai_response_types = ["chat", "report"]
+
+allowed_input_types = {
+    "chat": ["coding", "text"],
+    "report": ["text"],
+}
 
 PDF_PAGE_DIMS = [595, 842]

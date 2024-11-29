@@ -1,6 +1,7 @@
 from typing import List, Dict, Literal
 import itertools
 import traceback
+import math
 from datetime import datetime
 import asyncio
 from functools import partial
@@ -28,7 +29,12 @@ from lib.llm import (
     call_llm_and_parse_output,
     COMMON_INSTRUCTIONS,
 )
-from lib.config import group_role_learner, group_role_mentor
+from lib.config import (
+    group_role_learner,
+    group_role_mentor,
+    task_ai_response_types,
+    allowed_input_types,
+)
 from lib.init import init_env_vars, init_db
 from lib.db import (
     get_all_tasks_for_org_or_cohort,
@@ -62,8 +68,9 @@ from lib.db import (
     get_cohorts_for_org,
     add_tasks_to_cohorts,
     remove_tasks_from_cohorts,
+    add_scoring_criteria_to_task,
+    add_scoring_criteria_to_tasks,
 )
-from lib.strings import *
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
@@ -85,6 +92,18 @@ if "org_id" not in st.query_params:
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_details_from_org_id(st.session_state.org_id)
+
+
+def reset_ai_running():
+    st.session_state.is_ai_running = False
+
+
+def set_ai_running():
+    st.session_state.is_ai_running = True
+
+
+if "is_ai_running" not in st.session_state:
+    reset_ai_running()
 
 
 def show_logo():
@@ -150,6 +169,13 @@ if "final_answer" not in st.session_state:
     st.session_state.final_answer = ""
 
 
+def refresh_scoring_criteria():
+    st.session_state.scoring_criteria = []
+
+
+if "scoring_criteria" not in st.session_state:
+    refresh_scoring_criteria()
+
 show_toast()
 
 # model = st.sidebar.selectbox(
@@ -164,7 +190,7 @@ show_toast()
 model = {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"}
 
 
-async def generate_answer_for_task(task_name, task_description):
+async def generate_answer_for_task(task_name, task_description, verbose=True):
     system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description and completely adhere to the requirements without making up anything on your own that is not already present in the description.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
 
     user_prompt_template = (
@@ -194,7 +220,7 @@ async def generate_answer_for_task(task_name, task_description):
             model=model["version"],
             output_parser=output_parser,
             max_tokens=2048,
-            verbose=True,
+            verbose=verbose,
             # labels=["final_answers", "audit rights"],
             # model_type=model_type,
         )
@@ -205,19 +231,12 @@ async def generate_answer_for_task(task_name, task_description):
 
 
 @st.spinner("Generating answer...")
-def generate_answer_for_form_task():
+def generate_answer_for_form_task(verbose=True):
     st.session_state.ai_answer = asyncio.run(
         generate_answer_for_task(
-            st.session_state.task_name, st.session_state.task_description
+            st.session_state.task_name, st.session_state.task_description, verbose
         )
     )
-
-
-def get_task_type(is_code_editor_enabled: bool):
-    if is_code_editor_enabled:
-        return "coding"
-
-    return "text"
 
 
 def convert_tests_to_prompt(tests: List[Dict]) -> str:
@@ -315,29 +334,46 @@ def update_test_in_session_state(test_index):
     }
 
 
+def validate_task_metadata_params():
+    error_text = ""
+    if not st.session_state.ai_response_type:
+        error_text = "Please select the AI response type"
+    elif not st.session_state.task_type:
+        error_text = "Please select a task type"
+    elif (
+        st.session_state.task_type == "coding" and not st.session_state.coding_languages
+    ):
+        error_text = "Please select at least one coding language"
+    elif (
+        st.session_state.ai_response_type == "report"
+        and not st.session_state.scoring_criteria
+    ):
+        error_text = "Please add at least one scoring criterion for the report"
+
+    return error_text
+
+
 def add_verified_task_to_list(final_answer):
     error_text = ""
     if not st.session_state.task_name:
         error_text = "Please enter a task name"
     elif not st.session_state.task_description:
         error_text = "Please enter a task description"
-    elif st.session_state.show_code_editor and not st.session_state.coding_languages:
-        error_text = "Please add at least one coding language"
-    elif not final_answer:
+    elif st.session_state.ai_response_type == "chat" and not final_answer:
         error_text = "Please enter an answer"
-
+    else:
+        error_text = validate_task_metadata_params()
     if error_text:
         st.error(error_text)
         return
-
-    task_type = get_task_type(st.session_state.show_code_editor)
 
     task_id = store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
         final_answer,
         st.session_state.task_tags,
-        task_type,
+        st.session_state.task_type,
+        st.session_state.ai_response_type,
         st.session_state.coding_languages,
         model["version"],
         True,
@@ -346,8 +382,13 @@ def add_verified_task_to_list(final_answer):
         st.session_state.org_id,
     )
 
-    if st.session_state.task_cohort:
-        add_tasks_to_cohorts([[task_id, st.session_state.task_cohort["id"]]])
+    if st.session_state.task_cohorts:
+        add_tasks_to_cohorts(
+            [[task_id, cohort["id"]] for cohort in st.session_state.task_cohorts]
+        )
+
+    if st.session_state.scoring_criteria:
+        add_scoring_criteria_to_task(task_id, st.session_state.scoring_criteria)
 
     refresh_tasks()
     reset_tests()
@@ -370,7 +411,7 @@ def add_tests_to_task(
         num_test_inputs = cols[0].number_input("Number of inputs", min_value=1, step=1)
         cols[-1].markdown("####")
 
-    header_container.subheader(admin_code_test_cases_label)
+    header_container.subheader("Add tests")
     if cols[-1].button("Generate", key="generate_tests"):
         asyncio.run(
             generate_tests_for_task(
@@ -527,32 +568,109 @@ def milestone_selector():
 
 
 def cohort_selector():
-    return st.selectbox(
-        "Cohort",
+    return st.multiselect(
+        "Cohorts",
         st.session_state.cohorts,
-        key="task_cohort",
+        key="task_cohorts",
         format_func=lambda row: row["name"],
-        index=None,
         help="If you don't see the cohort you want, you can create a new one from the `Cohorts` tab",
     )
 
 
-def task_type_selector():
-    return st.checkbox(
-        admin_show_code_editor_label,
-        value=False,
-        help=admin_show_code_editor_help,
-        key="show_code_editor",
+def task_input_type_selector():
+    task_input_types = allowed_input_types[st.session_state.ai_response_type]
+    default_index = None
+    if len(task_input_types) == 1:
+        default_index = 0
+
+    return st.selectbox(
+        "Select task type", task_input_types, key="task_type", index=default_index
+    )
+
+
+def clear_task_input_type():
+    if "task_type" in st.session_state:
+        del st.session_state.task_type
+
+
+def ai_response_type_selector():
+    return st.selectbox(
+        "Select AI response type",
+        task_ai_response_types,
+        key="ai_response_type",
+        index=task_ai_response_types.index("chat"),
+        on_change=clear_task_input_type,
     )
 
 
 def coding_language_selector():
+    if (
+        "coding_languages" in st.session_state
+        and st.session_state.coding_languages is None
+    ):
+        st.session_state.coding_languages = []
+
     return st.multiselect(
-        admin_code_editor_language_label,
+        "Code editor language (s)",
         coding_languages_supported,
-        help=admin_code_editor_language_help,
+        help="Choose or more languages to show in the code editor",
         key="coding_languages",
     )
+
+
+def show_scoring_criteria_addition_form():
+    st.subheader("Scoring Criterion")
+    for scoring_criterion in st.session_state.scoring_criteria:
+        with st.expander(
+            f"{scoring_criterion['category']} ({scoring_criterion['range'][0]} - {scoring_criterion['range'][1]})"
+        ):
+            st.markdown(scoring_criterion["description"])
+
+    new_category = st.text_input(
+        "Add a new category to the scoring criterion",
+        placeholder="e.g. Correctness",
+        key="new_scoring_criterion_category",
+    )
+    new_description = st.text_area(
+        "Add a description for the new category",
+        placeholder="e.g. The answer provided is correct",
+        key="new_scoring_criterion_description",
+    )
+    cols = st.columns(2)
+    range_start = cols[0].number_input(
+        "Lowest possible score for this category",
+        min_value=0,
+        step=1,
+        key="new_scoring_criterion_range_start",
+    )
+    range_end = cols[1].number_input(
+        "Highest possible score for this category",
+        min_value=range_start + 1,
+        step=1,
+        key="new_scoring_criterion_range_end",
+    )
+    st.button(
+        "Add category", use_container_width=True, on_click=update_scoring_criteria
+    )
+    st.divider()
+
+
+def update_scoring_criteria():
+    st.session_state.scoring_criteria.append(
+        {
+            "category": st.session_state.new_scoring_criterion_category,
+            "description": st.session_state.new_scoring_criterion_description,
+            "range": [
+                st.session_state.new_scoring_criterion_range_start,
+                st.session_state.new_scoring_criterion_range_end,
+            ],
+        }
+    )
+
+    st.session_state.new_scoring_criterion_category = ""
+    st.session_state.new_scoring_criterion_description = ""
+    st.session_state.new_scoring_criterion_range_start = 0
+    st.session_state.new_scoring_criterion_range_end = 1
 
 
 @st.dialog("Add a new task")
@@ -563,49 +681,57 @@ def show_task_form():
         key="task_description",
     )
 
-    if task_type_selector():
-        if (
-            "coding_languages" in st.session_state
-            and st.session_state.coding_languages is None
-        ):
-            st.session_state.coding_languages = []
+    cols = st.columns(2)
 
+    with cols[0]:
+        ai_response_type = ai_response_type_selector()
+
+    if not ai_response_type:
+        return
+
+    with cols[1]:
+        task_type = task_input_type_selector()
+
+    if task_type == "coding":
         coding_language_selector()
+
+        # test cases
+        if st.checkbox("I want to add tests", False):
+            add_tests_to_task(
+                st.session_state.task_name,
+                st.session_state.task_description,
+                mode="add",
+            )
     else:
         st.session_state.coding_languages = None
 
-    # test cases
-    if st.session_state.show_code_editor and st.checkbox("I want to add tests", False):
-        add_tests_to_task(
-            st.session_state.task_name,
-            st.session_state.task_description,
-            mode="add",
+    final_answer = None
+    if ai_response_type == "chat":
+        cols = st.columns([3.5, 1])
+
+        cols[-1].container(height=10, border=False)
+        if cols[-1].button(
+            "Generate",
+            disabled=(
+                not st.session_state.task_description
+                or not st.session_state.task_name
+                or st.session_state.final_answer != ""
+                or st.session_state.ai_answer != ""
+            ),
+            key="generate_answer",
+        ):
+            with cols[0]:
+                generate_answer_for_form_task()
+
+        final_answer = cols[0].text_area(
+            "Answer",
+            key="final_answer",
+            value=st.session_state.ai_answer,
         )
-
-    st.subheader("Answer")
-    cols = st.columns([3.5, 1])
-
-    if cols[-1].button(
-        "Generate",
-        disabled=(
-            not st.session_state.task_description
-            or not st.session_state.task_name
-            or st.session_state.final_answer != ""
-            or st.session_state.ai_answer != ""
-        ),
-        key="generate_answer",
-    ):
-        with cols[0]:
-            generate_answer_for_form_task()
-
-    final_answer = cols[0].text_area(
-        "Answer",
-        key="final_answer",
-        value=st.session_state.ai_answer,
-        label_visibility="collapsed",
-    )
-    if not final_answer and st.session_state.ai_answer:
-        final_answer = st.session_state.ai_answer
+        if not final_answer and st.session_state.ai_answer:
+            final_answer = st.session_state.ai_answer
+    elif ai_response_type == "report":
+        show_scoring_criteria_addition_form()
 
     st.multiselect(
         "Tags",
@@ -624,7 +750,7 @@ def show_task_form():
         cohort_selector()
 
     if st.button(
-        "Verify and Add",
+        "Add task",
         use_container_width=True,
         type="primary",
     ):
@@ -632,9 +758,11 @@ def show_task_form():
         add_verified_task_to_list(final_answer)
 
 
-async def generate_answer_for_bulk_task(task_id, task_name, task_description):
-    answer = await generate_answer_for_task(task_name, task_description)
-    return task_id, answer
+async def generate_answer_for_bulk_task(
+    task_row_index, task_name, task_description, verbose=True
+):
+    answer = await generate_answer_for_task(task_name, task_description, verbose)
+    return task_row_index, answer
 
 
 def update_progress_bar(progress_bar, count, num_tasks, message):
@@ -642,11 +770,14 @@ def update_progress_bar(progress_bar, count, num_tasks, message):
 
 
 async def generate_answers_for_tasks(tasks_df):
+    set_ai_running()
     coroutines = []
 
     for index, row in tasks_df.iterrows():
         coroutines.append(
-            generate_answer_for_bulk_task(index, row["Name"], row["Description"])
+            generate_answer_for_bulk_task(
+                index, row["Name"], row["Description"], verbose=False
+            )
         )
 
     num_tasks = len(tasks_df)
@@ -659,8 +790,11 @@ async def generate_answers_for_tasks(tasks_df):
     tasks_df["Answer"] = [None] * num_tasks
 
     for completed_task in asyncio.as_completed(coroutines):
-        task_id, answer = await completed_task
-        tasks_df.at[task_id, "Answer"] = answer
+        task_row_index, answer = await completed_task
+
+        print(task_row_index, answer)
+
+        tasks_df.at[task_row_index, "Answer"] = answer
         count += 1
 
         update_progress_bar(
@@ -668,85 +802,160 @@ async def generate_answers_for_tasks(tasks_df):
         )
 
     progress_bar.empty()
-
+    reset_ai_running()
     return tasks_df
+
+
+def bulk_upload_tasks_to_db(
+    tasks_df: pd.DataFrame,
+):
+    error_text = validate_task_metadata_params()
+    if error_text:
+        st.error(error_text)
+        return
+
+    verified = True
+    if st.session_state.ai_response_type == "chat" and "Answer" not in tasks_df.columns:
+        tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
+        verified = False
+
+    has_tags = "Tags" in tasks_df.columns
+
+    if has_tags:
+        unique_tags = list(
+            set(
+                list(
+                    itertools.chain(
+                        *tasks_df["Tags"]
+                        .apply(lambda val: [tag.strip() for tag in val.split(",")])
+                        .tolist()
+                    )
+                )
+            )
+        )
+        has_new_tags = create_bulk_tags(unique_tags, st.session_state.org_id)
+        if has_new_tags:
+            refresh_tags()
+
+    new_task_ids = []
+    for _, row in tasks_df.iterrows():
+        task_tags = []
+        if has_tags:
+            task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
+            task_tags = [
+                tag for tag in st.session_state.tags if tag["name"] in task_tag_names
+            ]
+
+        if st.session_state.ai_response_type == "chat":
+            answer = row["Answer"]
+        else:
+            answer = None
+
+        task_id = store_task_to_db(
+            row["Name"],
+            row["Description"],
+            answer,
+            task_tags,
+            st.session_state.task_type,
+            st.session_state.ai_response_type,
+            st.session_state.coding_languages,
+            model["version"],
+            verified,
+            [],
+            (
+                st.session_state.milestone["id"]
+                if st.session_state.milestone is not None
+                else None
+            ),
+            st.session_state.org_id,
+        )
+        new_task_ids.append(task_id)
+
+    if st.session_state.task_cohorts:
+        cohort_tasks_to_add = list(
+            itertools.chain(
+                *[
+                    [(task_id, cohort["id"]) for task_id in new_task_ids]
+                    for cohort in st.session_state.task_cohorts
+                ]
+            )
+        )
+        add_tasks_to_cohorts(cohort_tasks_to_add)
+
+    if st.session_state.scoring_criteria:
+        add_scoring_criteria_to_tasks(new_task_ids, st.session_state.scoring_criteria)
+
+    refresh_tasks()
+    st.rerun()
 
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-    show_code_editor = task_type_selector()
-    coding_languages = None
+    cols = st.columns(2)
 
-    if show_code_editor:
-        coding_languages = coding_language_selector()
+    with cols[0]:
+        ai_response_type = ai_response_type_selector()
 
-    task_type = get_task_type(show_code_editor)
+    if not ai_response_type:
+        return
 
-    milestone = milestone_selector()
+    with cols[1]:
+        task_type = task_input_type_selector()
 
-    cohort = cohort_selector()
+    if task_type == "coding":
+        coding_language_selector()
+    else:
+        st.session_state.coding_languages = None
+
+    if ai_response_type == "report":
+        show_scoring_criteria_addition_form()
+
+    cols = st.columns(2)
+    with cols[0]:
+        milestone = milestone_selector()
+
+    with cols[1]:
+        cohorts = cohort_selector()
+
+    file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
+    if ai_response_type == "chat":
+        file_uploader_label += ", `Answer` (optional)"
 
     uploaded_file = st.file_uploader(
-        "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional), `Answer` (optional)",
+        file_uploader_label,
         type="csv",
-        key="bulk_upload_tasks",
+        key=f"bulk_upload_tasks_{st.session_state.task_uploader_key}",
     )
 
     if uploaded_file:
         tasks_df = pd.read_csv(uploaded_file)
 
-        if "Answer" not in tasks_df.columns:
-            tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
+        st.dataframe(tasks_df, hide_index=True)
 
-        has_tags = "Tags" in tasks_df.columns
+        error_message = None
+        for index, row in tasks_df.iterrows():
+            if not row["Name"] or (
+                isinstance(row["Name"], float) and math.isnan(row["Name"])
+            ):
+                error_message = f"Task name missing for row {index + 1}"
+                break
+            if not row["Description"] or (
+                isinstance(row["Description"], float) and math.isnan(row["Description"])
+            ):
+                error_message = f"Task description missing for row {index + 1}"
+                break
 
-        if has_tags:
-            unique_tags = list(
-                set(
-                    list(
-                        itertools.chain(
-                            *tasks_df["Tags"]
-                            .apply(lambda val: [tag.strip() for tag in val.split(",")])
-                            .tolist()
-                        )
-                    )
-                )
-            )
-            has_new_tags = create_bulk_tags(unique_tags)
-            if has_new_tags:
-                refresh_tags()
+        if error_message:
+            st.error(error_message)
+            return
 
-        new_task_ids = []
-        for _, row in tasks_df.iterrows():
-            task_tags = []
-            if has_tags:
-                task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
-                task_tags = [
-                    tag
-                    for tag in st.session_state.tags
-                    if tag["name"] in task_tag_names
-                ]
-
-            task_id = store_task_to_db(
-                row["Name"],
-                row["Description"],
-                row["Answer"],
-                task_tags,
-                task_type,
-                coding_languages,
-                model["version"],
-                False,
-                [],
-                milestone["id"] if milestone is not None else None,
-                st.session_state.org_id,
-            )
-            new_task_ids.append(task_id)
-
-        if cohort:
-            add_tasks_to_cohorts([(task_id, cohort["id"]) for task_id in new_task_ids])
-
-        refresh_tasks()
-        st.rerun()
+        if st.button(
+            "Add tasks",
+            use_container_width=True,
+            type="primary",
+            disabled=st.session_state.is_ai_running,
+        ):
+            bulk_upload_tasks_to_db(tasks_df)
 
 
 def delete_tasks_from_list(task_ids):
@@ -905,9 +1114,12 @@ def show_tasks_tab():
         reset_tests()
         st.session_state.ai_answer = ""
         st.session_state.final_answer = ""
+        refresh_scoring_criteria()
         show_task_form()
 
     if bulk_upload_tasks:
+        refresh_scoring_criteria()
+        update_task_uploader_key()
         show_bulk_upload_tasks_form()
 
     tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Update the cohort for the selected tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)\n\n- Delete tasks"
@@ -989,6 +1201,7 @@ def show_tasks_tab():
         "milestone_name",
         "cohort_names",
         "type",
+        "response_type",
         "coding_language",
         "generation_model",
         "timestamp",
@@ -1011,6 +1224,7 @@ def show_tasks_tab():
                 row["description"],
                 row["answer"],
                 row["type"],
+                row["response_type"],
                 row["coding_language"],
                 row["generation_model"],
                 row["verified"],
@@ -1095,6 +1309,14 @@ def show_tasks_tab():
 
 with tabs[1]:
     show_tasks_tab()
+
+if "task_uploader_key" not in st.session_state:
+    st.session_state.task_uploader_key = 0
+
+
+def update_task_uploader_key():
+    st.session_state.task_uploader_key += 1
+
 
 if "cohort_uploader_key" not in st.session_state:
     st.session_state.cohort_uploader_key = 0

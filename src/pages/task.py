@@ -34,7 +34,18 @@ from lib.db import (
     delete_message as delete_message_from_db,
     get_user_streak,
     get_badge_by_type_and_user_id,
-    get_user_by_email,
+    get_scoring_criteria_for_task,
+    get_cohort_by_id,
+)
+from lib.output_formats.report import (
+    get_ai_report_response,
+    show_ai_report,
+    show_attempt_picker,
+    reset_displayed_attempt_index,
+    set_display_for_new_attempt,
+    reset_current_num_attempts,
+    increase_current_num_attempts,
+    set_display_for_restoring_history,
 )
 from lib.ui import display_waiting_indicator
 from components.badge import create_badge
@@ -84,6 +95,7 @@ if "cohort" not in st.query_params:
     st.switch_page("./home.py")
 
 cohort_id = int(st.query_params["cohort"])
+cohort = get_cohort_by_id(cohort_id)
 login_or_signup_user(st.query_params["email"])
 
 task_id = st.query_params.get("id")
@@ -110,6 +122,10 @@ if not task["verified"]:
     )
     st.stop()
 
+st.session_state.scoring_criteria = None
+if task["response_type"] == "report":
+    st.session_state.scoring_criteria = get_scoring_criteria_for_task(task_id)
+
 if "user" not in st.session_state:
     st.session_state.user = get_logged_in_user()
 
@@ -134,8 +150,19 @@ if "is_solved" not in st.session_state:
         and st.session_state.chat_history[-2]["is_solved"]
     )
 
-if "is_ai_running" not in st.session_state:
+if "displayed_attempt_index" not in st.session_state:
+    reset_displayed_attempt_index()
+
+if "current_num_attempts" not in st.session_state:
+    reset_current_num_attempts()
+
+
+def reset_ai_running():
     st.session_state.is_ai_running = False
+
+
+if "is_ai_running" not in st.session_state:
+    reset_ai_running()
 
 
 def refresh_streak():
@@ -150,11 +177,11 @@ if "badges_to_show" not in st.session_state:
 if st.session_state.badges_to_show:
     if len(st.session_state.badges_to_show) == 1:
         show_badge_dialog(
-            st.session_state.badges_to_show[0], task["cohort_name"], task["org_name"]
+            st.session_state.badges_to_show[0], cohort["name"], task["org_name"]
         )
     else:
         show_multiple_badges_dialog(
-            st.session_state.badges_to_show, task["cohort_name"], task["org_name"]
+            st.session_state.badges_to_show, cohort["name"], task["org_name"]
         )
     st.session_state.badges_to_show = []
 
@@ -184,21 +211,35 @@ with sticky_container(
 # st.session_state
 # st.session_state['code']
 
-if task["type"] == "coding" and not st.session_state.is_review_mode:
-    chat_column, code_column = st.columns(2)
-    description_container = chat_column.container(height=200)
-    chat_container = chat_column.container(height=375)
+if task["response_type"] == "chat":
+    if task["type"] == "coding" and not st.session_state.is_review_mode:
+        chat_column, code_column = st.columns(2)
+        description_container = chat_column.container(height=200)
+        chat_container = chat_column.container(height=325)
 
-    code_input_container = code_column.container(height=525, border=False)
-    chat_input_container = code_column.container(height=100, border=False)
+        code_input_container = code_column.container(height=475, border=False)
+        chat_input_container = code_column.container(height=100, border=False)
+    else:
+        # chat_column = st.columns(1)[0]
+        description_col, chat_col = st.columns(2)
+
+        description_container = description_col.container(height=450, border=True)
+        chat_container = chat_col.container(border=True, height=450)
+
+        chat_input_container = None
 else:
-    # chat_column = st.columns(1)[0]
-    description_col, chat_col = st.columns(2)
+    input_description_col, _, report_col = st.columns([1, 0.1, 1.5])
+    description_container = input_description_col.container(height=450, border=True)
 
-    description_container = description_col.container(border=True)
-    chat_container = chat_col.container(border=True, height=425)
-
-    chat_input_container = None
+    navigation_container = report_col.container().empty()
+    user_input_display_container = report_col.container(
+        height=100, border=False
+    ).empty()
+    report_col.container(height=1, border=False)
+    report_height = 300 if st.session_state.current_num_attempts > 1 else 250
+    ai_report_container = report_col.container(
+        border=False, height=report_height
+    ).empty()
 
 
 with description_container:
@@ -216,9 +257,13 @@ def transform_assistant_message_for_ai_history(message: dict):
 
 if "ai_chat_history" not in st.session_state:
     st.session_state.ai_chat_history = MessageHistory()
-    st.session_state.ai_chat_history.add_user_message(
-        f"""Task:\n```\n{task['description']}\n```\n\nReference Solution (never to be shared with the learner):\n```\n{task['answer']}\n```"""
-    )
+
+    task_details = f"""Task:\n```\n{task['description']}\n```"""
+
+    if task["response_type"] == "chat":
+        task_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{task['answer']}\n```"""
+
+    st.session_state.ai_chat_history.add_user_message(task_details)
 
     for message in st.session_state.chat_history:
         # import ipdb; ipdb.set_trace()
@@ -268,7 +313,7 @@ def delete_user_chat_message(index_to_delete: int):
     refresh_streak()
 
 
-def display_user_message(user_response: str, message_index: int):
+def display_user_chat_message(user_response: str, message_index: int):
     # delete_button_key = f"message_{message_index}"
     # if delete_button_key in st.session_state:
     #     return
@@ -287,42 +332,94 @@ def display_user_message(user_response: str, message_index: int):
         # )
 
 
+def display_user_input_report(user_response: str):
+    # delete_button_key = f"message_{message_index}"
+    # if delete_button_key in st.session_state:
+    #     return
+
+    with user_input_display_container:
+        # user_answer_cols = st.columns([5, 1])
+        st.markdown(f"**Your response**<br>{user_response}", unsafe_allow_html=True)
+        if st.session_state.is_review_mode:
+            return
+
+        # user_answer_cols[1].button(
+        #     "Delete",
+        #     on_click=partial(delete_user_chat_message, index_to_delete=message_index),
+        #     key=delete_button_key,
+        #     disabled=st.session_state.is_ai_running,
+        # )
+
+
 # st.session_state.chat_history
 # st.session_state.ai_chat_history
 
 if not st.session_state.chat_history:
     empty_container = None
-    if st.session_state.is_review_mode:
-        chat_container.warning("No task history found")
+    if task["response_type"] == "chat":
+        if st.session_state.is_review_mode:
+            chat_container.warning("No task history found")
+        else:
+            empty_container = chat_container.empty()
+            with empty_container:
+                st.warning("Your task history will appear here!")
     else:
-        empty_container = chat_container.empty()
-        with empty_container:
-            st.warning("Your task history will appear here!")
+        # TODO: add this for report type
+        if st.session_state.is_review_mode:
+            user_input_display_container.warning("No task history found")
+        else:
+            with user_input_display_container:
+                st.warning("Your response will appear here!")
+else:
+    if task["response_type"] == "chat":
+        # Display chat messages from history on app rerun
+        for index, message in enumerate(st.session_state.chat_history):
+            if message["role"] == "user":
+                # import ipdb; ipdb.set_trace()
+                display_user_chat_message(message["content"], message_index=index)
+            else:
+                with chat_container.chat_message(message["role"]):
+                    ai_message = html.escape(message["content"])
 
-# Display chat messages from history on app rerun
-for index, message in enumerate(st.session_state.chat_history):
-    if message["role"] == "user":
-        # import ipdb; ipdb.set_trace()
-        display_user_message(message["content"], message_index=index)
+                    # ai is supposed to return all html tags within backticks, but in case it doesn't
+                    # html.escape will escape the html tags; but this will mess up the html tags that
+                    # were returned within backticks; so, we fix those html tags that would have been
+                    # incorrectly escaped as well.
+                    ai_message = ai_message.replace("`&lt;", "`<")
+                    ai_message = ai_message.replace("&gt;`", ">`")
+
+                    st.markdown(ai_message, unsafe_allow_html=True)
     else:
-        with chat_container.chat_message(message["role"]):
-            ai_message = html.escape(message["content"])
+        st.session_state.current_num_attempts = len(st.session_state.chat_history) // 2
 
-            # ai is supposed to return all html tags within backticks, but in case it doesn't
-            # html.escape will escape the html tags; but this will mess up the html tags that
-            # were returned within backticks; so, we fix those html tags that would have been
-            # incorrectly escaped as well.
-            ai_message = ai_message.replace("`&lt;", "`<")
-            ai_message = ai_message.replace("&gt;`", ">`")
+        set_display_for_restoring_history()
 
-            st.markdown(ai_message, unsafe_allow_html=True)
+        if st.session_state.current_num_attempts > 1:
+            show_attempt_picker(navigation_container)
+
+        displayed_user_message_index = (
+            st.session_state.displayed_attempt_index - 1
+        ) * 2
+
+        display_user_input_report(
+            st.session_state.chat_history[displayed_user_message_index]["content"]
+        )
+        show_ai_report(
+            json.loads(
+                st.session_state.chat_history[displayed_user_message_index + 1][
+                    "content"
+                ]
+            ),
+            ["Category", "Feedback", "Score"],
+            ai_report_container,
+        )
 
 
 def get_session_history():
     return st.session_state.ai_chat_history
 
 
-def get_ai_response(user_message: str):
+def get_ai_chat_response(user_message: str):
     import instructor
     import openai
 
@@ -421,12 +518,12 @@ def check_for_badges_unlocked():
                     st.session_state.badges_to_show.append(longest_streak_badge_id)
 
 
-def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
+def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]):
     # import ipdb; ipdb.set_trace()
     if not st.session_state.chat_history:
         empty_container.empty()
 
-    display_user_message(user_response, len(st.session_state.chat_history))
+    display_user_chat_message(user_response, len(st.session_state.chat_history))
 
     user_message = {"role": "user", "content": user_response}
     st.session_state.chat_history.append(user_message)
@@ -440,7 +537,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
         with ai_response_container:
             display_waiting_indicator()
 
-        for extraction in get_ai_response(user_message):
+        for extraction in get_ai_chat_response(user_message):
             if json_dump := extraction.model_dump():
                 # print(json_dump)
                 ai_response_list = json_dump["feedback"]
@@ -477,7 +574,7 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
         "user",
         user_response,
         st.session_state.is_solved,
-        response_type,
+        input_type,
     )
     st.session_state.chat_history[-1] = new_user_message
 
@@ -492,8 +589,74 @@ def get_ai_feedback(user_response: str, response_type: Literal["text", "code"]):
     st.session_state.chat_history.append(new_ai_message)
 
     # retain_code()
-    st.session_state.is_ai_running = False
+    reset_ai_running()
+    st.rerun()
 
+
+def get_ai_feedback_report(user_response: str):
+    increase_current_num_attempts()
+    set_display_for_new_attempt()
+
+    # if st.session_state.current_num_attempts == 2:
+    navigation_container.empty()
+    # show_attempt_picker(navigation_container)
+
+    display_user_input_report(user_response)
+
+    user_message = {"role": "user", "content": user_response}
+    st.session_state.chat_history.append(user_message)
+
+    st.session_state.ai_chat_history.add_user_message(
+        transform_user_message_for_ai_history(user_message)
+    )
+
+    rows = get_ai_report_response(
+        st.session_state.ai_chat_history.messages,
+        st.session_state.scoring_criteria,
+        ai_report_container,
+    )
+
+    is_solved = all(
+        row[2] == st.session_state.scoring_criteria[index]["range"][1]
+        for index, row in enumerate(rows)
+    )
+
+    if not st.session_state.is_solved and is_solved:
+        st.balloons()
+        st.session_state.is_solved = True
+        time.sleep(2)
+
+    ai_response = json.dumps(rows)
+
+    check_for_badges_unlocked()
+    refresh_streak()
+
+    st.session_state.ai_chat_history.add_ai_message(ai_response)
+
+    logger.info(get_formatted_history(st.session_state.ai_chat_history.messages))
+
+    # Add user message to chat history [store to db only if ai response has been completely fetched]
+    new_user_message = store_message_to_db(
+        task_user_id,
+        task_id,
+        "user",
+        user_response,
+        st.session_state.is_solved,
+        "text",
+    )
+    st.session_state.chat_history[-1] = new_user_message
+
+    # Add assistant response to chat history
+    new_ai_message = store_message_to_db(
+        task_user_id,
+        task_id,
+        "assistant",
+        ai_response,
+        st.session_state.is_solved,
+    )
+    st.session_state.chat_history.append(new_ai_message)
+
+    reset_ai_running()
     st.rerun()
 
 
@@ -598,7 +761,7 @@ def get_code_for_ai_feedback():
 
 def get_ai_feedback_on_code():
     toggle_show_code_output()
-    get_ai_feedback(get_code_for_ai_feedback(), "code")
+    get_ai_feedback_chat(get_code_for_ai_feedback(), "code")
 
 
 if "show_code_output" not in st.session_state:
@@ -636,14 +799,13 @@ def restore_code_snippets(chat_history):
     return {}
 
 
-restored_code_snippets = restore_code_snippets(st.session_state.chat_history)
-
-for lang, code in restored_code_snippets.items():
-    if lang not in st.session_state:
-        st.session_state[lang] = code
-
-
 if task["type"] == "coding" and not st.session_state.is_review_mode:
+    restored_code_snippets = restore_code_snippets(st.session_state.chat_history)
+
+    for lang, code in restored_code_snippets.items():
+        if lang not in st.session_state:
+            st.session_state[lang] = code
+
     if "React" in task["coding_language"] and "react_code" not in st.session_state:
         st.session_state["react_code"] = react_default_code
     if "SQL" in task["coding_language"] and "sql_code" not in st.session_state:
@@ -708,7 +870,7 @@ if task["type"] == "coding" and not st.session_state.is_review_mode:
                             auto_update=True,
                             value=st.session_state[f"{tab_name}_code"],
                             placeholder=f"Write your {language} code here...",
-                            height=330,
+                            height=275,
                         )
 
         else:
@@ -861,13 +1023,32 @@ def show_and_handle_chat_input():
         return
 
     if user_response := st.chat_input(
-        user_response_placeholder, on_submit=set_ai_running
+        user_response_placeholder,
+        key="chat_input",
+        on_submit=set_ai_running,
+        disabled=st.session_state.is_ai_running,
     ):
-        get_ai_feedback(user_response, "text")
+        get_ai_feedback_chat(user_response, "text")
 
 
-if chat_input_container:
-    with chat_input_container:
+def show_and_handle_report_input():
+    if st.session_state.is_review_mode:
+        return
+
+    if user_response := st.chat_input(
+        user_response_placeholder,
+        key="report_input",
+        on_submit=set_ai_running,
+        disabled=st.session_state.is_ai_running,
+    ):
+        get_ai_feedback_report(user_response)
+
+
+if task["response_type"] == "chat":
+    if chat_input_container:
+        with chat_input_container:
+            show_and_handle_chat_input()
+    else:
         show_and_handle_chat_input()
 else:
-    show_and_handle_chat_input()
+    show_and_handle_report_input()

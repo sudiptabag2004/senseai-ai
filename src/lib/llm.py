@@ -147,13 +147,13 @@ def parse_llm_output(
 
 
 def get_parsed_output_dict(
-    output_parser, llm_output, parse_by_alias: bool, model: str, verbose: bool = False
+    output_parser, llm_output, model: str, verbose: bool = False
 ) -> Dict:
     """Use the output parser to parse the LLM output and return the parsed output as a dictionary"""
     pred = parse_llm_output(output_parser, llm_output, model=model, verbose=verbose)
 
     if isinstance(pred, BaseModel):
-        pred_dict = pred.dict(by_alias=parse_by_alias)
+        pred_dict = pred.model_dump()
     else:
         pred_dict = pred
 
@@ -232,7 +232,6 @@ async def call_openai_chat_model(
         "top_p": 1,
         "frequency_penalty": 0,
         "presence_penalty": 0,
-        "store": True
     }
     llm = ChatOpenAI(model=model, **common_model_args, **openai_model_kwargs)
     # if not kwargs.get("skip_token_limit_check"):
@@ -290,7 +289,6 @@ async def call_llm_and_parse_output(
     max_tokens,
     # labels,
     verbose: bool = False,
-    parse_by_alias: bool = False,
     **kwargs,
 ):
     llm_output = await call_openai_chat_model(
@@ -301,10 +299,10 @@ async def call_llm_and_parse_output(
         verbose=verbose,
         **kwargs,
     )
+    print(llm_output)
     return get_parsed_output_dict(
         output_parser,
         llm_output,
-        parse_by_alias=parse_by_alias,
         model=model,
         verbose=verbose,
     )

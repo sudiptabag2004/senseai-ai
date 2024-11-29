@@ -2,6 +2,7 @@ import os
 from os.path import exists
 import json
 import traceback
+import itertools
 import sqlite3
 import uuid
 from unidecode import unidecode
@@ -28,6 +29,7 @@ from lib.config import (
     organizations_table_name,
     user_organizations_table_name,
     cohort_tasks_table_name,
+    task_scoring_criteria_table_name,
 )
 from models import LeaderboardViewType
 from lib.utils import (
@@ -206,7 +208,7 @@ def create_tasks_table(cursor):
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
-                    answer TEXT NOT NULL,
+                    answer TEXT,
                     type TEXT NOT NULL DEFAULT 'text',
                     coding_language TEXT,
                     generation_model TEXT NOT NULL,
@@ -214,9 +216,24 @@ def create_tasks_table(cursor):
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     milestone_id INTEGER,
                     org_id INTEGER NOT NULL,
+                    response_type TEXT NOT NULL,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
+    )
+
+
+def create_task_scoring_criteria_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {task_scoring_criteria_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                min_score INTEGER NOT NULL,
+                max_score INTEGER NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+            )"""
     )
 
 
@@ -305,6 +322,10 @@ def init_db():
             create_tasks_table(cursor)
             conn.commit()
 
+        if not check_table_exists(task_scoring_criteria_table_name, cursor):
+            create_task_scoring_criteria_table(cursor)
+            conn.commit()
+
         if not check_table_exists(cohort_tasks_table_name, cursor):
             create_cohort_tables(cursor)
             conn.commit()
@@ -333,6 +354,8 @@ def init_db():
 
         # Create a table to store tasks
         create_tasks_table(cursor)
+
+        create_task_scoring_criteria_table(cursor)
 
         # Create a table to store chat history
         create_chat_history_table(cursor)
@@ -378,6 +401,7 @@ def store_task(
     answer: str,
     tags: List[Dict],
     task_type: str,
+    response_type: str,
     coding_languages: List[str],
     generation_model: str,
     verified: bool,
@@ -393,8 +417,8 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id, response_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
@@ -406,6 +430,7 @@ def store_task(
                 verified,
                 milestone_id,
                 org_id,
+                response_type,
             ),
         )
 
@@ -452,6 +477,7 @@ def update_task(
     description: str,
     answer: str,
     task_type: str,
+    response_type: str,
     coding_languages: List[str],
     generation_model: str,
     verified: bool,
@@ -464,7 +490,7 @@ def update_task(
     cursor.execute(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?
+    SET name = ?, description = ?, answer = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?, response_type = ?
     WHERE id = ?
     """,
         (
@@ -475,6 +501,7 @@ def update_task(
             coding_language_str,
             generation_model,
             verified,
+            response_type,
             task_id,
         ),
     )
@@ -533,6 +560,7 @@ def convert_task_db_to_dict(task, tests):
         "org_id": task[12],
         "org_name": task[13],
         "cohorts": cohorts,
+        "response_type": task[16],
         "tests": tests,
     }
 
@@ -545,7 +573,7 @@ def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tags,
         t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids
+        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids, t.response_type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
@@ -614,7 +642,7 @@ def get_task_by_id(task_id: int):
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
         t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.org_id, o.name as org_name,
-        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids
+        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids, t.response_type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
@@ -647,6 +675,27 @@ def get_task_by_id(task_id: int):
     conn.close()
 
     return convert_task_db_to_dict(task, tests)
+
+
+def get_scoring_criteria_for_task(task_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"SELECT category, description, min_score, max_score FROM {task_scoring_criteria_table_name} WHERE task_id = ?",
+        (task_id,),
+    )
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "category": row[0],
+            "description": row[1],
+            "range": [row[2], row[3]],
+        }
+        for row in rows
+    ]
 
 
 def delete_task(task_id: int):
@@ -682,6 +731,13 @@ def delete_task(task_id: int):
         cursor.execute(
             f"""
         DELETE FROM {chat_history_table_name} WHERE task_id = ?
+        """,
+            (task_id,),
+        )
+
+        cursor.execute(
+            f"""
+        DELETE FROM {task_scoring_criteria_table_name} WHERE task_id = ?
         """,
             (task_id,),
         )
@@ -734,6 +790,12 @@ def delete_tasks(task_ids: List[int]):
         cursor.execute(
             f"""
         DELETE FROM {chat_history_table_name} WHERE task_id IN ({task_ids_as_str})
+        """
+        )
+
+        cursor.execute(
+            f"""
+        DELETE FROM {task_scoring_criteria_table_name} WHERE task_id IN ({task_ids_as_str})
         """
         )
 
@@ -2433,7 +2495,7 @@ def create_tag(tag_name: str, org_id: int):
     conn.close()
 
 
-def create_bulk_tags(tag_names: List[str]) -> bool:
+def create_bulk_tags(tag_names: List[str], org_id: int) -> bool:
     if not tag_names:
         return False
 
@@ -2441,7 +2503,7 @@ def create_bulk_tags(tag_names: List[str]) -> bool:
     cursor = conn.cursor()
 
     # Get existing tags
-    cursor.execute(f"SELECT name FROM {tags_table_name}")
+    cursor.execute(f"SELECT name FROM {tags_table_name} WHERE org_id = ?", (org_id,))
     existing_tags = {row[0] for row in cursor.fetchall()}
 
     # Filter out tags that already exist
@@ -2452,8 +2514,8 @@ def create_bulk_tags(tag_names: List[str]) -> bool:
     # Insert new tags
     if new_tags:
         cursor.executemany(
-            f"INSERT INTO {tags_table_name} (name) VALUES (?)",
-            [(tag,) for tag in new_tags],
+            f"INSERT INTO {tags_table_name} (name, org_id) VALUES (?, ?)",
+            [(tag, org_id) for tag in new_tags],
         )
 
     conn.commit()
@@ -2577,21 +2639,56 @@ def remove_tasks_from_cohorts(cohort_tasks_to_remove: List[Tuple[int, int]]):
         conn.close()
 
 
-def seed_cohort_tasks_table():
+def add_scoring_criteria_to_task(task_id: int, scoring_criteria: List[Dict]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get all tasks with their cohort IDs
-    cursor.execute(f"SELECT id, cohort_id FROM {tasks_table_name}")
-    tasks = cursor.fetchall()
-
-    # Insert entries into cohort_tasks table
-    for task_id, cohort_id in tasks:
-        if cohort_id is not None:
-            cursor.execute(
-                f"INSERT INTO {cohort_tasks_table_name} (task_id, cohort_id) VALUES (?, ?)",
-                (task_id, cohort_id),
+    cursor.executemany(
+        f"""INSERT INTO {task_scoring_criteria_table_name} 
+            (task_id, category, description, min_score, max_score) 
+            VALUES (?, ?, ?, ?, ?)""",
+        [
+            (
+                task_id,
+                criterion["category"],
+                criterion["description"],
+                criterion["range"][0],
+                criterion["range"][1],
             )
+            for criterion in scoring_criteria
+        ],
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def add_scoring_criteria_to_tasks(task_ids: List[int], scoring_criteria: List[Dict]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        f"""INSERT INTO {task_scoring_criteria_table_name} 
+            (task_id, category, description, min_score, max_score) 
+            VALUES (?, ?, ?, ?, ?)""",
+        list(
+            itertools.chain(
+                *[
+                    [
+                        (
+                            task_id,
+                            criterion["category"],
+                            criterion["description"],
+                            criterion["range"][0],
+                            criterion["range"][1],
+                        )
+                        for criterion in scoring_criteria
+                    ]
+                    for task_id in task_ids
+                ]
+            )
+        ),
+    )
 
     conn.commit()
     conn.close()
@@ -2601,26 +2698,23 @@ def migrate_tasks_table():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Create temporary table with org_id column
+    # Create temporary table with response_type column
     cursor.execute(
         f"""CREATE TABLE temp_tasks AS 
-            SELECT t.id, t.name, t.description, t.answer, t.type, t.coding_language,
-                   t.generation_model, t.verified, t.timestamp, t.milestone_id,
-                   c.org_id as org_id
-            FROM {tasks_table_name} t
-            LEFT JOIN {cohorts_table_name} c ON t.cohort_id = c.id"""
+            SELECT t.*, 'chat' as response_type
+            FROM {tasks_table_name} t"""
     )
 
     # Drop original table
     cursor.execute(f"DROP TABLE {tasks_table_name}")
 
-    # Create new tasks table with org_id column
+    # Create new tasks table with response_type column
     cursor.execute(
         f"""CREATE TABLE {tasks_table_name} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             description TEXT NOT NULL,
-            answer TEXT NOT NULL,
+            answer TEXT,
             type TEXT NOT NULL DEFAULT 'text',
             coding_language TEXT,
             generation_model TEXT NOT NULL,
@@ -2628,6 +2722,7 @@ def migrate_tasks_table():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             milestone_id INTEGER,
             org_id INTEGER NOT NULL,
+            response_type TEXT NOT NULL,
             FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
             FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
         )"""
