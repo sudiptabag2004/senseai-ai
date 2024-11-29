@@ -792,8 +792,6 @@ async def generate_answers_for_tasks(tasks_df):
     for completed_task in asyncio.as_completed(coroutines):
         task_row_index, answer = await completed_task
 
-        print(task_row_index, answer)
-
         tasks_df.at[task_row_index, "Answer"] = answer
         count += 1
 
