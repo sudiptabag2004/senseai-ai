@@ -47,7 +47,12 @@ from lib.output_formats.report import (
     increase_current_num_attempts,
     set_display_for_restoring_history,
 )
-from lib.ui import display_waiting_indicator
+from lib.ui import (
+    display_waiting_indicator,
+    escape_text_outside_code_blocks,
+    correct_newlines_outside_code_blocks,
+    correct_code_blocks
+)
 from components.badge import create_badge
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
@@ -379,29 +384,9 @@ else:
                 display_user_chat_message(message["content"], message_index=index)
             else:
                 with chat_container.chat_message(message["role"]):
-                    # Split content into sections based on code blocks based on ```
-                    # and escape the text before and after the code blocks; since
-                    # streamlit correctly renders code within ```, don't escape it
-                    content = message["content"]
-                    sections = []
-                    last_end = 0
-
-                    # Find all code blocks
-                    for match in re.finditer(r"```.*?\n.*?```", content, re.DOTALL):
-                        # Add escaped text before code block
-                        if match.start() > last_end:
-                            sections.append(
-                                html.escape(content[last_end : match.start()])
-                            )
-                        # Add unescaped code block
-                        sections.append(content[match.start() : match.end()])
-                        last_end = match.end()
-
-                    # Add any remaining text after last code block
-                    if last_end < len(content):
-                        sections.append(html.escape(content[last_end:]))
-
-                    ai_message = "".join(sections)
+                    ai_message = escape_text_outside_code_blocks(
+                        correct_code_blocks(message["content"])
+                    )
 
                     # ai is supposed to return all html tags within backticks, but in case it doesn't
                     # html.escape will escape the html tags; but this will mess up the html tags that
@@ -565,7 +550,8 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
                 ai_response_list = json_dump["feedback"]
                 if ai_response_list:
                     ai_response = " ".join(ai_response_list)
-                    ai_response = ai_response.replace("\n", "\n\n")
+                    ai_response = correct_code_blocks(ai_response)
+                    ai_response = correct_newlines_outside_code_blocks(ai_response)
                     ai_response_container.markdown(ai_response, unsafe_allow_html=True)
 
                 is_solved = (
