@@ -379,7 +379,29 @@ else:
                 display_user_chat_message(message["content"], message_index=index)
             else:
                 with chat_container.chat_message(message["role"]):
-                    ai_message = html.escape(message["content"])
+                    # Split content into sections based on code blocks based on ```
+                    # and escape the text before and after the code blocks; since
+                    # streamlit correctly renders code within ```, don't escape it
+                    content = message["content"]
+                    sections = []
+                    last_end = 0
+
+                    # Find all code blocks
+                    for match in re.finditer(r"```.*?\n.*?```", content, re.DOTALL):
+                        # Add escaped text before code block
+                        if match.start() > last_end:
+                            sections.append(
+                                html.escape(content[last_end : match.start()])
+                            )
+                        # Add unescaped code block
+                        sections.append(content[match.start() : match.end()])
+                        last_end = match.end()
+
+                    # Add any remaining text after last code block
+                    if last_end < len(content):
+                        sections.append(html.escape(content[last_end:]))
+
+                    ai_message = "".join(sections)
 
                     # ai is supposed to return all html tags within backticks, but in case it doesn't
                     # html.escape will escape the html tags; but this will mess up the html tags that
