@@ -21,6 +21,9 @@ tasks_table_name = "tasks"
 tests_table_name = "tests"
 cohorts_table_name = "cohorts"
 cohort_tasks_table_name = "cohort_tasks"
+course_tasks_table_name = "course_tasks"
+courses_table_name = "courses"
+course_cohorts_table_name = "course_cohorts"
 task_scoring_criteria_table_name = "task_scoring_criteria"
 groups_table_name = "groups"
 user_cohorts_table_name = "user_cohorts"
@@ -36,6 +39,9 @@ user_organizations_table_name = "user_organizations"
 
 group_role_learner = "learner"
 group_role_mentor = "mentor"
+
+uncategorized_milestone_name = "Uncategorized"
+uncategorized_milestone_color = "#808080"
 
 coding_languages_supported = [
     "HTML",

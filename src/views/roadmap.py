@@ -5,6 +5,7 @@ from lib.db import (
     get_all_milestone_progress,
     get_all_verified_tasks_for_cohort,
     get_solved_tasks_for_user,
+    get_courses_for_cohort,
 )
 from components.milestone_learner_view import show_milestone_card
 from auth import get_logged_in_user
@@ -81,11 +82,10 @@ def show_roadmap_as_list(
         # delete_tasks(event.selection['rows'])
 
 
-def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int):
-    if not all_tasks:
-        return show_empty_error_message()
-
-    all_milestone_data = get_all_milestone_progress(user_id, cohort_id)
+def show_roadmap_for_course(all_tasks, user_id: int, cohort_id: int, course: Dict):
+    all_milestone_data = get_all_milestone_progress(
+        user_id, cohort_id, course_id=course["id"]
+    )
 
     if not all_milestone_data:
         return show_empty_error_message()
@@ -110,6 +110,19 @@ def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int):
             milestone_tasks,
             cohort_id,
         )
+
+
+def show_roadmap_by_course(all_tasks, user_id: int, cohort_id: int):
+    if not all_tasks:
+        return show_empty_error_message()
+
+    cohort_courses = get_courses_for_cohort(cohort_id)
+
+    tabs = st.tabs([course["name"] for course in cohort_courses])
+
+    for tab, course in zip(tabs, cohort_courses):
+        with tab:
+            show_roadmap_for_course(all_tasks, user_id, cohort_id, course)
 
 
 def update_task_view():
@@ -145,6 +158,6 @@ def show_roadmap(cohort_id: int):
     if st.session_state.show_list_view:
         show_roadmap_as_list(all_tasks, cohort_id)
     else:
-        show_roadmap_by_milestone(
+        show_roadmap_by_course(
             all_tasks, user_id=logged_in_user["id"], cohort_id=cohort_id
         )
