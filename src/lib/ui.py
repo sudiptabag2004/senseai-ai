@@ -36,3 +36,7 @@ def display_waiting_indicator():
     """,
         unsafe_allow_html=True,
     )
+
+
+def show_singular_or_plural(count: int, label: str):
+    return f"{count} {label}" if count == 1 else f"{count} {label}s"

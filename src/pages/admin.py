@@ -29,6 +29,7 @@ from lib.llm import (
     call_llm_and_parse_output,
     COMMON_INSTRUCTIONS,
 )
+from lib.ui import show_singular_or_plural
 from lib.config import (
     group_role_learner,
     group_role_mentor,
@@ -65,11 +66,21 @@ from lib.db import (
     update_cohort_group_name,
     add_members_to_cohort_group,
     remove_members_from_cohort_group,
-    get_cohorts_for_org,
-    add_tasks_to_cohorts,
-    remove_tasks_from_cohorts,
+    get_courses_for_tasks,
+    add_tasks_to_courses,
+    remove_tasks_from_courses,
     add_scoring_criteria_to_task,
     add_scoring_criteria_to_tasks,
+    create_course,
+    get_all_courses_for_org,
+    add_course_to_cohorts,
+    add_courses_to_cohort,
+    remove_course_from_cohorts,
+    remove_courses_from_cohort,
+    delete_course,
+    get_courses_for_cohort,
+    get_cohorts_for_course,
+    get_tasks_for_course,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -133,6 +144,10 @@ def refresh_cohorts():
     st.session_state.cohorts = get_all_cohorts_for_org(st.session_state.org_id)
 
 
+def refresh_courses():
+    st.session_state.courses = get_all_courses_for_org(st.session_state.org_id)
+
+
 def refresh_tasks():
     st.session_state.tasks = get_all_tasks_for_org_or_cohort(st.session_state.org_id)
 
@@ -147,6 +162,9 @@ def refresh_tags():
 
 if "cohorts" not in st.session_state:
     refresh_cohorts()
+
+if "courses" not in st.session_state:
+    refresh_courses()
 
 if "milestones" not in st.session_state:
     refresh_milestones()
@@ -175,6 +193,22 @@ def refresh_scoring_criteria():
 
 if "scoring_criteria" not in st.session_state:
     refresh_scoring_criteria()
+
+if "task_uploader_key" not in st.session_state:
+    st.session_state.task_uploader_key = 0
+
+
+def update_task_uploader_key():
+    st.session_state.task_uploader_key += 1
+
+
+if "cohort_uploader_key" not in st.session_state:
+    st.session_state.cohort_uploader_key = 0
+
+
+def update_cohort_uploader_key():
+    st.session_state.cohort_uploader_key += 1
+
 
 show_toast()
 
@@ -382,9 +416,12 @@ def add_verified_task_to_list(final_answer):
         st.session_state.org_id,
     )
 
-    if st.session_state.task_cohorts:
-        add_tasks_to_cohorts(
-            [[task_id, cohort["id"]] for cohort in st.session_state.task_cohorts]
+    if st.session_state.selected_task_courses:
+        add_tasks_to_courses(
+            [
+                [task_id, course["id"]]
+                for course in st.session_state.selected_task_courses
+            ]
         )
 
     if st.session_state.scoring_criteria:
@@ -567,13 +604,25 @@ def milestone_selector():
     )
 
 
-def cohort_selector():
+def cohort_selector(default=None):
     return st.multiselect(
         "Cohorts",
         st.session_state.cohorts,
-        key="task_cohorts",
+        key="course_cohorts",
+        default=default,
         format_func=lambda row: row["name"],
         help="If you don't see the cohort you want, you can create a new one from the `Cohorts` tab",
+    )
+
+
+def course_selector(key_prefix: str, default=None):
+    return st.multiselect(
+        "Courses",
+        st.session_state.courses,
+        default=default,
+        key=f"selected_{key_prefix}_courses",
+        format_func=lambda row: row["name"],
+        help="If you don't see the course you want, you can create a new one from the `Courses` tab",
     )
 
 
@@ -747,7 +796,7 @@ def show_task_form():
         milestone_selector()
 
     with cols[1]:
-        cohort_selector()
+        course_selector("task", default=None)
 
     if st.button(
         "Add task",
@@ -869,16 +918,16 @@ def bulk_upload_tasks_to_db(
         )
         new_task_ids.append(task_id)
 
-    if st.session_state.task_cohorts:
-        cohort_tasks_to_add = list(
+    if st.session_state.selected_task_courses:
+        course_tasks_to_add = list(
             itertools.chain(
                 *[
-                    [(task_id, cohort["id"]) for task_id in new_task_ids]
-                    for cohort in st.session_state.task_cohorts
+                    [(task_id, course["id"]) for task_id in new_task_ids]
+                    for course in st.session_state.selected_task_courses
                 ]
             )
         )
-        add_tasks_to_cohorts(cohort_tasks_to_add)
+        add_tasks_to_courses(course_tasks_to_add)
 
     if st.session_state.scoring_criteria:
         add_scoring_criteria_to_tasks(new_task_ids, st.session_state.scoring_criteria)
@@ -910,10 +959,10 @@ def show_bulk_upload_tasks_form():
 
     cols = st.columns(2)
     with cols[0]:
-        milestone = milestone_selector()
+        milestone_selector()
 
     with cols[1]:
-        cohorts = cohort_selector()
+        course_selector("task", default=None)
 
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
     if ai_response_type == "chat":
@@ -1028,68 +1077,77 @@ def show_task_edit_dialog(task_ids):
         st.rerun()
 
 
-@st.dialog("Assign tasks to cohort")
-def show_tasks_assign_to_cohort_dialog(row_ids, task_ids, tasks_df):
-    task_cohorts = []
-    for _, row in tasks_df.iloc[row_ids].iterrows():
-        task_cohorts.append([cohort["id"] for cohort in row["cohorts"]])
+@st.dialog("Update courses for tasks")
+def show_update_task_courses(task_ids, existing_task_course_pairs):
+    # Find courses that all selected tasks belong to
+    task_course_dict = {}
+    for task_id, course_id in existing_task_course_pairs:
+        if task_id not in task_course_dict:
+            task_course_dict[task_id] = set()
 
-    common_cohort_ids = find_intersection(task_cohorts)
+        task_course_dict[task_id].add(course_id)
 
-    org_cohorts = get_cohorts_for_org(st.session_state.org_id)
+    # Get intersection of course IDs across all tasks
+    common_course_ids = None
+    for task_id in task_ids:
+        task_courses = task_course_dict.get(task_id, set())
 
-    default_cohorts = [
-        cohort for cohort in org_cohorts if cohort["id"] in common_cohort_ids
+        if common_course_ids is None:
+            common_course_ids = task_courses
+            continue
+
+        common_course_ids = common_course_ids.intersection(task_courses)
+
+    # Convert course IDs to course objects for default selection
+    default_courses = [
+        course
+        for course in st.session_state.courses
+        if course["id"] in (common_course_ids or set())
     ]
 
-    with st.form("assign_tasks_to_cohort_form", border=False):
-        selected_cohorts = st.multiselect(
-            "Select cohorts to assign tasks to",
-            org_cohorts,
+    with st.form("update_task_courses_form", border=False):
+        selected_courses = st.multiselect(
+            "Select courses to assign tasks to",
+            st.session_state.courses,
             format_func=lambda x: x["name"],
-            default=default_cohorts,
+            default=default_courses,
         )
 
         st.container(height=30, border=False)
 
         if st.form_submit_button("Update", use_container_width=True, type="primary"):
-            cohort_tasks_to_add = []
-            cohort_tasks_to_remove = []
-
-            for row_id, task_id in zip(row_ids, task_ids):
-                new_cohort_ids = [cohort["id"] for cohort in selected_cohorts]
-                existing_cohort_ids = [
-                    cohort["id"] for cohort in tasks_df.iloc[row_id]["cohorts"]
-                ]
-
-                added_cohort_ids = list(set(new_cohort_ids) - set(existing_cohort_ids))
-                deleted_cohort_ids = list(
-                    set(existing_cohort_ids) - set(new_cohort_ids)
+            # our SQL query takes care of existing pairs, so we don't need to filter them here
+            course_tasks_to_keep = list(
+                itertools.chain(
+                    *[
+                        [(task_id, course["id"]) for course in selected_courses]
+                        for task_id in task_ids
+                    ]
                 )
+            )
 
-                for cohort_id in added_cohort_ids:
-                    cohort_tasks_to_add.append((task_id, cohort_id))
+            if sorted(course_tasks_to_keep, key=lambda x: x[0]) == sorted(
+                existing_task_course_pairs, key=lambda x: x[0]
+            ):
+                st.error("No changes made")
+                return
 
-                for cohort_id in deleted_cohort_ids:
-                    cohort_tasks_to_remove.append((task_id, cohort_id))
+            course_tasks_to_remove = [
+                pair
+                for pair in existing_task_course_pairs
+                if pair not in course_tasks_to_keep
+            ]
 
-            if cohort_tasks_to_add:
-                add_tasks_to_cohorts(cohort_tasks_to_add)
+            if course_tasks_to_keep:
+                add_tasks_to_courses(course_tasks_to_keep)
 
-            if cohort_tasks_to_remove:
-                remove_tasks_from_cohorts(cohort_tasks_to_remove)
+            if course_tasks_to_remove:
+                remove_tasks_from_courses(course_tasks_to_remove)
 
             st.rerun()
 
 
-tasks_heading = "Tasks"
-cohorts_heading = "Cohorts"
-num_cohorts = len(st.session_state.cohorts)
-
-if num_cohorts > 0:
-    cohorts_heading = f"Cohorts ({num_cohorts})"
-
-tab_names = [cohorts_heading, tasks_heading, "Milestones", "Tags"]
+tab_names = ["Cohorts", "Courses", "Tasks", "Milestones", "Tags"]
 
 is_hva_org = get_hva_org_id() == st.session_state.org_id
 if is_hva_org:
@@ -1100,7 +1158,6 @@ tab_names.append("Settings")
 tabs = st.tabs(tab_names)
 
 
-@st.fragment
 def show_tasks_tab():
     cols = st.columns([1, 8])
 
@@ -1186,7 +1243,10 @@ def show_tasks_tab():
         "milestone_name": st.column_config.TextColumn(label="milestone"),
     }
 
-    df["cohort_names"] = df["cohorts"].apply(lambda x: [cohort["name"] for cohort in x])
+    task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
+    df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
+
+    df["course_names"] = df["courses"].apply(lambda x: [course["name"] for course in x])
 
     column_order = [
         "id",
@@ -1197,7 +1257,7 @@ def show_tasks_tab():
         "answer",
         "tags",
         "milestone_name",
-        "cohort_names",
+        "course_names",
         "type",
         "response_type",
         "coding_language",
@@ -1234,7 +1294,7 @@ def show_tasks_tab():
         # st.rerun()
 
     if not is_edit_mode:
-        delete_col, assign_cohort_col, edit_col, add_tests_col = st.columns(
+        delete_col, update_course_col, edit_col, add_tests_col = st.columns(
             [0.4, 1, 1.2, 6]
         )
 
@@ -1257,11 +1317,15 @@ def show_tasks_tab():
                     task_ids,
                 )
 
-            if assign_cohort_col.button("Update cohort"):
+            if update_course_col.button("Update courses"):
                 # import ipdb; ipdb.set_trace()
-                show_tasks_assign_to_cohort_dialog(
-                    event.selection["rows"], task_ids, df
-                )
+                existing_task_course_pairs = []
+
+                for task_id in task_ids:
+                    for course in task_id_to_courses[task_id]:
+                        existing_task_course_pairs.append((task_id, course["id"]))
+
+                show_update_task_courses(task_ids, existing_task_course_pairs)
 
             if edit_col.button("Edit task attributes"):
                 # import ipdb; ipdb.set_trace()
@@ -1305,23 +1369,8 @@ def show_tasks_tab():
             )
 
 
-with tabs[1]:
+with tabs[2]:
     show_tasks_tab()
-
-if "task_uploader_key" not in st.session_state:
-    st.session_state.task_uploader_key = 0
-
-
-def update_task_uploader_key():
-    st.session_state.task_uploader_key += 1
-
-
-if "cohort_uploader_key" not in st.session_state:
-    st.session_state.cohort_uploader_key = 0
-
-
-def update_cohort_uploader_key():
-    st.session_state.cohort_uploader_key += 1
 
 
 @st.dialog("Create Cohort")
@@ -1625,6 +1674,11 @@ def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
     if confirm_col.button("Confirm", type="primary"):
         delete_cohort(cohort_id)
         refresh_cohorts()
+
+        # invalidate cache
+        for course in cohort_info["courses"]:
+            get_cohorts_for_course.clear(course["id"])
+
         set_toast("Cohort deleted successfully!")
         st.rerun()
 
@@ -1632,31 +1686,76 @@ def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
         st.rerun()
 
 
-@st.fragment
-def show_cohorts_tab():
-    cols = st.columns([1.2, 0.5, 3])
-    selected_cohort = cols[0].selectbox(
-        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
-    )
+@st.dialog("Update Cohort Courses")
+def show_update_cohort_courses_dialog(cohort_id: int, cohort_courses: List[Dict]):
+    with st.form("update_cohort_courses_form", border=False):
+        selected_courses = course_selector("cohort", default=cohort_courses)
 
-    cols[1].container(height=10, border=False)
-    if cols[1].button("Create Cohort", type="primary"):
-        show_create_cohort_dialog()
+        st.container(height=10, border=False)
 
-    if not len(st.session_state.cohorts):
-        st.error("No cohorts added yet")
+        has_changes = selected_courses != cohort_courses
+
+        if st.form_submit_button(
+            "Update",
+            type="primary",
+            use_container_width=True,
+        ):
+            if not has_changes:
+                st.error("No changes made")
+                return
+
+            courses_to_delete = [
+                course for course in cohort_courses if course not in selected_courses
+            ]
+            courses_to_add = [
+                course for course in selected_courses if course not in cohort_courses
+            ]
+            if courses_to_add:
+                add_courses_to_cohort(
+                    cohort_id, [course["id"] for course in courses_to_add]
+                )
+            if courses_to_delete:
+                remove_courses_from_cohort(
+                    cohort_id, [course["id"] for course in courses_to_delete]
+                )
+
+            refresh_cohorts()
+
+            # invalidate cache
+            get_courses_for_cohort.clear(cohort_id)
+            for course in courses_to_add + courses_to_delete:
+                get_cohorts_for_course.clear(course["id"])
+
+            set_toast("Cohort updated successfully!")
+            st.rerun()
+
+
+def show_cohort_courses(selected_cohort: Dict):
+    if st.button("Update Courses"):
+        show_update_cohort_courses_dialog(
+            selected_cohort["id"], selected_cohort["courses"]
+        )
+
+    if not selected_cohort["courses"]:
+        st.info("No courses in this cohort")
         return
 
-    cohort_info = get_cohort_by_id(selected_cohort["id"])
+    st.pills(
+        "Courses",
+        selected_cohort["courses"],
+        format_func=lambda x: x["name"],
+        label_visibility="collapsed",
+        disabled=True,
+    )
 
-    if selected_cohort:
-        cols = st.columns([1, 1, 7.5])
-        if cols[0].button("Add Members"):
-            show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
-        if cols[1].button("Create Groups"):
-            show_create_groups_dialog(selected_cohort["id"], cohort_info)
-        if cols[2].button("🗑️", help="Delete Cohort"):
-            show_delete_cohort_confirmation_dialog(selected_cohort["id"], cohort_info)
+
+def show_cohort_overview(selected_cohort: Dict):
+    cohort_info = get_cohort_by_id(selected_cohort["id"])
+    cols = st.columns([1, 1, 7.5])
+    if cols[0].button("Add Members"):
+        show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+    if cols[1].button("Create Groups"):
+        show_create_groups_dialog(selected_cohort["id"], cohort_info)
 
     learners = []
     mentors = []
@@ -1733,7 +1832,7 @@ def show_cohorts_tab():
                 for member in group["members"]
                 if member["role"] == group_role_learner
             ]
-            return f'{group["name"]} ({len(group_learners)} learners, {len(group_mentors)} mentors)'
+            return f'{group["name"]} ({show_singular_or_plural(len(group_learners), "learner")}, {show_singular_or_plural(len(group_mentors), "mentor")})'
 
         selected_group = cols[0].selectbox(
             "Select a group",
@@ -1806,8 +1905,216 @@ def show_cohorts_tab():
         show_groups_tab(cohort_info)
 
 
+def show_cohorts_tab():
+    cols = st.columns([1.2, 0.5, 3])
+    selected_cohort = cols[0].selectbox(
+        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
+    )
+
+    cols[1].container(height=10, border=False)
+    if cols[1].button("Create Cohort", type="primary"):
+        show_create_cohort_dialog()
+
+    if not len(st.session_state.cohorts):
+        st.error("No cohorts added yet")
+        return
+
+    if not selected_cohort:
+        return
+
+    tabs = st.tabs(["Overview", "Courses"])
+
+    selected_cohort["courses"] = get_courses_for_cohort(selected_cohort["id"])
+
+    cols[2].container(height=10, border=False)
+    if cols[2].button("🗑️", help="Delete Cohort"):
+        show_delete_cohort_confirmation_dialog(selected_cohort["id"], selected_cohort)
+
+    with tabs[0]:
+        show_cohort_overview(selected_cohort)
+
+    with tabs[1]:
+        show_cohort_courses(selected_cohort)
+
+
 with tabs[0]:
     show_cohorts_tab()
+
+
+@st.dialog("Create Course")
+def show_create_course_dialog():
+    with st.form("create_course_form", border=False):
+        course_name = st.text_input("Enter course name")
+
+        cohort_selector()
+
+        if st.form_submit_button(
+            "Create",
+            type="primary",
+            use_container_width=True,
+        ):
+            if not course_name:
+                st.error("Enter a course name")
+                return
+
+            new_course_id = create_course(course_name, st.session_state.org_id)
+
+            if st.session_state.course_cohorts:
+                add_course_to_cohorts(
+                    new_course_id,
+                    [cohort["id"] for cohort in st.session_state.course_cohorts],
+                )
+                # invalidate cache
+                for cohort in st.session_state.course_cohorts:
+                    get_courses_for_cohort.clear(cohort["id"])
+
+            refresh_courses()
+            set_toast(f"Course `{course_name}` created successfully!")
+            st.rerun()
+
+
+@st.dialog("Update Course Cohorts")
+def show_update_course_cohorts_dialog(course_id: int, course_cohorts: List[Dict]):
+    with st.form("update_course_cohorts_form", border=False):
+        selected_cohorts = cohort_selector(default=course_cohorts)
+
+        st.container(height=10, border=False)
+
+        has_changes = selected_cohorts != course_cohorts
+
+        if st.form_submit_button(
+            "Update",
+            type="primary",
+            use_container_width=True,
+        ):
+            if not has_changes:
+                st.error("No changes made")
+                return
+
+            cohorts_to_delete_from = [
+                cohort for cohort in course_cohorts if cohort not in selected_cohorts
+            ]
+            cohorts_to_add_to = [
+                cohort for cohort in selected_cohorts if cohort not in course_cohorts
+            ]
+            if cohorts_to_add_to:
+                add_course_to_cohorts(
+                    course_id, [cohort["id"] for cohort in cohorts_to_add_to]
+                )
+            if cohorts_to_delete_from:
+                remove_course_from_cohorts(
+                    course_id, [cohort["id"] for cohort in cohorts_to_delete_from]
+                )
+
+            refresh_courses()
+
+            # invalidate cache
+            get_cohorts_for_course.clear(course_id)
+            for cohort in cohorts_to_add_to + cohorts_to_delete_from:
+                get_courses_for_cohort.clear(cohort["id"])
+
+            set_toast("Cohorts updated successfully!")
+            st.rerun()
+
+
+@st.dialog("Delete Course Confirmation")
+def show_delete_course_confirmation_dialog(course):
+    st.markdown(f"Are you sure you want to delete the course: `{course['name']}`?")
+    (
+        confirm_col,
+        cancel_col,
+    ) = st.columns([1.5, 6])
+
+    if confirm_col.button("Confirm", type="primary"):
+        delete_course(course["id"])
+        refresh_courses()
+
+        # invalidate cache
+        for cohort in course["cohorts"]:
+            get_courses_for_cohort.clear(cohort["id"])
+
+        set_toast("Course deleted successfully!")
+        st.rerun()
+
+    if cancel_col.button("Cancel"):
+        st.rerun()
+
+
+def show_course_tasks_tab(selected_course):
+    if not selected_course["tasks"]:
+        st.info("This course has no tasks yet")
+        return
+
+    st.dataframe(
+        pd.DataFrame(selected_course["tasks"], columns=["id", "name", "milestone"]),
+        hide_index=True,
+        use_container_width=True,
+        column_order=["id", "name", "milestone"],
+        column_config={
+            "id": st.column_config.TextColumn(
+                width="small",
+            ),
+        },
+    )
+
+
+def show_course_cohorts_tab(selected_course):
+    if st.button("Update Cohorts"):
+        show_update_course_cohorts_dialog(
+            selected_course["id"], selected_course["cohorts"]
+        )
+
+    if not selected_course["cohorts"]:
+        st.info("This course has not been added to any cohort yet")
+    else:
+        # st.write(selected_course["cohorts"])
+        st.pills(
+            "**Cohorts**",
+            selected_course["cohorts"],
+            format_func=lambda x: x["name"],
+            disabled=True,
+            label_visibility="collapsed",
+        )
+
+
+def show_courses_tab():
+    cols = st.columns([1.2, 0.5, 0.55, 2.5])
+
+    selected_course = cols[0].selectbox(
+        "Select a course",
+        st.session_state.courses,
+        format_func=lambda course: course["name"],
+    )
+
+    cols[1].container(height=10, border=False)
+    if cols[1].button("Create Course", type="primary"):
+        show_create_course_dialog()
+
+    if not len(st.session_state.courses):
+        st.error("No courses added yet")
+        return
+
+    if not selected_course:
+        return
+
+    selected_course["tasks"] = get_tasks_for_course(selected_course["id"])
+    selected_course["cohorts"] = get_cohorts_for_course(selected_course["id"])
+
+    cols[2].container(height=10, border=False)
+    if cols[2].button("🗑️", help="Delete Course"):
+        show_delete_course_confirmation_dialog(selected_course)
+
+    tabs = st.tabs(["Tasks", "Cohorts"])
+
+    with tabs[0]:
+        show_course_tasks_tab(selected_course)
+
+    with tabs[1]:
+        show_course_cohorts_tab(selected_course)
+
+
+with tabs[1]:
+    show_courses_tab()
 
 
 def add_milestone(new_milestone, milestone_color):
@@ -1922,7 +2229,7 @@ def show_milestones_tab():
             )
 
 
-with tabs[2]:
+with tabs[3]:
     show_milestones_tab()
 
 
@@ -1997,7 +2304,7 @@ def show_tags_tab():
             )
 
 
-with tabs[3]:
+with tabs[4]:
     show_tags_tab()
 
 
@@ -2059,12 +2366,12 @@ def show_analytics_tab():
 
 
 if is_hva_org:
-    with tabs[4]:
+    with tabs[5]:
         show_analytics_tab()
 
 
 @st.dialog("Add Member")
-def show_add_member_dialog():
+def show_add_member_dialog(org_users):
     with st.form("add_member_form", border=False):
         member_email = st.text_input("Enter email")
         role = st.selectbox("Select role", ["admin"], disabled=True)
@@ -2078,6 +2385,10 @@ def show_add_member_dialog():
             try:
                 # Check that the email address is valid
                 member_email = validate_email(member_email)
+                if member_email.normalized in [user["email"] for user in org_users]:
+                    st.error("Member already exists")
+                    return
+
                 add_user_to_org_by_email(
                     member_email.normalized, st.session_state.org_id, role
                 )
@@ -2092,9 +2403,9 @@ def show_add_member_dialog():
 def show_settings_tab():
     st.markdown("#### Members")
 
-    st.button("Add Member", on_click=show_add_member_dialog)
-
     org_users = get_org_users(st.session_state.org_id)
+    st.button("Add Member", on_click=show_add_member_dialog, args=(org_users,))
+
     df = pd.DataFrame(org_users)
     st.dataframe(
         df, use_container_width=True, hide_index=True, column_order=["email", "role"]

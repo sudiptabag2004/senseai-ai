@@ -1,6 +1,8 @@
 import os
 from os.path import exists
 import json
+from collections import defaultdict
+import streamlit as st
 import traceback
 import itertools
 import sqlite3
@@ -30,6 +32,11 @@ from lib.config import (
     user_organizations_table_name,
     cohort_tasks_table_name,
     task_scoring_criteria_table_name,
+    courses_table_name,
+    course_cohorts_table_name,
+    course_tasks_table_name,
+    uncategorized_milestone_name,
+    uncategorized_milestone_color,
 )
 from models import LeaderboardViewType
 from lib.utils import (
@@ -90,6 +97,7 @@ def create_user_organizations_table(cursor):
                 org_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, org_id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
@@ -128,6 +136,7 @@ def create_cohort_tables(cursor):
                 user_id INTEGER NOT NULL,
                 cohort_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
+                UNIQUE(user_id, cohort_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
                 FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
@@ -149,20 +158,23 @@ def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 group_id INTEGER NOT NULL,
+                UNIQUE(user_id, group_id),
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
             )"""
     )
 
-    # Create a table to store tasks in cohorts
+
+def create_course_tasks_table(cursor):
     cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {cohort_tasks_table_name} (
+        f"""CREATE TABLE IF NOT EXISTS {course_tasks_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
-                cohort_id INTEGER NOT NULL,
+                course_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
             )"""
     )
 
@@ -196,8 +208,35 @@ def create_tag_tables(cursor):
                 task_id INTEGER NOT NULL,
                 tag_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(task_id, tag_id),
                 FOREIGN KEY (task_id) REFERENCES tasks(id),
                 FOREIGN KEY (tag_id) REFERENCES tags(id)
+            )"""
+    )
+
+
+def create_courses_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {courses_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+            )"""
+    )
+
+
+def create_course_cohorts_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {course_cohorts_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                course_id INTEGER NOT NULL,
+                cohort_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(course_id, cohort_id),
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
     )
 
@@ -306,6 +345,18 @@ def init_db():
             create_user_organizations_table(cursor)
             conn.commit()
 
+        if not check_table_exists(cohorts_table_name, cursor):
+            create_cohort_tables(cursor)
+            conn.commit()
+
+        if not check_table_exists(courses_table_name, cursor):
+            create_courses_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(course_cohorts_table_name, cursor):
+            create_course_cohorts_table(cursor)
+            conn.commit()
+
         if not check_table_exists(milestones_table_name, cursor):
             create_milestones_table(cursor)
             conn.commit()
@@ -326,16 +377,16 @@ def init_db():
             create_task_scoring_criteria_table(cursor)
             conn.commit()
 
-        if not check_table_exists(cohort_tasks_table_name, cursor):
-            create_cohort_tables(cursor)
-            conn.commit()
-
         if not check_table_exists(tests_table_name, cursor):
             create_tests_table(cursor)
             conn.commit()
 
         if not check_table_exists(chat_history_table_name, cursor):
             create_chat_history_table(cursor)
+            conn.commit()
+
+        if not check_table_exists(course_tasks_table_name, cursor):
+            create_course_tasks_table(cursor)
             conn.commit()
 
         if not check_table_exists(cv_review_usage_table_name, cursor):
@@ -346,27 +397,35 @@ def init_db():
         return
 
     try:
-        create_milestones_table(cursor)
+        create_organizations_table(cursor)
 
         create_users_table(cursor)
 
+        create_user_organizations_table(cursor)
+
+        create_milestones_table(cursor)
+
+        create_tag_tables(cursor)
+
+        create_cohort_tables(cursor)
+
+        create_courses_table(cursor)
+
+        create_course_cohorts_table(cursor)
+
         create_badges_table(cursor)
 
-        # Create a table to store tasks
         create_tasks_table(cursor)
 
         create_task_scoring_criteria_table(cursor)
 
-        # Create a table to store chat history
         create_chat_history_table(cursor)
 
-        # Create a table to store cv review usage
-        create_cv_review_usage_table(cursor)
-
-        # Create a table to store tests
         create_tests_table(cursor)
 
-        create_cohort_tables(cursor)
+        create_course_tasks_table(cursor)
+
+        create_cv_review_usage_table(cursor)
 
         # Commit the changes and close the connection
         conn.commit()
@@ -538,12 +597,6 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
 
 
 def convert_task_db_to_dict(task, tests):
-    cohort_names = deserialise_list_from_str(task[14])
-    cohort_ids = list(map(int, deserialise_list_from_str(task[15])))
-    cohorts = [
-        {"name": cohort_names[i], "id": cohort_ids[i]} for i in range(len(cohort_names))
-    ]
-
     return {
         "id": task[0],
         "name": task[1],
@@ -559,13 +612,17 @@ def convert_task_db_to_dict(task, tests):
         "milestone_name": task[11],
         "org_id": task[12],
         "org_name": task[13],
-        "cohorts": cohorts,
-        "response_type": task[16],
+        "response_type": task[14],
         "tests": tests,
     }
 
 
 def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
+    if org_id is None and cohort_id is None:
+        raise ValueError("Either org_id or cohort_id must be provided")
+    if org_id is not None and cohort_id is not None:
+        raise ValueError("Only one of org_id or cohort_id can be provided")
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -573,14 +630,12 @@ def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tags,
         t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids, t.response_type
+        t.response_type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
-    LEFT JOIN {organizations_table_name} o ON t.org_id = o.id
-    LEFT JOIN {cohort_tasks_table_name} ct ON t.id = ct.task_id
-    LEFT JOIN {cohorts_table_name} c ON ct.cohort_id = c.id"""
+    LEFT JOIN {organizations_table_name} o ON t.org_id = o.id"""
 
     query_params = ()
 
@@ -588,8 +643,12 @@ def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
         query += " WHERE t.org_id = ?"
         query_params += (org_id,)
     elif cohort_id is not None:
-        query += " WHERE c.id = ? AND o.id = (SELECT org_id FROM cohorts WHERE id = ?)"
-        query_params += (cohort_id, cohort_id)
+        query += f""" 
+        INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        INNER JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
+        WHERE cc.cohort_id = ?
+        """
+        query_params += (cohort_id,)
 
     query += f"""
     GROUP BY t.id
@@ -641,15 +700,12 @@ def get_task_by_id(task_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.org_id, o.name as org_name,
-        GROUP_CONCAT(DISTINCT c.name) as cohort_names, GROUP_CONCAT(DISTINCT c.id) as cohort_ids, t.response_type
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.org_id, o.name as org_name, t.response_type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
     LEFT JOIN {organizations_table_name} o ON t.org_id = o.id
-    LEFT JOIN {cohort_tasks_table_name} ct ON t.id = ct.task_id
-    LEFT JOIN {cohorts_table_name} c ON ct.cohort_id = c.id
     WHERE t.id = ?
     GROUP BY t.id
     """,
@@ -703,7 +759,6 @@ def delete_task(task_id: int):
     cursor = conn.cursor()
 
     try:
-        # Delete associated tests first
         cursor.execute(
             f"""
         DELETE FROM {tests_table_name} WHERE task_id = ?
@@ -711,15 +766,13 @@ def delete_task(task_id: int):
             (task_id,),
         )
 
-        # Delete entries from cohort_tasks table
         cursor.execute(
             f"""
-        DELETE FROM {cohort_tasks_table_name} WHERE task_id = ?
+        DELETE FROM {course_tasks_table_name} WHERE task_id = ?
         """,
             (task_id,),
         )
 
-        # Delete entries from task_tags table
         cursor.execute(
             f"""
         DELETE FROM {task_tags_table_name} WHERE task_id = ?
@@ -727,7 +780,6 @@ def delete_task(task_id: int):
             (task_id,),
         )
 
-        # Delete entries from chat_history table
         cursor.execute(
             f"""
         DELETE FROM {chat_history_table_name} WHERE task_id = ?
@@ -742,7 +794,6 @@ def delete_task(task_id: int):
             (task_id,),
         )
 
-        # Then delete the task
         cursor.execute(
             f"""
         DELETE FROM {tasks_table_name} WHERE id = ?
@@ -765,28 +816,24 @@ def delete_tasks(task_ids: List[int]):
     task_ids_as_str = serialise_list_to_str(map(str, task_ids))
 
     try:
-        # Delete associated tests first
         cursor.execute(
             f"""
         DELETE FROM {tests_table_name} WHERE task_id IN ({task_ids_as_str})
         """
         )
 
-        # Delete entries from cohort_tasks table
         cursor.execute(
             f"""
-        DELETE FROM {cohort_tasks_table_name} WHERE task_id IN ({task_ids_as_str})
+        DELETE FROM {course_tasks_table_name} WHERE task_id IN ({task_ids_as_str})
         """
         )
 
-        # Delete entries from task_tags table
         cursor.execute(
             f"""
         DELETE FROM {task_tags_table_name} WHERE task_id IN ({task_ids_as_str})
         """
         )
 
-        # Delete entries from chat_history table
         cursor.execute(
             f"""
         DELETE FROM {chat_history_table_name} WHERE task_id IN ({task_ids_as_str})
@@ -799,7 +846,6 @@ def delete_tasks(task_ids: List[int]):
         """
         )
 
-        # Then delete the tasks
         cursor.execute(
             f"""
         DELETE FROM {tasks_table_name} WHERE id IN ({task_ids_as_str})
@@ -963,8 +1009,9 @@ def get_solved_tasks_for_user(
         SELECT DISTINCT ch.task_id 
         FROM {chat_history_table_name} ch
         JOIN {tasks_table_name} t ON t.id = ch.task_id
-        JOIN {cohort_tasks_table_name} ct ON t.id = ct.task_id
-        WHERE ch.user_id = ? AND ch.is_solved = 1 AND ct.cohort_id = ?
+        JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
+        WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ?
         """,
             (user_id, cohort_id),
         )
@@ -983,8 +1030,9 @@ def get_solved_tasks_for_user(
             SELECT ch.task_id, MIN(datetime(ch.timestamp, '+5 hours', '+30 minutes')) as first_solved_time
             FROM {chat_history_table_name} ch
             JOIN {tasks_table_name} t ON t.id = ch.task_id
-            JOIN {cohort_tasks_table_name} ct ON t.id = ct.task_id
-            WHERE ch.user_id = ? AND ch.is_solved = 1 AND ct.cohort_id = ?
+            JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+            JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
+            WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ?
             GROUP BY ch.task_id
         )
         SELECT DISTINCT task_id 
@@ -1088,7 +1136,7 @@ def get_user_activity_last_n_days(user_id: int, n: int, cohort_id: int):
         f"""
     SELECT DATE(datetime(timestamp, '+5 hours', '+30 minutes')), COUNT(*)
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND task_id IN (SELECT task_id FROM {cohort_tasks_table_name} WHERE cohort_id = ?)
+    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
     GROUP BY DATE(timestamp)
     ORDER BY DATE(timestamp)
     """,
@@ -1116,7 +1164,7 @@ def get_user_streak(user_id: int, cohort_id: int):
         f"""
     SELECT MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND task_id IN (SELECT task_id FROM {cohort_tasks_table_name} WHERE cohort_id = ?)
+    WHERE user_id = ? AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
     GROUP BY DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
     ORDER BY timestamp DESC
     """,
@@ -1157,7 +1205,7 @@ def get_streaks(
     FROM (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
-        WHERE 1=1 {date_filter} AND task_id IN (SELECT task_id FROM {cohort_tasks_table_name} WHERE cohort_id = ?)
+        WHERE 1=1 {date_filter} AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
         ORDER BY user_id, timestamp DESC
     ) t
@@ -1292,11 +1340,6 @@ def delete_cohort(cohort_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # TODO: remove this once we have many to many relationship between cohorts and tasks
-    cursor.execute(
-        f"DELETE FROM {tasks_table_name} WHERE cohort_id = ?",
-        (cohort_id,),
-    )
     cursor.execute(
         f"DELETE FROM {user_groups_table_name} WHERE group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
         (cohort_id,),
@@ -1375,29 +1418,6 @@ def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
         raise e
     finally:
         conn.close()
-
-
-def add_user_to_cohort_group(user_id: int, group_id: int, conn=None, cursor=None):
-    is_master_connection = False
-    if conn is None:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        is_master_connection = True
-
-    try:
-        cursor.execute(
-            f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
-            (user_id, group_id),
-        )
-        if is_master_connection:
-            conn.commit()
-    except Exception as e:
-        if is_master_connection:
-            conn.rollback()
-        raise e
-    finally:
-        if is_master_connection:
-            conn.close()
 
 
 def update_cohort_group_name(group_id: int, new_name: str):
@@ -1775,11 +1795,10 @@ def delete_milestone(milestone_id: int):
     conn.close()
 
 
-def get_all_milestone_progress(user_id: int, cohort_id: int):
+def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    query = f"""
+    base_query = f"""
     SELECT 
         m.id AS milestone_id,
         m.name AS milestone_name,
@@ -1792,7 +1811,8 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
     LEFT JOIN 
         {tasks_table_name} t ON m.id = t.milestone_id
     LEFT JOIN
-        {cohort_tasks_table_name} ct ON t.id = ct.task_id
+        {course_tasks_table_name} ct ON t.id = ct.task_id
+    LEFT JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
     LEFT JOIN (
         SELECT 
             task_id, 
@@ -1802,13 +1822,14 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
             {chat_history_table_name}
         WHERE 
             user_id = ? AND task_id IN (
-                SELECT task_id FROM {cohort_tasks_table_name} WHERE cohort_id = ?
+                SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
             )
         GROUP BY 
             task_id, user_id
     ) task_solved ON t.id = task_solved.task_id
     WHERE 
-        t.verified = 1 AND ct.cohort_id = ?
+        t.verified = 1 AND cc.cohort_id = ?
+        {' AND ct.course_id = ?' if course_id is not None else ''}
     GROUP BY 
         m.id, m.name, m.color
     HAVING 
@@ -1817,22 +1838,27 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
         incomplete_tasks DESC
     """
 
-    cursor.execute(query, (user_id, cohort_id, cohort_id))
+    params = [user_id, cohort_id, cohort_id]
+    if course_id is not None:
+        params.append(course_id)
+
+    cursor.execute(base_query, tuple(params))
     results = cursor.fetchall()
 
     # Get tasks with null milestone_id
     null_milestone_query = f"""
     SELECT 
         NULL AS milestone_id,
-        'Uncategorized' AS milestone_name,
-        '#808080' AS milestone_color,
+        '{uncategorized_milestone_name}' AS milestone_name,
+        '{uncategorized_milestone_color}' AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
         SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
         COUNT(DISTINCT t.id) - SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
     FROM 
         {tasks_table_name} t
     LEFT JOIN
-        {cohort_tasks_table_name} ct ON t.id = ct.task_id
+        {course_tasks_table_name} ct ON t.id = ct.task_id
+    LEFT JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
     LEFT JOIN (
         SELECT 
             task_id,
@@ -1842,7 +1868,7 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
             {chat_history_table_name}
         WHERE 
             user_id = ? AND task_id IN (
-                SELECT task_id FROM {cohort_tasks_table_name} WHERE cohort_id = ?
+                SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
             )
         GROUP BY 
             task_id, user_id
@@ -1850,14 +1876,19 @@ def get_all_milestone_progress(user_id: int, cohort_id: int):
     WHERE 
         t.milestone_id IS NULL 
         AND t.verified = 1 
-        AND ct.cohort_id = ?
+        AND cc.cohort_id = ?
+        {' AND ct.course_id = ?' if course_id is not None else ''}
     HAVING
         COUNT(DISTINCT t.id) > 0
     ORDER BY 
         incomplete_tasks DESC
     """
 
-    cursor.execute(null_milestone_query, (user_id, cohort_id, cohort_id))
+    null_params = [user_id, cohort_id, cohort_id]
+    if course_id is not None:
+        null_params.append(course_id)
+
+    cursor.execute(null_milestone_query, tuple(null_params))
     null_milestone_results = cursor.fetchall()
 
     results.extend(null_milestone_results)
@@ -2596,23 +2627,39 @@ def drop_user_cohorts_table():
     conn.close()
 
 
-def drop_cohort_tasks_table():
+def get_courses_for_tasks(task_ids: List[int]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"DROP TABLE IF EXISTS {cohort_tasks_table_name}")
-    conn.commit()
-    conn.close()
+    cursor.execute(
+        f"SELECT ct.task_id, c.id, c.name FROM {course_tasks_table_name} ct JOIN {courses_table_name} c ON ct.course_id = c.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})"
+    )
+    results = cursor.fetchall()
+
+    task_courses = [
+        {
+            "task_id": result[0],
+            "course": {"id": result[1], "name": result[2]},
+        }
+        for result in results
+    ]
+
+    task_id_to_courses = defaultdict(list)
+
+    for task_course in task_courses:
+        task_id_to_courses[task_course["task_id"]].append(task_course["course"])
+
+    return task_id_to_courses
 
 
-def add_tasks_to_cohorts(cohort_tasks_to_add: List[Tuple[int, int]]):
+def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int]]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         cursor.executemany(
-            f"INSERT INTO {cohort_tasks_table_name} (task_id, cohort_id) VALUES (?, ?)",
-            cohort_tasks_to_add,
+            f"INSERT OR IGNORE INTO {course_tasks_table_name} (task_id, course_id) VALUES (?, ?)",
+            course_tasks_to_add,
         )
         conn.commit()
     except Exception as e:
@@ -2622,14 +2669,14 @@ def add_tasks_to_cohorts(cohort_tasks_to_add: List[Tuple[int, int]]):
         conn.close()
 
 
-def remove_tasks_from_cohorts(cohort_tasks_to_remove: List[Tuple[int, int]]):
+def remove_tasks_from_courses(course_tasks_to_remove: List[Tuple[int, int]]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         cursor.executemany(
-            f"DELETE FROM {cohort_tasks_table_name} WHERE task_id = ? AND cohort_id = ?",
-            cohort_tasks_to_remove,
+            f"DELETE FROM {course_tasks_table_name} WHERE task_id = ? AND course_id = ?",
+            course_tasks_to_remove,
         )
         conn.commit()
     except Exception as e:
@@ -2739,3 +2786,333 @@ def migrate_tasks_table():
 
     conn.commit()
     conn.close()
+
+
+def create_course(name: str, org_id: int) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"""
+            INSERT INTO {courses_table_name} (name, org_id)
+            VALUES (?, ?)
+            """,
+            (name, org_id),
+        )
+        cohort_id = cursor.lastrowid
+        conn.commit()
+
+        return cohort_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def convert_course_db_to_dict(course: Tuple) -> Dict:
+    return {
+        "id": course[0],
+        "name": course[1],
+    }
+
+
+def get_all_courses_for_org(org_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            f"SELECT id, name FROM {courses_table_name} WHERE org_id = ? ORDER BY id DESC",
+            (org_id,),
+        )
+
+        courses = cursor.fetchall()
+
+        return [convert_course_db_to_dict(course) for course in courses]
+    except Exception as e:
+        print(f"Error fetching courses: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def delete_course(course_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"DELETE FROM {course_cohorts_table_name} WHERE course_id = ?", (course_id,)
+    )
+
+    cursor.execute(f"DELETE FROM {courses_table_name} WHERE id = ?", (course_id,))
+
+    conn.commit()
+    conn.close()
+
+
+def delete_all_courses_for_org(org_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"DELETE FROM {course_cohorts_table_name} WHERE course_id IN (SELECT id FROM {courses_table_name} WHERE org_id = ?)",
+        (org_id,),
+    )
+
+    cursor.execute(f"DELETE FROM {courses_table_name} WHERE org_id = ?", (org_id,))
+
+    conn.commit()
+    conn.close()
+
+
+def add_course_to_cohorts(course_id: int, cohort_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        f"INSERT INTO {course_cohorts_table_name} (course_id, cohort_id) VALUES (?, ?)",
+        [(course_id, cohort_id) for cohort_id in cohort_ids],
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def add_courses_to_cohort(cohort_id: int, course_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        f"INSERT INTO {course_cohorts_table_name} (course_id, cohort_id) VALUES (?, ?)",
+        [(course_id, cohort_id) for course_id in course_ids],
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def remove_course_from_cohorts(course_id: int, cohort_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        f"DELETE FROM {course_cohorts_table_name} WHERE course_id = ? AND cohort_id = ?",
+        [(course_id, cohort_id) for cohort_id in cohort_ids],
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def remove_courses_from_cohort(cohort_id: int, course_ids: List[int]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        f"DELETE FROM {course_cohorts_table_name} WHERE cohort_id = ? AND course_id = ?",
+        [(cohort_id, course_id) for course_id in course_ids],
+    )
+
+    conn.commit()
+    conn.close()
+
+
+@st.cache_data
+def get_courses_for_cohort(cohort_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT c.id, c.name 
+        FROM {courses_table_name} c
+        JOIN {course_cohorts_table_name} cc ON c.id = cc.course_id
+        WHERE cc.cohort_id = ?
+        """,
+        (cohort_id,),
+    )
+
+    courses = cursor.fetchall()
+    return [{"id": course[0], "name": course[1]} for course in courses]
+
+
+@st.cache_data
+def get_cohorts_for_course(course_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT ch.id, ch.name 
+        FROM {cohorts_table_name} ch
+        JOIN {course_cohorts_table_name} cc ON ch.id = cc.cohort_id
+        WHERE cc.course_id = ?
+        """,
+        (course_id,),
+    )
+
+    cohorts = cursor.fetchall()
+    return [{"id": cohort[0], "name": cohort[1]} for cohort in cohorts]
+
+
+def drop_course_cohorts_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {course_cohorts_table_name}")
+    cursor.execute(f"DROP TABLE IF EXISTS {course_cohorts_table_name}")
+
+    conn.commit()
+    conn.close()
+
+
+def drop_courses_table():
+    drop_course_cohorts_table()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {courses_table_name}")
+    cursor.execute(f"DROP TABLE IF EXISTS {courses_table_name}")
+
+    conn.commit()
+    conn.close()
+
+
+def get_tasks_for_course(course_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
+        FROM {course_tasks_table_name} ct 
+        JOIN {tasks_table_name} t ON ct.task_id = t.id 
+        LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id 
+        WHERE ct.course_id = ?""",
+        (course_id,),
+    )
+
+    tasks = cursor.fetchall()
+    return [{"id": task[0], "name": task[1], "milestone": task[2]} for task in tasks]
+
+
+def seed_courses_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all existing cohorts
+    cursor.execute(f"SELECT id FROM {cohorts_table_name}")
+    cohort_ids = cursor.fetchall()
+
+    # Create a new course for each cohort
+    for cohort_id in cohort_ids:
+        # Insert the course
+        cursor.execute(
+            f"""
+            INSERT INTO {courses_table_name} (name, org_id)
+            SELECT 'New Course', org_id 
+            FROM {cohorts_table_name}
+            WHERE id = ?
+            """,
+            (cohort_id[0],),
+        )
+
+        course_id = cursor.lastrowid
+
+        # Link the course to the cohort
+        cursor.execute(
+            f"""
+            INSERT INTO {course_cohorts_table_name} (cohort_id, course_id)
+            VALUES (?, ?)
+            """,
+            (cohort_id[0], course_id),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def move_task_cohorts_to_task_courses():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all tasks from cohort_tasks table
+    cursor.execute(f"SELECT task_id, cohort_id FROM {cohort_tasks_table_name}")
+    cohort_tasks = cursor.fetchall()
+
+    for task_id, cohort_id in cohort_tasks:
+        # Get the first course linked to this cohort
+        cursor.execute(
+            f"""
+            SELECT course_id 
+            FROM {course_cohorts_table_name}
+            WHERE cohort_id = ?
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (cohort_id,),
+        )
+        course = cursor.fetchone()
+
+        if course:
+            # Insert into course_tasks table
+            cursor.execute(
+                f"""
+                INSERT INTO {course_tasks_table_name} (task_id, course_id)
+                VALUES (?, ?)
+                """,
+                (task_id, course[0]),
+            )
+
+    conn.commit()
+    conn.close()
+
+
+def drop_cohort_tasks_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(f"DELETE FROM {cohort_tasks_table_name}")
+    cursor.execute(f"DROP TABLE IF EXISTS {cohort_tasks_table_name}")
+
+    conn.commit()
+    conn.close()
+
+
+def make_task_course_unique():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_task_course ON {course_tasks_table_name} (task_id, course_id)"
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def make_pivot_tables_unique():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_user_cohort ON {user_cohorts_table_name} (user_id, cohort_id)"
+    )
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_user_group ON {user_groups_table_name} (user_id, group_id)"
+    )
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_course_cohort ON {course_cohorts_table_name} (cohort_id, course_id)"
+    )
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_user_org ON {user_organizations_table_name} (user_id, org_id)"
+    )
+    cursor.execute(
+        f"CREATE UNIQUE INDEX idx_task_tag ON {task_tags_table_name} (task_id, tag_id)"
+    )
+
+    conn.commit()
+    conn.close()
+
