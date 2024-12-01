@@ -6,6 +6,7 @@ from lib.db import (
     get_all_verified_tasks_for_cohort,
     get_solved_tasks_for_user,
     get_courses_for_cohort,
+    get_tasks_for_course,
 )
 from components.milestone_learner_view import show_milestone_card
 from auth import get_logged_in_user
@@ -121,8 +122,10 @@ def show_roadmap_by_course(all_tasks, user_id: int, cohort_id: int):
     tabs = st.tabs([course["name"] for course in cohort_courses])
 
     for tab, course in zip(tabs, cohort_courses):
+        course_task_ids = [task["id"] for task in get_tasks_for_course(course["id"])]
+        course_tasks = [task for task in all_tasks if task["id"] in course_task_ids]
         with tab:
-            show_roadmap_for_course(all_tasks, user_id, cohort_id, course)
+            show_roadmap_for_course(course_tasks, user_id, cohort_id, course)
 
 
 def update_task_view():
