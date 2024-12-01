@@ -2811,6 +2811,30 @@ def create_course(name: str, org_id: int) -> int:
         conn.close()
 
 
+def update_course_name(course_id: int, name: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {courses_table_name} SET name = ? WHERE id = ?", (name, course_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def update_cohort_name(cohort_id: int, name: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"UPDATE {cohorts_table_name} SET name = ? WHERE id = ?", (name, cohort_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def convert_course_db_to_dict(course: Tuple) -> Dict:
     return {
         "id": course[0],
@@ -3115,4 +3139,3 @@ def make_pivot_tables_unique():
 
     conn.commit()
     conn.close()
-

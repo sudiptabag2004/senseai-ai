@@ -37,6 +37,7 @@ from lib.config import (
     allowed_input_types,
 )
 from lib.init import init_env_vars, init_db
+from lib.cache import clear_course_cache_for_cohorts, clear_cohort_cache_for_courses
 from lib.db import (
     get_all_tasks_for_org_or_cohort,
     store_task as store_task_to_db,
@@ -81,6 +82,8 @@ from lib.db import (
     get_courses_for_cohort,
     get_cohorts_for_course,
     get_tasks_for_course,
+    update_course_name as update_course_name_in_db,
+    update_cohort_name as update_cohort_name_in_db,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -1676,8 +1679,7 @@ def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
         refresh_cohorts()
 
         # invalidate cache
-        for course in cohort_info["courses"]:
-            get_cohorts_for_course.clear(course["id"])
+        clear_cohort_cache_for_courses(cohort_info["courses"])
 
         set_toast("Cohort deleted successfully!")
         st.rerun()
@@ -1722,36 +1724,39 @@ def show_update_cohort_courses_dialog(cohort_id: int, cohort_courses: List[Dict]
             refresh_cohorts()
 
             # invalidate cache
-            get_courses_for_cohort.clear(cohort_id)
-            for course in courses_to_add + courses_to_delete:
-                get_cohorts_for_course.clear(course["id"])
+            clear_course_cache_for_cohorts([cohort_id])
+            clear_cohort_cache_for_courses(courses_to_add + courses_to_delete)
 
             set_toast("Cohort updated successfully!")
             st.rerun()
 
 
 def show_cohort_courses(selected_cohort: Dict):
-    if st.button("Update Courses"):
+    cols = st.columns([1, 0.4])
+    with cols[0]:
+        if not selected_cohort["courses"]:
+            st.markdown("#### Courses")
+            st.info("No courses in this cohort")
+            cols[1].container(height=40, border=False)
+        else:
+            st.pills(
+                "Courses",
+                selected_cohort["courses"],
+                format_func=lambda x: x["name"],
+                disabled=True,
+            )
+            cols[1].container(height=5, border=False)
+
+    if cols[1].button("Update", key="update_cohort_courses"):
         show_update_cohort_courses_dialog(
             selected_cohort["id"], selected_cohort["courses"]
         )
 
-    if not selected_cohort["courses"]:
-        st.info("No courses in this cohort")
-        return
-
-    st.pills(
-        "Courses",
-        selected_cohort["courses"],
-        format_func=lambda x: x["name"],
-        label_visibility="collapsed",
-        disabled=True,
-    )
-
 
 def show_cohort_overview(selected_cohort: Dict):
+    st.subheader("Overview")
     cohort_info = get_cohort_by_id(selected_cohort["id"])
-    cols = st.columns([1, 1, 7.5])
+    cols = st.columns([1, 2, 3.5])
     if cols[0].button("Add Members"):
         show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
     if cols[1].button("Create Groups"):
@@ -1812,7 +1817,7 @@ def show_cohort_overview(selected_cohort: Dict):
             st.info("No groups in this cohort")
             return
 
-        cols = st.columns([1, 0.3, 2])
+        cols = st.columns([1, 0.4, 1.9])
 
         # NOTE: DO NOT REMOVE THIS FORMATTING FOR THE DROPDOWN
         # OTHERWISE CHANGES IN THE COHORT LIKE ADDING/REMOVING MEMBERS
@@ -1905,6 +1910,32 @@ def show_cohort_overview(selected_cohort: Dict):
         show_groups_tab(cohort_info)
 
 
+def update_cohort_name(cohort, new_name):
+    if new_name == cohort["name"]:
+        st.toast("No changes made")
+        return
+
+    update_cohort_name_in_db(cohort["id"], new_name)
+    refresh_cohorts()
+
+    # invalidate cache
+    clear_cohort_cache_for_courses(cohort["courses"])
+
+    set_toast("Cohort name updated successfully!")
+    st.rerun()
+
+
+def show_cohort_name_update_form(selected_cohort):
+    with st.form("update_cohort_name_form", border=False):
+        cols = st.columns([1, 0.4])
+        updated_cohort_name = cols[0].text_input(
+            "Cohort Name", value=selected_cohort["name"]
+        )
+        cols[1].container(height=10, border=False)
+        if cols[1].form_submit_button("Update"):
+            update_cohort_name(selected_cohort, updated_cohort_name)
+
+
 def show_cohorts_tab():
     cols = st.columns([1.2, 0.5, 3])
     selected_cohort = cols[0].selectbox(
@@ -1922,19 +1953,23 @@ def show_cohorts_tab():
     if not selected_cohort:
         return
 
-    tabs = st.tabs(["Overview", "Courses"])
-
     selected_cohort["courses"] = get_courses_for_cohort(selected_cohort["id"])
 
-    cols[2].container(height=10, border=False)
-    if cols[2].button("🗑️", help="Delete Cohort"):
-        show_delete_cohort_confirmation_dialog(selected_cohort["id"], selected_cohort)
+    st.divider()
 
-    with tabs[0]:
-        show_cohort_overview(selected_cohort)
+    main_tab_cols = st.columns([0.4, 0.05, 1])
 
-    with tabs[1]:
+    with main_tab_cols[0]:
+        show_cohort_name_update_form(selected_cohort)
         show_cohort_courses(selected_cohort)
+        st.container(height=10, border=False)
+        if st.button("Delete Cohort", icon="🗑️"):
+            show_delete_cohort_confirmation_dialog(
+                selected_cohort["id"], selected_cohort
+            )
+
+    with main_tab_cols[-1]:
+        show_cohort_overview(selected_cohort)
 
 
 with tabs[0]:
@@ -1965,8 +2000,7 @@ def show_create_course_dialog():
                     [cohort["id"] for cohort in st.session_state.course_cohorts],
                 )
                 # invalidate cache
-                for cohort in st.session_state.course_cohorts:
-                    get_courses_for_cohort.clear(cohort["id"])
+                clear_course_cache_for_cohorts(st.session_state.course_cohorts)
 
             refresh_courses()
             set_toast(f"Course `{course_name}` created successfully!")
@@ -2009,9 +2043,8 @@ def show_update_course_cohorts_dialog(course_id: int, course_cohorts: List[Dict]
             refresh_courses()
 
             # invalidate cache
-            get_cohorts_for_course.clear(course_id)
-            for cohort in cohorts_to_add_to + cohorts_to_delete_from:
-                get_courses_for_cohort.clear(cohort["id"])
+            clear_cohort_cache_for_courses([course_id])
+            clear_course_cache_for_cohorts(cohorts_to_add_to + cohorts_to_delete_from)
 
             set_toast("Cohorts updated successfully!")
             st.rerun()
@@ -2030,8 +2063,7 @@ def show_delete_course_confirmation_dialog(course):
         refresh_courses()
 
         # invalidate cache
-        for cohort in course["cohorts"]:
-            get_courses_for_cohort.clear(cohort["id"])
+        clear_course_cache_for_cohorts(course["cohorts"])
 
         set_toast("Course deleted successfully!")
         st.rerun()
@@ -2041,6 +2073,7 @@ def show_delete_course_confirmation_dialog(course):
 
 
 def show_course_tasks_tab(selected_course):
+    st.subheader("Tasks")
     if not selected_course["tasks"]:
         st.info("This course has no tasks yet")
         return
@@ -2058,23 +2091,53 @@ def show_course_tasks_tab(selected_course):
     )
 
 
-def show_course_cohorts_tab(selected_course):
-    if st.button("Update Cohorts"):
+def show_course_cohorts(selected_course):
+    cols = st.columns([1, 0.4])
+    with cols[0]:
+        if not selected_course["cohorts"]:
+            st.markdown("#### Cohorts")
+            st.info("This course has not been added to any cohort yet")
+            cols[1].container(height=40, border=False)
+        else:
+            # st.write(selected_course["cohorts"])
+            st.pills(
+                "Cohorts",
+                selected_course["cohorts"],
+                format_func=lambda x: x["name"],
+                disabled=True,
+            )
+            cols[1].container(height=5, border=False)
+
+    if cols[1].button("Update", key="update_course_cohorts"):
         show_update_course_cohorts_dialog(
             selected_course["id"], selected_course["cohorts"]
         )
 
-    if not selected_course["cohorts"]:
-        st.info("This course has not been added to any cohort yet")
-    else:
-        # st.write(selected_course["cohorts"])
-        st.pills(
-            "**Cohorts**",
-            selected_course["cohorts"],
-            format_func=lambda x: x["name"],
-            disabled=True,
-            label_visibility="collapsed",
+
+def update_course_name(course, new_name):
+    if new_name == course["name"]:
+        st.toast("No changes made")
+        return
+
+    update_course_name_in_db(course["id"], new_name)
+    refresh_courses()
+
+    # invalidate cache
+    clear_course_cache_for_cohorts(course["cohorts"])
+
+    set_toast("Course name updated successfully!")
+    st.rerun()
+
+
+def show_course_name_update_form(selected_course):
+    with st.form("update_course_name_form", border=False):
+        cols = st.columns([1, 0.4])
+        updated_course_name = cols[0].text_input(
+            "Course Name", value=selected_course["name"]
         )
+        cols[1].container(height=10, border=False)
+        if cols[1].form_submit_button("Update"):
+            update_course_name(selected_course, updated_course_name)
 
 
 def show_courses_tab():
@@ -2100,17 +2163,20 @@ def show_courses_tab():
     selected_course["tasks"] = get_tasks_for_course(selected_course["id"])
     selected_course["cohorts"] = get_cohorts_for_course(selected_course["id"])
 
-    cols[2].container(height=10, border=False)
-    if cols[2].button("🗑️", help="Delete Course"):
-        show_delete_course_confirmation_dialog(selected_course)
+    st.divider()
 
-    tabs = st.tabs(["Tasks", "Cohorts"])
+    main_tab_cols = st.columns([0.4, 0.05, 1])
 
-    with tabs[0]:
+    with main_tab_cols[0]:
+        show_course_name_update_form(selected_course)
+        show_course_cohorts(selected_course)
+
+        st.container(height=10, border=False)
+        if st.button("Delete Course", icon="🗑️"):
+            show_delete_course_confirmation_dialog(selected_course)
+
+    with main_tab_cols[-1]:
         show_course_tasks_tab(selected_course)
-
-    with tabs[1]:
-        show_course_cohorts_tab(selected_course)
 
 
 with tabs[1]:
