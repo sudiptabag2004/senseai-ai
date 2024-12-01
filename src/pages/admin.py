@@ -1817,7 +1817,7 @@ def show_cohort_overview(selected_cohort: Dict):
             st.info("No groups in this cohort")
             return
 
-        cols = st.columns([1, 0.4, 1.9])
+        cols = st.columns([1, 0.4, 1.8])
 
         # NOTE: DO NOT REMOVE THIS FORMATTING FOR THE DROPDOWN
         # OTHERWISE CHANGES IN THE COHORT LIKE ADDING/REMOVING MEMBERS
