@@ -18,7 +18,9 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 import streamlit as st
 
-st.set_page_config(page_title="Task | SensAI", layout="wide")
+st.set_page_config(
+    page_title="Task | SensAI", layout="wide", initial_sidebar_state="collapsed"
+)
 
 from streamlit_ace import st_ace, THEMES
 
@@ -26,7 +28,7 @@ from lib.llm import logger, get_formatted_history
 from components.sticky_container import sticky_container
 from components.buttons import back_to_home_button
 from auth import login_or_signup_user
-from lib.config import coding_languages_supported
+from lib.config import coding_languages_supported, uncategorized_milestone_name
 from lib.db import (
     get_task_by_id,
     store_message as store_message_to_db,
@@ -51,7 +53,7 @@ from lib.ui import (
     display_waiting_indicator,
     escape_text_outside_code_blocks,
     correct_newlines_outside_code_blocks,
-    correct_code_blocks
+    correct_code_blocks,
 )
 from components.badge import create_badge
 from lib.init import init_env_vars, init_db
@@ -67,6 +69,8 @@ from components.code_execution import (
     show_sql_help_text,
 )
 from components.badge import show_badge_dialog, show_multiple_badges_dialog
+from components.milestone_learner_view import get_task_url
+from views.roadmap import get_tasks_with_completion_status
 
 init_env_vars()
 init_db()
@@ -99,8 +103,14 @@ if "cohort" not in st.query_params:
     time.sleep(2)
     st.switch_page("./home.py")
 
+if "course" not in st.query_params:
+    st.error("Not authorized. Redirecting to home page...")
+    time.sleep(2)
+    st.switch_page("./home.py")
+
 cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
+
 login_or_signup_user(st.query_params["email"])
 
 task_id = st.query_params.get("id")
@@ -143,6 +153,41 @@ if "mode" in st.query_params and st.query_params["mode"] == "review":
     st.session_state.is_review_mode = True
 else:
     st.session_state.is_review_mode = False
+
+if not st.session_state.is_review_mode and task["milestone_name"] != uncategorized_milestone_name:
+    course_id = int(st.query_params["course"])
+    course_tasks = get_tasks_with_completion_status(
+        task_user_id, cohort_id, course_id, task["milestone_id"]
+    )
+
+    with st.sidebar.container(border=True):
+        st.subheader(task["milestone_name"])
+
+    for index, course_task in enumerate(course_tasks):
+        # with st.sidebar:
+        #     set_task_view_style()
+        #     st.markdown(
+        #         get_task_view(course_task, cohort_id, course_id, show_button=False),
+        #         unsafe_allow_html=True,
+        #     )
+        course_text_to_display = course_task["name"]
+
+        if course_task["completed"]:
+            course_text_to_display = "✅ " + course_text_to_display
+
+        task_url = get_task_url(course_task, cohort_id, course_id)
+
+        if course_task["id"] == int(task_id):
+            st.sidebar.markdown(
+                f"""<div style='background-color: #ADADB2; padding: 8px 12px; border-radius: 0.5rem; margin: 0 0 16px 0;'>{course_text_to_display}</div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.sidebar.markdown(
+                f'<a href="{task_url}" target="_self" style="text-decoration: none; background-color: #dfe3eb; padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block;">{course_text_to_display}</a>',
+                unsafe_allow_html=True,
+            )
+            # st.sidebar.link_button(course_text_to_display, task_url, **kwargs)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(

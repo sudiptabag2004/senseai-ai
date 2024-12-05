@@ -8,6 +8,7 @@ from lib.db import (
     get_user_cohorts,
     get_cohorts_for_org,
     get_user_cohort_groups,
+    get_courses_for_cohort,
 )
 
 from components.streak import show_streak
@@ -41,8 +42,6 @@ def get_mentor_groups(user_id: int, cohort_id: int):
 def mentor_view(selected_cohort: Dict):
     logged_in_user = get_logged_in_user()
 
-    cols = st.columns(2)
-
     selected_group = None
     selected_learner = None
 
@@ -51,7 +50,18 @@ def mentor_view(selected_cohort: Dict):
 
     mentor_groups = get_mentor_groups(logged_in_user["id"], selected_cohort["id"])
 
+    cohort_courses = get_courses_for_cohort(selected_cohort["id"])
+
+    cols = st.columns(3)
+
     with cols[0]:
+        selected_course = st.selectbox(
+            "Select a course",
+            cohort_courses,
+            format_func=lambda x: x["name"],
+        )
+
+    with cols[1]:
         selected_group = st.selectbox(
             "Select a group",
             mentor_groups,
@@ -59,20 +69,15 @@ def mentor_view(selected_cohort: Dict):
             index=0,
         )
 
-    if selected_group:
-        with cols[1]:
-            selected_learner = st.selectbox(
-                "Select a learner",
-                selected_group["learners"],
-                format_func=lambda val: val["email"],
-                index=0,
-            )
-
-    if not selected_learner:
-        return
+    with cols[2]:
+        selected_learner = st.selectbox(
+            "Select a learner",
+            selected_group["learners"],
+            format_func=lambda val: val["email"],
+        )
 
     all_milestone_data = get_all_milestone_progress(
-        selected_learner["id"], cohort_id=selected_cohort["id"]
+        selected_learner["id"], selected_course["id"]
     )
     rows = []
 
@@ -127,7 +132,7 @@ def mentor_view(selected_cohort: Dict):
     milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
     df_actions.link_button(
         "Yes",
-        f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&mode=review",
+        f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&course={selected_course['id']}&mode=review",
     )
     # print()
     # delete_tasks(event.selection['rows'])
@@ -149,9 +154,6 @@ def show_home():
     role = None
 
     if user_cohorts:
-        # if len(user_cohorts) == 1:
-        #     selected_cohort = user_cohorts[0]
-        # else:
         cols = st.columns(2)
         with cols[0]:
             selected_cohort = st.selectbox(

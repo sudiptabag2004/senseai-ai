@@ -39,7 +39,7 @@ from lib.config import (
 from lib.init import init_env_vars, init_db
 from lib.cache import clear_course_cache_for_cohorts, clear_cohort_cache_for_courses
 from lib.db import (
-    get_all_tasks_for_org_or_cohort,
+    get_all_tasks_for_org_or_course,
     store_task as store_task_to_db,
     delete_tasks as delete_tasks_from_db,
     update_task as update_task_in_db,
@@ -152,7 +152,7 @@ def refresh_courses():
 
 
 def refresh_tasks():
-    st.session_state.tasks = get_all_tasks_for_org_or_cohort(st.session_state.org_id)
+    st.session_state.tasks = get_all_tasks_for_org_or_course(st.session_state.org_id)
 
 
 def refresh_milestones():
@@ -2078,11 +2078,23 @@ def show_course_tasks_tab(selected_course):
         st.info("This course has no tasks yet")
         return
 
+    cols = st.columns([1, 2])
+    with cols[0]:
+        milestone = st.selectbox(
+            "Filter by milestone",
+            set([task["milestone"] for task in selected_course["tasks"]]),
+            key="course_task_milestone_filter",
+        )
+
+    filtered_tasks = [
+        task for task in selected_course["tasks"] if task["milestone"] == milestone
+    ]
+
     st.dataframe(
-        pd.DataFrame(selected_course["tasks"], columns=["id", "name", "milestone"]),
+        pd.DataFrame(filtered_tasks, columns=["id", "name"]),
         hide_index=True,
         use_container_width=True,
-        column_order=["id", "name", "milestone"],
+        column_order=["id", "name"],
         column_config={
             "id": st.column_config.TextColumn(
                 width="small",
