@@ -52,6 +52,8 @@ def mentor_view(selected_cohort: Dict):
 
     cohort_courses = get_courses_for_cohort(selected_cohort["id"])
 
+    print(cohort_courses)
+
     cols = st.columns(3)
 
     with cols[0]:

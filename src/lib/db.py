@@ -2698,6 +2698,23 @@ def remove_tasks_from_courses(course_tasks_to_remove: List[Tuple[int, int]]):
         conn.close()
 
 
+def update_task_orders(task_orders: List[Tuple[int, int]]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.executemany(
+            f"UPDATE {course_tasks_table_name} SET ordering = ? WHERE id = ?",
+            task_orders,
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
 def add_scoring_criteria_to_task(task_id: int, scoring_criteria: List[Dict]):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2974,10 +2991,10 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
-        LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id 
+        LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
         WHERE ct.course_id = ?"""
 
     params = [course_id]
@@ -2991,138 +3008,17 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
     cursor.execute(query, tuple(params))
 
     tasks = cursor.fetchall()
-    return [{"id": task[0], "name": task[1], "milestone": task[2]} for task in tasks]
-
-
-def make_task_course_unique():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_task_course ON {course_tasks_table_name} (task_id, course_id)"
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def make_pivot_tables_unique():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_user_cohort ON {user_cohorts_table_name} (user_id, cohort_id)"
-    )
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_user_group ON {user_groups_table_name} (user_id, group_id)"
-    )
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_course_cohort ON {course_cohorts_table_name} (cohort_id, course_id)"
-    )
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_user_org ON {user_organizations_table_name} (user_id, org_id)"
-    )
-    cursor.execute(
-        f"CREATE UNIQUE INDEX idx_task_tag ON {task_tags_table_name} (task_id, tag_id)"
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def migrate_course_tasks_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Add ordering column if it doesn't exist
-    cursor.execute(f"PRAGMA table_info({course_tasks_table_name})")
-    columns = cursor.fetchall()
-
-    if not any(column[1] == "ordering" for column in columns):
-        cursor.execute(
-            f"ALTER TABLE {course_tasks_table_name} ADD COLUMN ordering INTEGER"
-        )
-
-    conn.commit()
-    conn.close()
-
-
-def seed_course_tasks_table_ordering():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Get all courses
-    cursor.execute(f"SELECT DISTINCT course_id FROM {course_tasks_table_name}")
-    courses = cursor.fetchall()
-
-    # For each course, update ordering of its tasks
-    for (course_id,) in courses:
-        # Get tasks for this course ordered by id (to maintain consistent ordering)
-        cursor.execute(
-            f"""
-            SELECT id FROM {course_tasks_table_name} 
-            WHERE course_id = ? 
-            ORDER BY id
-            """,
-            (course_id,),
-        )
-        tasks = cursor.fetchall()
-
-        # Update ordering starting from 1
-        for order, (task_course_row_id,) in enumerate(tasks):
-            cursor.execute(
-                f"""
-                UPDATE {course_tasks_table_name}
-                SET ordering = ?
-                WHERE id = ?
-                """,
-                (order, task_course_row_id),
-            )
-
-    conn.commit()
-    conn.close()
-
-
-def migrate_course_tasks_ordering():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        # Then alter the table to make ordering NOT NULL
-        cursor.execute(
-            f"""
-            ALTER TABLE {course_tasks_table_name}
-            RENAME TO temp_course_tasks
-            """
-        )
-
-        cursor.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS {course_tasks_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                course_id INTEGER NOT NULL,
-                ordering INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(task_id, course_id),
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
-            )
-            """
-        )
-
-        cursor.execute(
-            f"""
-            INSERT INTO {course_tasks_table_name}
-            SELECT * FROM temp_course_tasks
-            """
-        )
-
-        cursor.execute("DROP TABLE temp_course_tasks")
-
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
+    return [
+        {
+            "id": task[0],
+            "name": task[1],
+            "milestone": task[2],
+            "verified": task[3],
+            "type": task[4],
+            "response_type": task[5],
+            "coding_language": deserialise_list_from_str(task[6]),
+            "ordering": task[7],
+            "course_task_id": task[8],
+        }
+        for task in tasks
+    ]

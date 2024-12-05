@@ -6,7 +6,6 @@ from lib.db import (
     get_all_verified_tasks_for_course,
     get_solved_tasks_for_user,
     get_courses_for_cohort,
-    get_tasks_for_course,
 )
 from components.milestone_learner_view import show_milestone_card
 from auth import get_logged_in_user
