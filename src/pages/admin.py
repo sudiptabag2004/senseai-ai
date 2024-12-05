@@ -19,11 +19,6 @@ import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
-# root_dir = os.path.dirname(os.path.abspath(__file__))
-
-# if root_dir not in sys.path:
-#     sys.path.append(root_dir)
-
 from lib.llm import (
     get_llm_input_messages,
     call_llm_and_parse_output,
@@ -37,7 +32,10 @@ from lib.config import (
     allowed_input_types,
 )
 from lib.init import init_env_vars, init_db
-from lib.cache import clear_course_cache_for_cohorts, clear_cohort_cache_for_courses
+from lib.cache import (
+    clear_course_cache_for_cohorts,
+    clear_cohort_cache_for_courses,
+)
 from lib.db import (
     get_all_tasks_for_org_or_course,
     store_task as store_task_to_db,
@@ -84,6 +82,7 @@ from lib.db import (
     get_tasks_for_course,
     update_course_name as update_course_name_in_db,
     update_cohort_name as update_cohort_name_in_db,
+    update_task_orders as update_task_orders_in_db,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -2072,6 +2071,55 @@ def show_delete_course_confirmation_dialog(course):
         st.rerun()
 
 
+def update_task_order(current_order, updated_order, milestone_tasks):
+    selected_task = milestone_tasks[current_order]
+
+    # task ordering in milestones are likely to not be in a sequence
+    # so, to update the ordering, instead of adding/subtracting 1 from the ordering of all tasks,
+    # for each task between the current and updated order, we assign the ordering values
+    if current_order < updated_order:
+        task_indices_to_update = range(current_order + 1, updated_order + 1)
+        update_value = -1
+    else:
+        task_indices_to_update = range(updated_order, current_order)
+        update_value = 1
+
+    task_orders_to_update = [
+        (
+            milestone_tasks[task_index + update_value]["ordering"],
+            milestone_tasks[task_index]["course_task_id"],
+        )
+        for task_index in task_indices_to_update
+    ]
+    task_orders_to_update.append(
+        (
+            milestone_tasks[updated_order]["ordering"],
+            selected_task["course_task_id"],
+        )
+    )
+    update_task_orders_in_db(task_orders_to_update)
+
+
+@st.dialog("Update Task Order")
+def show_update_task_order_dialog(current_order: int, milestone_tasks: List[Dict]):
+    st.write(f"Current Order: `{current_order + 1}`")
+
+    with st.form("update_task_order_form", border=False):
+        updated_order = st.selectbox(
+            "Enter new order",
+            options=list(range(1, len(milestone_tasks) + 1)),
+            index=current_order,
+        )
+        if st.form_submit_button("Update", type="primary", use_container_width=True):
+            if updated_order == current_order + 1:
+                st.error("No changes made")
+                return
+
+            update_task_order(current_order, updated_order - 1, milestone_tasks)
+            set_toast("Task order updated successfully!")
+            st.rerun()
+
+
 def show_course_tasks_tab(selected_course):
     st.subheader("Tasks")
     if not selected_course["tasks"]:
@@ -2090,17 +2138,38 @@ def show_course_tasks_tab(selected_course):
         task for task in selected_course["tasks"] if task["milestone"] == milestone
     ]
 
-    st.dataframe(
-        pd.DataFrame(filtered_tasks, columns=["id", "name"]),
+    filtered_df = pd.DataFrame(
+        filtered_tasks,
+        columns=["id", "verified", "name", "type", "response_type", "coding_language"],
+    )
+
+    action_container = st.container()
+
+    event = st.dataframe(
+        filtered_df,
+        on_select="rerun",
+        selection_mode="single-row",
         hide_index=True,
         use_container_width=True,
-        column_order=["id", "name"],
         column_config={
             "id": st.column_config.TextColumn(
                 width="small",
             ),
+            "verified": st.column_config.CheckboxColumn(
+                default=False,
+                width="small",
+            ),
+            "name": st.column_config.TextColumn(width="large"),
         },
     )
+
+    if len(event.selection["rows"]):
+        index = event.selection["rows"][0]
+        action_container.button(
+            "Update order",
+            on_click=show_update_task_order_dialog,
+            args=(index, filtered_tasks),
+        )
 
 
 def show_course_cohorts(selected_course):
