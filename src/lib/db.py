@@ -170,7 +170,7 @@ def create_course_tasks_table(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
                 course_id INTEGER NOT NULL,
-                ordering INTEGER,
+                ordering INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
@@ -2650,10 +2650,29 @@ def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int]]):
     cursor = conn.cursor()
 
     try:
-        cursor.executemany(
-            f"INSERT OR IGNORE INTO {course_tasks_table_name} (task_id, course_id) VALUES (?, ?)",
-            course_tasks_to_add,
-        )
+        # Group tasks by course_id
+        course_to_tasks = defaultdict(list)
+        for task_id, course_id in course_tasks_to_add:
+            course_to_tasks[course_id].append(task_id)
+
+        # For each course, get max ordering and insert tasks with incremented order
+        for course_id, task_ids in course_to_tasks.items():
+            cursor.execute(
+                f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ?",
+                (course_id,),
+            )
+            max_ordering = cursor.fetchone()[0]
+
+            # Insert tasks with incremented ordering
+            values_to_insert = []
+            for i, task_id in enumerate(task_ids, start=1):
+                values_to_insert.append((task_id, course_id, max_ordering + i))
+
+            cursor.executemany(
+                f"INSERT OR IGNORE INTO {course_tasks_table_name} (task_id, course_id, ordering) VALUES (?, ?, ?)",
+                values_to_insert,
+            )
+
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -3062,3 +3081,48 @@ def seed_course_tasks_table_ordering():
 
     conn.commit()
     conn.close()
+
+
+def migrate_course_tasks_ordering():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Then alter the table to make ordering NOT NULL
+        cursor.execute(
+            f"""
+            ALTER TABLE {course_tasks_table_name}
+            RENAME TO temp_course_tasks
+            """
+        )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {course_tasks_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                course_id INTEGER NOT NULL,
+                ordering INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(task_id, course_id),
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
+            )
+            """
+        )
+
+        cursor.execute(
+            f"""
+            INSERT INTO {course_tasks_table_name}
+            SELECT * FROM temp_course_tasks
+            """
+        )
+
+        cursor.execute("DROP TABLE temp_course_tasks")
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
