@@ -30,7 +30,6 @@ from lib.config import (
     cv_review_usage_table_name,
     organizations_table_name,
     user_organizations_table_name,
-    cohort_tasks_table_name,
     task_scoring_criteria_table_name,
     courses_table_name,
     course_cohorts_table_name,
@@ -171,6 +170,7 @@ def create_course_tasks_table(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
                 course_id INTEGER NOT NULL,
+                ordering INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
@@ -617,11 +617,11 @@ def convert_task_db_to_dict(task, tests):
     }
 
 
-def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
-    if org_id is None and cohort_id is None:
-        raise ValueError("Either org_id or cohort_id must be provided")
-    if org_id is not None and cohort_id is not None:
-        raise ValueError("Only one of org_id or cohort_id can be provided")
+def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
+    if org_id is None and course_id is None:
+        raise ValueError("Either org_id or course_id must be provided")
+    if org_id is not None and course_id is not None:
+        raise ValueError("Only one of org_id or course_id can be provided")
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -638,22 +638,21 @@ def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
     LEFT JOIN {organizations_table_name} o ON t.org_id = o.id"""
 
     query_params = ()
-
     if org_id is not None:
         query += " WHERE t.org_id = ?"
         query_params += (org_id,)
-    elif cohort_id is not None:
+        query += f"""
+        GROUP BY t.id
+        ORDER BY t.timestamp ASC
+        """
+    elif course_id is not None:
         query += f""" 
         INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
-        INNER JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-        WHERE cc.cohort_id = ?
+        WHERE ct.course_id = ?
+        GROUP BY t.id
+        ORDER BY ct.ordering ASC
         """
-        query_params += (cohort_id,)
-
-    query += f"""
-    GROUP BY t.id
-    ORDER BY t.timestamp ASC
-    """
+        query_params += (course_id,)
 
     cursor.execute(
         query,
@@ -682,8 +681,8 @@ def get_all_tasks_for_org_or_cohort(org_id: int = None, cohort_id: int = None):
     return tasks_dicts
 
 
-def get_all_verified_tasks_for_cohort(cohort_id: int, milestone_id: int):
-    tasks = get_all_tasks_for_org_or_cohort(cohort_id=cohort_id)
+def get_all_verified_tasks_for_course(course_id: int, milestone_id: int = None):
+    tasks = get_all_tasks_for_org_or_course(course_id=course_id)
     verified_tasks = [task for task in tasks if task["verified"]]
 
     if milestone_id:
@@ -700,7 +699,7 @@ def get_task_by_id(task_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, t.org_id, o.name as org_name, t.response_type
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
@@ -1795,7 +1794,7 @@ def delete_milestone(milestone_id: int):
     conn.close()
 
 
-def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = None):
+def get_all_milestone_progress(user_id: int, course_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     base_query = f"""
@@ -1822,14 +1821,13 @@ def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = No
             {chat_history_table_name}
         WHERE 
             user_id = ? AND task_id IN (
-                SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
+                SELECT task_id FROM {course_tasks_table_name} WHERE course_id = ?
             )
         GROUP BY 
             task_id, user_id
     ) task_solved ON t.id = task_solved.task_id
     WHERE 
-        t.verified = 1 AND cc.cohort_id = ?
-        {' AND ct.course_id = ?' if course_id is not None else ''}
+        t.verified = 1 AND ct.course_id = ?
     GROUP BY 
         m.id, m.name, m.color
     HAVING 
@@ -1838,9 +1836,7 @@ def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = No
         incomplete_tasks DESC
     """
 
-    params = [user_id, cohort_id, cohort_id]
-    if course_id is not None:
-        params.append(course_id)
+    params = [user_id, course_id, course_id]
 
     cursor.execute(base_query, tuple(params))
     results = cursor.fetchall()
@@ -1868,7 +1864,7 @@ def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = No
             {chat_history_table_name}
         WHERE 
             user_id = ? AND task_id IN (
-                SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
+                SELECT task_id FROM {course_tasks_table_name} WHERE course_id = ?
             )
         GROUP BY 
             task_id, user_id
@@ -1876,17 +1872,14 @@ def get_all_milestone_progress(user_id: int, cohort_id: int, course_id: int = No
     WHERE 
         t.milestone_id IS NULL 
         AND t.verified = 1 
-        AND cc.cohort_id = ?
-        {' AND ct.course_id = ?' if course_id is not None else ''}
+        AND ct.course_id = ?
     HAVING
         COUNT(DISTINCT t.id) > 0
     ORDER BY 
         incomplete_tasks DESC
     """
 
-    null_params = [user_id, cohort_id, cohort_id]
-    if course_id is not None:
-        null_params.append(course_id)
+    null_params = [user_id, course_id, course_id]
 
     cursor.execute(null_milestone_query, tuple(null_params))
     null_milestone_results = cursor.fetchall()
@@ -2741,53 +2734,6 @@ def add_scoring_criteria_to_tasks(task_ids: List[int], scoring_criteria: List[Di
     conn.close()
 
 
-def migrate_tasks_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Create temporary table with response_type column
-    cursor.execute(
-        f"""CREATE TABLE temp_tasks AS 
-            SELECT t.*, 'chat' as response_type
-            FROM {tasks_table_name} t"""
-    )
-
-    # Drop original table
-    cursor.execute(f"DROP TABLE {tasks_table_name}")
-
-    # Create new tasks table with response_type column
-    cursor.execute(
-        f"""CREATE TABLE {tasks_table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            answer TEXT,
-            type TEXT NOT NULL DEFAULT 'text',
-            coding_language TEXT,
-            generation_model TEXT NOT NULL,
-            verified BOOLEAN NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            milestone_id INTEGER,
-            org_id INTEGER NOT NULL,
-            response_type TEXT NOT NULL,
-            FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
-            FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
-        )"""
-    )
-
-    # Copy data from temp table to new table
-    cursor.execute(
-        f"""INSERT INTO {tasks_table_name}
-            SELECT * FROM temp_tasks"""
-    )
-
-    # Drop temporary table
-    cursor.execute("DROP TABLE temp_tasks")
-
-    conn.commit()
-    conn.close()
-
-
 def create_course(name: str, org_id: int) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3005,104 +2951,28 @@ def drop_courses_table():
     conn.close()
 
 
-def get_tasks_for_course(course_id: int):
+def get_tasks_for_course(course_id: int, milestone_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
         LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id 
-        WHERE ct.course_id = ?""",
-        (course_id,),
-    )
+        WHERE ct.course_id = ?"""
+
+    params = [course_id]
+
+    if milestone_id is not None:
+        query += " AND t.milestone_id = ?"
+        params.append(milestone_id)
+
+    query += " ORDER BY ct.ordering"
+
+    cursor.execute(query, tuple(params))
 
     tasks = cursor.fetchall()
     return [{"id": task[0], "name": task[1], "milestone": task[2]} for task in tasks]
-
-
-def seed_courses_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Get all existing cohorts
-    cursor.execute(f"SELECT id FROM {cohorts_table_name}")
-    cohort_ids = cursor.fetchall()
-
-    # Create a new course for each cohort
-    for cohort_id in cohort_ids:
-        # Insert the course
-        cursor.execute(
-            f"""
-            INSERT INTO {courses_table_name} (name, org_id)
-            SELECT 'New Course', org_id 
-            FROM {cohorts_table_name}
-            WHERE id = ?
-            """,
-            (cohort_id[0],),
-        )
-
-        course_id = cursor.lastrowid
-
-        # Link the course to the cohort
-        cursor.execute(
-            f"""
-            INSERT INTO {course_cohorts_table_name} (cohort_id, course_id)
-            VALUES (?, ?)
-            """,
-            (cohort_id[0], course_id),
-        )
-
-    conn.commit()
-    conn.close()
-
-
-def move_task_cohorts_to_task_courses():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Get all tasks from cohort_tasks table
-    cursor.execute(f"SELECT task_id, cohort_id FROM {cohort_tasks_table_name}")
-    cohort_tasks = cursor.fetchall()
-
-    for task_id, cohort_id in cohort_tasks:
-        # Get the first course linked to this cohort
-        cursor.execute(
-            f"""
-            SELECT course_id 
-            FROM {course_cohorts_table_name}
-            WHERE cohort_id = ?
-            ORDER BY id ASC
-            LIMIT 1
-            """,
-            (cohort_id,),
-        )
-        course = cursor.fetchone()
-
-        if course:
-            # Insert into course_tasks table
-            cursor.execute(
-                f"""
-                INSERT INTO {course_tasks_table_name} (task_id, course_id)
-                VALUES (?, ?)
-                """,
-                (task_id, course[0]),
-            )
-
-    conn.commit()
-    conn.close()
-
-
-def drop_cohort_tasks_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(f"DELETE FROM {cohort_tasks_table_name}")
-    cursor.execute(f"DROP TABLE IF EXISTS {cohort_tasks_table_name}")
-
-    conn.commit()
-    conn.close()
 
 
 def make_task_course_unique():
@@ -3136,6 +3006,59 @@ def make_pivot_tables_unique():
     cursor.execute(
         f"CREATE UNIQUE INDEX idx_task_tag ON {task_tags_table_name} (task_id, tag_id)"
     )
+
+    conn.commit()
+    conn.close()
+
+
+def migrate_course_tasks_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Add ordering column if it doesn't exist
+    cursor.execute(f"PRAGMA table_info({course_tasks_table_name})")
+    columns = cursor.fetchall()
+
+    if not any(column[1] == "ordering" for column in columns):
+        cursor.execute(
+            f"ALTER TABLE {course_tasks_table_name} ADD COLUMN ordering INTEGER"
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def seed_course_tasks_table_ordering():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all courses
+    cursor.execute(f"SELECT DISTINCT course_id FROM {course_tasks_table_name}")
+    courses = cursor.fetchall()
+
+    # For each course, update ordering of its tasks
+    for (course_id,) in courses:
+        # Get tasks for this course ordered by id (to maintain consistent ordering)
+        cursor.execute(
+            f"""
+            SELECT id FROM {course_tasks_table_name} 
+            WHERE course_id = ? 
+            ORDER BY id
+            """,
+            (course_id,),
+        )
+        tasks = cursor.fetchall()
+
+        # Update ordering starting from 1
+        for order, (task_course_row_id,) in enumerate(tasks):
+            cursor.execute(
+                f"""
+                UPDATE {course_tasks_table_name}
+                SET ordering = ?
+                WHERE id = ?
+                """,
+                (order, task_course_row_id),
+            )
 
     conn.commit()
     conn.close()

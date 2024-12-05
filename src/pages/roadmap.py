@@ -14,6 +14,7 @@ if (
     "mode" not in st.query_params
     or st.query_params["mode"] != "review"
     or "learner" not in st.query_params
+    or "course" not in st.query_params
     or "cohort" not in st.query_params
 ):
     unauthorized_redirect_to_home()
@@ -28,13 +29,19 @@ else:
     milestone_id = None
 
 cohort_id = int(st.query_params["cohort"])
+course_id = int(st.query_params["course"])
 
 all_tasks = get_tasks_with_completion_status(
     st.query_params["learner"],
     cohort_id,
+    course_id,
     milestone_id,
 )
 
 show_roadmap_as_list(
-    all_tasks, cohort_id, is_review_mode=True, learner_id=st.query_params["learner"]
+    all_tasks,
+    cohort_id,
+    course_id,
+    is_review_mode=True,
+    learner_id=st.query_params["learner"],
 )

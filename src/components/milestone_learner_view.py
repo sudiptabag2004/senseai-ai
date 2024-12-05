@@ -28,22 +28,113 @@ def generate_progress_bar_background_color(header_background_color: str):
     return progress_color
 
 
-def get_task_view(task: Dict, cohort_id: int):
+task_view_style = """.task-list-container {
+        background-color: #fff;
+        padding: 8px 16px;
+        max-height: calc(2 * (20px + 1.4em * 3 + 8px + 32px + 20px)); /* Approximate height of 2 tasks */
+        overflow-y: auto;
+        margin-bottom: 20px;
+    }
+    
+    .task-item {
+        display: flex;
+        align-items: flex-start;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+    }
+    .task-item:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .task-item:not(:last-child) {
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .task-checkbox {
+        flex-shrink: 0;
+        margin-top: 15px;
+        margin-right: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 15px;
+        height: 15px;
+    }
+    .task-checkbox svg {
+        width: 100%;
+        height: 100%;
+    }
+    .task-content {
+        flex-grow: 1;
+        min-width: 0; /* Allows content to shrink below its minimum content size */
+    }
+    .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+    }
+    .task-name {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 0;  /* Remove bottom margin since it's now in a flex container */
+        flex: 1;          /* Allow task name to take available space */
+        margin-right: 16px; /* Add some space between name and button */
+    }
+    .open-task-btn {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 14px;
+        margin-top: 8px;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    a:link {
+        color: white;
+        text-decoration: none;
+    }
+    a:visited {
+        color: white;
+        text-decoration: none;
+    }
+    a:hover {
+        color: white;
+        text-decoration: none;
+    }
+    a:active {
+        color: white;
+        text-decoration: none;
+    }"""
+
+
+def set_task_view_style():
+    st.markdown(f"""<style>{task_view_style}</style>""", unsafe_allow_html=True)
+
+
+def get_task_url(task: Dict, cohort_id: int, course_id: int):
+    return f"/task?id={task['id']}&email={st.session_state.email}&cohort={cohort_id}&course={course_id}"
+
+
+def get_task_view(task: Dict, cohort_id: int, course_id: int, show_button: bool = True):
+    task_url = get_task_url(task, cohort_id, course_id)
+
     progress_icon_name = "green_tick.svg" if task["completed"] else "border_circle.svg"
     progress_icon = open(f"lib/assets/{progress_icon_name}").read()
-
-    task_url = (
-        f"/task?id={task['id']}&email={st.session_state.email}&cohort={cohort_id}"
-    )
 
     # Escape HTML characters in task name and description
     task_name = html.escape(task["name"].strip())
     if len(task_name) > 50:
         task_name = task_name[:50] + "..."
 
-    # task_description = html.escape(task["description"].strip())
+    open_task_button_html = f"""\t\t\t<a href="{task_url}" class="open-task-btn" style="visibility: {'' if show_button else 'hidden'}">Open Task</a>\n"""
 
-    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-header">\n\t\t\t<div class="task-name">{task_name}</div>\n\t\t\t<a href="{task_url}" class="open-task-btn">Open Task</a>\n\t\t</div>\n\t</div>\n</div>"""
+    return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-header">\n\t\t\t<div class="task-name">{task_name}</div>\n{open_task_button_html}\t\t</div>\n\t</div>\n</div>"""
 
 
 def show_milestone_card(
@@ -52,6 +143,7 @@ def show_milestone_card(
     total_tasks: int,
     tasks: List[Dict],
     cohort_id: int,
+    course_id: int,
 ):
     # Calculate the progress percentage
     progress_percentage = (completed_tasks / total_tasks) * 100
@@ -62,7 +154,9 @@ def show_milestone_card(
     # Generate a unique class name based on the milestone name
     milestone_class = f"milestone-{milestone['id']}"
 
-    task_list_view = "".join(get_task_view(task, cohort_id) for task in tasks)
+    task_list_view = "".join(
+        get_task_view(task, cohort_id, course_id) for task in tasks
+    )
 
     st.markdown(
         f"""
@@ -113,94 +207,7 @@ def show_milestone_card(
         font-size: 14px;
         margin-bottom: 4px;
     }}
-    .task-list-container {{
-        background-color: #fff;
-        padding: 8px 16px;
-        max-height: calc(2 * (20px + 1.4em * 3 + 8px + 32px + 20px)); /* Approximate height of 2 tasks */
-        overflow-y: auto;
-        margin-bottom: 20px;
-    }}
-    
-    .task-item {{
-        display: flex;
-        align-items: flex-start;
-        padding-bottom: 20px;
-        margin-bottom: 20px;
-    }}
-    .task-item:last-child {{
-        margin-bottom: 0;
-        padding-bottom: 0;
-    }}
-
-    .task-item:not(:last-child) {{
-        border-bottom: 1px solid #e0e0e0;
-    }}
-    
-    .task-checkbox {{
-        flex-shrink: 0;
-        margin-top: 15px;
-        margin-right: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 15px;
-        height: 15px;
-    }}
-    .task-checkbox svg {{
-        width: 100%;
-        height: 100%;
-    }}
-    .task-content {{
-        flex-grow: 1;
-        min-width: 0; /* Allows content to shrink below its minimum content size */
-    }}
-    .task-header {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-    }}
-    .task-name {{
-        font-size: 16px;
-        font-weight: 500;
-        margin-bottom: 0;  /* Remove bottom margin since it's now in a flex container */
-        flex: 1;          /* Allow task name to take available space */
-        margin-right: 16px; /* Add some space between name and button */
-    }}
-    .open-task-btn {{
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 14px;
-        margin-top: 8px;
-        cursor: pointer;
-        border-radius: 4px;
-    }}
-    a:link {{
-        color: white;
-        text-decoration: none;
-    }}
-
-    a:visited {{
-        color: white;
-        text-decoration: none;
-    }}
-
-    a:hover {{
-        color: white;
-        text-decoration: none;
-    }}
-
-    a:active {{
-        color: white;
-        text-decoration: none;
-    }}
-
-
+    {task_view_style}
     </style>
     """,
         unsafe_allow_html=True,
