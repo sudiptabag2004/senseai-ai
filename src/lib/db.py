@@ -1803,8 +1803,8 @@ def get_all_milestone_progress(user_id: int, course_id: int):
         m.name AS milestone_name,
         m.color AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
-        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
-        COUNT(DISTINCT t.id) - SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
+        SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
+        COUNT(DISTINCT t.id) - SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
     FROM 
         {milestones_table_name} m
     LEFT JOIN 
@@ -1833,13 +1833,16 @@ def get_all_milestone_progress(user_id: int, course_id: int):
     HAVING 
         COUNT(DISTINCT t.id) > 0
     ORDER BY 
-        incomplete_tasks DESC
+        ct.ordering
     """
 
     params = [user_id, course_id, course_id]
 
     cursor.execute(base_query, tuple(params))
     results = cursor.fetchall()
+    print(base_query)
+    print(params)
+    print(results)
 
     # Get tasks with null milestone_id
     null_milestone_query = f"""
@@ -1848,8 +1851,8 @@ def get_all_milestone_progress(user_id: int, course_id: int):
         '{uncategorized_milestone_name}' AS milestone_name,
         '{uncategorized_milestone_color}' AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
-        SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
-        COUNT(DISTINCT t.id) - SUM(CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
+        SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
+        COUNT(DISTINCT t.id) - SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
     FROM 
         {tasks_table_name} t
     LEFT JOIN
@@ -1876,7 +1879,7 @@ def get_all_milestone_progress(user_id: int, course_id: int):
     HAVING
         COUNT(DISTINCT t.id) > 0
     ORDER BY 
-        incomplete_tasks DESC
+        ct.ordering
     """
 
     null_params = [user_id, course_id, course_id]

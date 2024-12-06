@@ -83,7 +83,22 @@ def show_roadmap_as_list(
         # delete_tasks(event.selection['rows'])
 
 
-def show_roadmap_for_course(all_tasks, user_id: int, cohort_id: int, course: Dict):
+def get_tasks_with_completion_status(
+    user_id: int, cohort_id: int, course_id: int, milestone_id: int = None
+):
+    all_tasks = get_all_verified_tasks_for_course(course_id, milestone_id)
+    solved_task_ids = get_solved_tasks_for_user(user_id, cohort_id)
+
+    for task in all_tasks:
+        if task["id"] in solved_task_ids:
+            task["completed"] = True
+        else:
+            task["completed"] = False
+
+    return all_tasks
+
+
+def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: Dict):
     all_milestone_data = get_all_milestone_progress(user_id, course_id=course["id"])
 
     if not all_milestone_data:
@@ -129,26 +144,11 @@ def show_roadmap_by_course(user_id: int, cohort_id: int):
             if st.session_state.show_list_view:
                 show_roadmap_as_list(course_tasks, cohort_id, course["id"])
             else:
-                show_roadmap_for_course(course_tasks, user_id, cohort_id, course)
+                show_roadmap_by_milestone(course_tasks, user_id, cohort_id, course)
 
 
 def update_task_view():
     st.query_params.view = "list" if st.session_state.show_list_view else "milestone"
-
-
-def get_tasks_with_completion_status(
-    user_id: int, cohort_id: int, course_id: int, milestone_id: int = None
-):
-    all_tasks = get_all_verified_tasks_for_course(course_id, milestone_id)
-    solved_task_ids = get_solved_tasks_for_user(user_id, cohort_id)
-
-    for task in all_tasks:
-        if task["id"] in solved_task_ids:
-            task["completed"] = True
-        else:
-            task["completed"] = False
-
-    return all_tasks
 
 
 def show_roadmap(cohort_id: int):

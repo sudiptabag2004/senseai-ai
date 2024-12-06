@@ -154,7 +154,10 @@ if "mode" in st.query_params and st.query_params["mode"] == "review":
 else:
     st.session_state.is_review_mode = False
 
-if not st.session_state.is_review_mode and task["milestone_name"] != uncategorized_milestone_name:
+if (
+    not st.session_state.is_review_mode
+    and task["milestone_name"] != uncategorized_milestone_name
+):
     course_id = int(st.query_params["course"])
     course_tasks = get_tasks_with_completion_status(
         task_user_id, cohort_id, course_id, task["milestone_id"]
@@ -170,7 +173,7 @@ if not st.session_state.is_review_mode and task["milestone_name"] != uncategoriz
         #         get_task_view(course_task, cohort_id, course_id, show_button=False),
         #         unsafe_allow_html=True,
         #     )
-        course_text_to_display = course_task["name"]
+        course_text_to_display = course_task["name"].strip()
 
         if course_task["completed"]:
             course_text_to_display = "✅ " + course_text_to_display
@@ -250,7 +253,7 @@ with sticky_container(
 ):
     # st.link_button('Open task list', '/task_list')
 
-    heading = f"**{task['name']}**"
+    heading = f"**{task['name'].strip()}**"
     if st.session_state.is_solved:
         heading += " ✅"
     st.write(heading)
