@@ -54,6 +54,7 @@ from lib.ui import (
     escape_text_outside_code_blocks,
     correct_newlines_outside_code_blocks,
     correct_code_blocks,
+    cleanup_ai_response,
 )
 from components.badge import create_badge
 from lib.init import init_env_vars, init_db
@@ -432,16 +433,7 @@ else:
                 display_user_chat_message(message["content"], message_index=index)
             else:
                 with chat_container.chat_message(message["role"]):
-                    ai_message = escape_text_outside_code_blocks(
-                        correct_code_blocks(message["content"])
-                    )
-
-                    # ai is supposed to return all html tags within backticks, but in case it doesn't
-                    # html.escape will escape the html tags; but this will mess up the html tags that
-                    # were returned within backticks; so, we fix those html tags that would have been
-                    # incorrectly escaped as well.
-                    ai_message = ai_message.replace("`&lt;", "`<")
-                    ai_message = ai_message.replace("&gt;`", ">`")
+                    ai_message = cleanup_ai_response(message["content"])
 
                     st.markdown(ai_message, unsafe_allow_html=True)
     else:
@@ -598,9 +590,7 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
                 ai_response_list = json_dump["feedback"]
                 if ai_response_list:
                     ai_response = " ".join(ai_response_list)
-                    ai_response = correct_code_blocks(ai_response)
-                    ai_response = correct_newlines_outside_code_blocks(ai_response)
-                    ai_response_container.markdown(ai_response, unsafe_allow_html=True)
+                    ai_response_container.markdown(cleanup_ai_response(ai_response), unsafe_allow_html=True)
 
                 is_solved = (
                     json_dump["is_correct"]

@@ -134,3 +134,21 @@ def correct_newlines_outside_code_blocks(text: str):
         sections.append(non_code_text)
 
     return "".join(sections)
+
+
+def correct_html_tags_in_ai_response(response: str):
+    # ai is supposed to return all html tags within backticks, but in case it doesn't
+    # html.escape will escape the html tags; but this will mess up the html tags that
+    # were returned within backticks; so, we fix those html tags that would have been
+    # incorrectly escaped as well.
+    response = response.replace("`&lt;", "`<")
+    response = response.replace("&gt;`", ">`")
+    return response
+
+
+def cleanup_ai_response(response: str):
+    return correct_html_tags_in_ai_response(
+        escape_text_outside_code_blocks(
+            correct_newlines_outside_code_blocks(correct_code_blocks(response))
+        )
+    )
