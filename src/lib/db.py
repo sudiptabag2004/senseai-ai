@@ -1803,29 +1803,25 @@ def get_all_milestone_progress(user_id: int, course_id: int):
         m.name AS milestone_name,
         m.color AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
-        SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
-        COUNT(DISTINCT t.id) - SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
+        (
+            SELECT COUNT(DISTINCT ch.task_id)
+            FROM {chat_history_table_name} ch
+            WHERE ch.user_id = ?
+            AND ch.is_solved = 1
+            AND ch.task_id IN (
+                SELECT t2.id 
+                FROM {tasks_table_name} t2 
+                JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
+                WHERE t2.milestone_id = m.id 
+                AND ct2.course_id = ?
+            )
+        ) AS completed_tasks
     FROM 
         {milestones_table_name} m
     LEFT JOIN 
         {tasks_table_name} t ON m.id = t.milestone_id
     LEFT JOIN
         {course_tasks_table_name} ct ON t.id = ct.task_id
-    LEFT JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-    LEFT JOIN (
-        SELECT 
-            task_id, 
-            user_id, 
-            MAX(CASE WHEN is_solved = 1 THEN 1 ELSE 0 END) AS is_solved
-        FROM 
-            {chat_history_table_name}
-        WHERE 
-            user_id = ? AND task_id IN (
-                SELECT task_id FROM {course_tasks_table_name} WHERE course_id = ?
-            )
-        GROUP BY 
-            task_id, user_id
-    ) task_solved ON t.id = task_solved.task_id
     WHERE 
         t.verified = 1 AND ct.course_id = ?
     GROUP BY 
@@ -1840,9 +1836,6 @@ def get_all_milestone_progress(user_id: int, course_id: int):
 
     cursor.execute(base_query, tuple(params))
     results = cursor.fetchall()
-    print(base_query)
-    print(params)
-    print(results)
 
     # Get tasks with null milestone_id
     null_milestone_query = f"""
@@ -1851,27 +1844,23 @@ def get_all_milestone_progress(user_id: int, course_id: int):
         '{uncategorized_milestone_name}' AS milestone_name,
         '{uncategorized_milestone_color}' AS milestone_color,
         COUNT(DISTINCT t.id) AS total_tasks,
-        SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS completed_tasks,
-        COUNT(DISTINCT t.id) - SUM(DISTINCT CASE WHEN task_solved.is_solved = 1 THEN 1 ELSE 0 END) AS incomplete_tasks
+        (
+            SELECT COUNT(DISTINCT ch.task_id)
+            FROM {chat_history_table_name} ch
+            WHERE ch.user_id = ?
+            AND ch.is_solved = 1
+            AND ch.task_id IN (
+                SELECT t2.id 
+                FROM {tasks_table_name} t2 
+                JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
+                WHERE t2.milestone_id IS NULL 
+                AND ct2.course_id = ?
+            )
+        ) AS completed_tasks
     FROM 
         {tasks_table_name} t
     LEFT JOIN
         {course_tasks_table_name} ct ON t.id = ct.task_id
-    LEFT JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-    LEFT JOIN (
-        SELECT 
-            task_id,
-            user_id,
-            MAX(CASE WHEN is_solved = 1 THEN 1 ELSE 0 END) AS is_solved
-        FROM 
-            {chat_history_table_name}
-        WHERE 
-            user_id = ? AND task_id IN (
-                SELECT task_id FROM {course_tasks_table_name} WHERE course_id = ?
-            )
-        GROUP BY 
-            task_id, user_id
-    ) task_solved ON t.id = task_solved.task_id
     WHERE 
         t.milestone_id IS NULL 
         AND t.verified = 1 
