@@ -669,13 +669,86 @@ def coding_language_selector():
     )
 
 
+def add_scoring_criterion():
+    st.session_state.scoring_criteria.append(
+        {
+            "category": st.session_state.new_scoring_criterion_category,
+            "description": st.session_state.new_scoring_criterion_description,
+            "range": [
+                st.session_state.new_scoring_criterion_range_start,
+                st.session_state.new_scoring_criterion_range_end,
+            ],
+        }
+    )
+
+    st.session_state.new_scoring_criterion_category = ""
+    st.session_state.new_scoring_criterion_description = ""
+    st.session_state.new_scoring_criterion_range_start = 0
+    st.session_state.new_scoring_criterion_range_end = 1
+
+
+def update_scoring_criterion(index: int):
+    st.session_state.scoring_criteria[index] = {
+        "category": st.session_state[f"scoring_criterion_category_{index}"],
+        "description": st.session_state[f"scoring_criterion_description_{index}"],
+        "range": [
+            st.session_state[f"scoring_criterion_range_start_{index}"],
+            st.session_state[f"scoring_criterion_range_end_{index}"],
+        ],
+    }
+
+
 def show_scoring_criteria_addition_form():
     st.subheader("Scoring Criterion")
-    for scoring_criterion in st.session_state.scoring_criteria:
+    for index, scoring_criterion in enumerate(st.session_state.scoring_criteria):
         with st.expander(
             f"{scoring_criterion['category']} ({scoring_criterion['range'][0]} - {scoring_criterion['range'][1]})"
         ):
-            st.markdown(scoring_criterion["description"])
+            updated_category = st.text_input(
+                "Category",
+                value=scoring_criterion["category"],
+                key=f"scoring_criterion_category_{index}",
+            )
+            updated_description = st.text_input(
+                "Description",
+                value=scoring_criterion["description"],
+                key=f"scoring_criterion_description_{index}",
+            )
+            cols = st.columns(2)
+            updated_range_start = cols[0].number_input(
+                "Min Score",
+                min_value=0,
+                step=1,
+                value=scoring_criterion["range"][0],
+                key=f"scoring_criterion_range_start_{index}",
+            )
+            range_end_min_value = updated_range_start + 1
+            range_end_default_value = (
+                scoring_criterion["range"][1]
+                if scoring_criterion["range"][1] >= range_end_min_value
+                else range_end_min_value
+            )
+            updated_range_end = cols[1].number_input(
+                "Max Score",
+                min_value=range_end_min_value,
+                step=1,
+                value=range_end_default_value,
+                key=f"scoring_criterion_range_end_{index}",
+            )
+
+            if (
+                updated_category != scoring_criterion["category"]
+                or updated_description != scoring_criterion["description"]
+                or updated_range_start != scoring_criterion["range"][0]
+                or updated_range_end != scoring_criterion["range"][1]
+            ):
+                st.button(
+                    "Update Criterion",
+                    type="primary",
+                    use_container_width=True,
+                    on_click=update_scoring_criterion,
+                    args=(index,),
+                )
 
     new_category = st.text_input(
         "Add a new category to the scoring criterion",
@@ -700,28 +773,8 @@ def show_scoring_criteria_addition_form():
         step=1,
         key="new_scoring_criterion_range_end",
     )
-    st.button(
-        "Add category", use_container_width=True, on_click=update_scoring_criteria
-    )
+    st.button("Add category", use_container_width=True, on_click=add_scoring_criterion)
     st.divider()
-
-
-def update_scoring_criteria():
-    st.session_state.scoring_criteria.append(
-        {
-            "category": st.session_state.new_scoring_criterion_category,
-            "description": st.session_state.new_scoring_criterion_description,
-            "range": [
-                st.session_state.new_scoring_criterion_range_start,
-                st.session_state.new_scoring_criterion_range_end,
-            ],
-        }
-    )
-
-    st.session_state.new_scoring_criterion_category = ""
-    st.session_state.new_scoring_criterion_description = ""
-    st.session_state.new_scoring_criterion_range_start = 0
-    st.session_state.new_scoring_criterion_range_end = 1
 
 
 @st.dialog("Add a new task")
@@ -781,6 +834,7 @@ def show_task_form():
         )
         if not final_answer and st.session_state.ai_answer:
             final_answer = st.session_state.ai_answer
+
     elif ai_response_type == "report":
         show_scoring_criteria_addition_form()
 
@@ -2152,9 +2206,7 @@ def show_course_tasks_tab(selected_course):
         hide_index=True,
         use_container_width=True,
         column_config={
-            "id": st.column_config.TextColumn(
-                width="small",
-            ),
+            "id": None,
             "verified": st.column_config.CheckboxColumn(
                 default=False,
                 width="small",

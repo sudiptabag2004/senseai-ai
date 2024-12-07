@@ -15,3 +15,4 @@ demo/english_activity.csv
 demo/db/
 src/db
 scripts
+.env.aws

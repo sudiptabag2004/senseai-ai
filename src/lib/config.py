@@ -61,7 +61,7 @@ task_ai_response_types = ["chat", "report"]
 
 allowed_input_types = {
     "chat": ["coding", "text"],
-    "report": ["text"],
+    "report": ["text", "audio"],
 }
 
 PDF_PAGE_DIMS = [595, 842]

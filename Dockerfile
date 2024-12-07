@@ -45,8 +45,9 @@ COPY src /src
 
 COPY src/.streamlit/config.prod.toml /src/.streamlit/config.toml
 
-# Remove the /src/lib/.env file if it exists
+# Remove the /src/lib/.env and .env.aws file if it exists
 RUN test -f /src/lib/.env && rm -f /src/lib/.env || true
+RUN test -f /src/lib/.env.aws && rm -f /src/lib/.env.aws || true
 
 # Expose the port on which your FastAPI app listens
 EXPOSE 8001
@@ -60,7 +61,11 @@ ARG OPENAI_ORG_ID
 
 ARG APP_URL
 
-RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL" >> /src/lib/.env
+ARG S3_BUCKET_NAME
+
+ARG S3_FOLDER_NAME
+
+RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME" >> /src/lib/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*

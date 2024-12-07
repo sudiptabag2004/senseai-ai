@@ -16,6 +16,7 @@ from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
 from lib.init import init_env_vars
+from lib.audio import validate_audio_input, prepare_audio_input_for_ai
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
@@ -155,8 +156,6 @@ def show_ai_report():
 
 
 def give_feedback_on_audio_input():
-    encoded_string = base64.b64encode(st.session_state.audio_data).decode("utf-8")
-
     container = st.empty()
 
     with container:
@@ -205,7 +204,10 @@ def give_feedback_on_audio_input():
             "content": [
                 {
                     "type": "input_audio",
-                    "input_audio": {"data": encoded_string, "format": "wav"},
+                    "input_audio": {
+                        "data": prepare_audio_input_for_ai(st.session_state.audio_data),
+                        "format": "wav",
+                    },
                 },
             ],
         },
@@ -323,13 +325,7 @@ else:
 
     if audio_value:
         if is_recording:
-            file_size = audio_value.size  # Size in bytes
-            max_size = 20 * 1024 * 1024  # 10MB in bytes
-
-            if file_size > max_size:
-                st.error(
-                    f"File size ({file_size/1024/1024:.1f}MB) exceeds maximum allowed size (20MB)"
-                )
+            if not validate_audio_input(audio_value):
                 st.stop()
 
             # st.session_state.audio_data = audio_value.export(format="wav").read()
