@@ -20,6 +20,7 @@ from lib.image import (
     standardize_image_size,
 )
 from lib.emoji import generate_emoji
+from lib.utils import get_current_time_in_ist
 
 root_dir = "./lib"
 
@@ -463,6 +464,61 @@ def show_multiple_badges_dialog(badge_ids: List[int], cohort_name: str, org_name
 
 def standardize_badge_image(image_path: str):
     standardize_image_size(image_path, image_path, 600, 600)
+
+
+def check_for_badges_unlocked(user_id: int, user_streak: List):
+    # scenarios:
+    # 1. streak does not exist - nothing to check in this case
+    # 2. streak exists and now 1 more day is added to it
+    #   a) if the check below does not pass: it means the streak for current day is already accounted for
+    #   b) if the check below passes:
+    #       i) it makes the current streak equal to the existing current streak badge value (e.g. if user deleted all messages for today and added new messages, then the streak will remain the same). Nothing to do in this case.
+    #       ii) it makes the current streak greater than the existing current streak badge value. In this case, we need to update the current streak badge
+    #           1. this current streak is the only streak the user ever had, nothing to do in this case
+    #           2. this current streak is a new streak with a previously larger streak in history:
+    #               a) if there is no longest streak badge, then, create a new longest streak badge with the older streak value
+    #               b) if there is a longest streak badge, then, compare the current streak with the longest streak badge value and update the longest streak badge if the current streak is greater than the longest streak badge value and show it as a badge
+    if not user_streak:
+        return
+
+    # if a streak already exists (of one or more days of continuous usage)
+    today = get_current_time_in_ist().date()
+    streak_last_date = user_streak[0]
+
+    if (today - streak_last_date).days != 1:
+        return
+
+    current_streak = len(user_streak) + 1
+
+    streak_badge_id = create_badge(
+        user_id,
+        str(current_streak),
+        "streak",
+    )
+
+    if streak_badge_id is None:
+        return
+
+    badges_to_show = [streak_badge_id]
+
+    longest_streak_badge = get_badge_by_type_and_user_id(
+        st.session_state.user["id"], "longest_streak"
+    )
+
+    # if no longest streak badge exists, then, the current streak is the first and longest streak
+    # no need to do anything in this case
+    # but if the longest streak badge exists, then, we need to compare the current streak with the longest streak
+    # if the current streak is greater than the longest streak, then, we need to update the longest streak badge
+    if longest_streak_badge is not None and current_streak > int(
+        longest_streak_badge["value"]
+    ):
+
+        longest_streak_badge_id = create_badge(
+            user_id, str(current_streak), "longest_streak"
+        )
+        badges_to_show.append(longest_streak_badge_id)
+
+    return badges_to_show
 
 
 def test_badge_image():

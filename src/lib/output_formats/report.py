@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 import pandas as pd
 import streamlit as st
 from pydantic import BaseModel, Field
@@ -32,14 +32,17 @@ def get_ai_report_response(
     ai_chat_history: List[Dict],
     scoring_criteria: List[Dict],
     container,
+    task_type: Literal["audio", "text"],
     max_completion_tokens: int = 2048,
 ):
     with container:
         display_waiting_indicator()
 
-    model = "gpt-4o-2024-08-06"
+    if task_type == "audio":
+        model = "gpt-4o-audio-preview-2024-10-01"
+    else:
+        model = "gpt-4o-2024-08-06"
 
-    # TODO: add what worked well, what needs improvement
     class Feedback(BaseModel):
         correct: str = Field(description="What worked well")
         wrong: str = Field(description="What needs improvement")
@@ -180,11 +183,12 @@ def increase_current_num_attempts():
 
 def show_attempt_picker(container):
     cols = container.columns([1, 1, 1, 10])
+
     with cols[0]:
         st.button(
             "<",
             key="prev_attempt",
-            disabled=st.session_state.displayed_attempt_index == 0,
+            disabled=st.session_state.displayed_attempt_index == 1,
             on_click=decrease_displayed_attempt_index,
         )
     with cols[1]:
@@ -201,3 +205,39 @@ def show_attempt_picker(container):
             == st.session_state.current_num_attempts,
             on_click=increase_displayed_attempt_index,
         )
+
+
+def get_containers():
+    input_description_col, _, report_col = st.columns([1, 0.1, 1.5])
+    description_container = input_description_col.container(height=450, border=True)
+
+    navigation_container = report_col.container().empty()
+    user_input_display_container = report_col.container(
+        height=100, border=False
+    ).empty()
+
+    # for spacing
+    report_col.container(height=1, border=False)
+
+    report_height = 300 if st.session_state.current_num_attempts > 1 else 250
+    ai_report_container = report_col.container(
+        border=False, height=report_height
+    ).empty()
+
+    return (
+        navigation_container,
+        description_container,
+        user_input_display_container,
+        ai_report_container,
+    )
+
+
+def display_user_text_input_report(user_input_display_container, user_response: str):
+    with user_input_display_container:
+        st.markdown(f"**Your response**<br>{user_response}", unsafe_allow_html=True)
+
+
+def display_user_audio_input_report(user_input_display_container, audio_data: bytes):
+    with user_input_display_container:
+        st.markdown("**Your response**", unsafe_allow_html=True)
+        st.audio(audio_data)

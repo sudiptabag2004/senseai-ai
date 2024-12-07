@@ -72,3 +72,13 @@ def find_intersection(list_of_lists):
         result.intersection_update(lst)
 
     return list(result)
+
+
+def load_file(file_path: str) -> bytes:
+    with open(file_path, "rb") as f:
+        return f.read()
+
+
+def save_file(file_path: str, data: bytes):
+    with open(file_path, "wb") as f:
+        f.write(data)
