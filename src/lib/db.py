@@ -97,7 +97,7 @@ def create_user_organizations_table(cursor):
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, org_id),
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -112,7 +112,9 @@ def create_badges_table(cursor):
                 type TEXT NOT NULL,
                 image_path TEXT NOT NULL,
                 bg_color TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                cohort_id INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
     )
 
@@ -209,8 +211,8 @@ def create_tag_tables(cursor):
                 tag_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, tag_id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id),
-                FOREIGN KEY (tag_id) REFERENCES tags(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id)
             )"""
     )
 
@@ -303,7 +305,7 @@ def create_cv_review_usage_table(cursor):
                 role TEXT NOT NULL,
                 ai_review TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
             )
             """
     )
@@ -2074,14 +2076,19 @@ def get_cohorts_for_org(org_id: int) -> List[Dict]:
 
 
 def create_badge_for_user(
-    user_id: int, value: str, badge_type: str, image_path: str, bg_color: str
+    user_id: int,
+    value: str,
+    badge_type: str,
+    image_path: str,
+    bg_color: str,
+    cohort_id: int,
 ) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        f"INSERT INTO {badges_table_name} (user_id, value, type, image_path, bg_color) VALUES (?, ?, ?, ?, ?)",
-        (user_id, value, badge_type, image_path, bg_color),
+        f"INSERT INTO {badges_table_name} (user_id, value, type, image_path, bg_color, cohort_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, value, badge_type, image_path, bg_color, cohort_id),
     )
 
     cursor.execute("SELECT last_insert_rowid()")
@@ -2108,9 +2115,9 @@ def update_badge(
 
 def convert_badge_db_to_dict(badge: Tuple):
     if badge is None:
-        return None
+        return
 
-    return {
+    output = {
         "id": badge[0],
         "user_id": badge[1],
         "value": badge[2],
@@ -2119,12 +2126,21 @@ def convert_badge_db_to_dict(badge: Tuple):
         "bg_color": badge[5],
     }
 
+    if len(badge) > 6:
+        output["cohort_name"] = badge[6]
+        output["org_name"] = badge[7]
+
+    return output
+
 
 def get_badge_by_id(badge_id: int) -> Dict:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {badges_table_name} WHERE id = ?", (badge_id,))
+    cursor.execute(
+        f"SELECT b.id, b.user_id, b.value, b.type, b.image_path, b.bg_color, c.name, o.name FROM {badges_table_name} b LEFT JOIN {cohorts_table_name} c ON c.id = b.cohort_id LEFT JOIN {organizations_table_name} o ON o.id = c.org_id WHERE b.id = ?",
+        (badge_id,),
+    )
     badge = cursor.fetchone()
 
     return convert_badge_db_to_dict(badge)
@@ -2135,7 +2151,7 @@ def get_badges_by_user_id(user_id: int) -> List[Dict]:
     cursor = conn.cursor()
 
     cursor.execute(
-        f"SELECT * FROM {badges_table_name} WHERE user_id = ? ORDER BY id DESC",
+        f"SELECT b.id, b.user_id, b.value, b.type, b.image_path, b.bg_color, c.name, o.name FROM {badges_table_name} b LEFT JOIN {cohorts_table_name} c ON c.id = b.cohort_id LEFT JOIN {organizations_table_name} o ON o.id = c.org_id WHERE b.user_id = ? ORDER BY b.id DESC",
         (user_id,),
     )
     badges = cursor.fetchall()
@@ -2143,13 +2159,15 @@ def get_badges_by_user_id(user_id: int) -> List[Dict]:
     return [convert_badge_db_to_dict(badge) for badge in badges]
 
 
-def get_badge_by_type_and_user_id(user_id: int, badge_type: str) -> Dict:
+def get_cohort_badge_by_type_and_user_id(
+    user_id: int, badge_type: str, cohort_id: int
+) -> Dict:
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        f"SELECT * FROM {badges_table_name} WHERE user_id = ? AND type = ?",
-        (user_id, badge_type),
+        f"SELECT id, user_id, value, type, image_path, bg_color FROM {badges_table_name} WHERE user_id = ? AND type = ? AND cohort_id = ?",
+        (user_id, badge_type, cohort_id),
     )
     badge = cursor.fetchone()
 
@@ -3014,3 +3032,96 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
         }
         for task in tasks
     ]
+
+
+def seed_badges_table_with_cohort_id():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Add cohort_id column if it doesn't exist
+    cursor.execute(f"PRAGMA table_info({badges_table_name})")
+    columns = cursor.fetchall()
+
+    try:
+        if not any(column[1] == "cohort_id" for column in columns):
+            cursor.execute(
+                f"ALTER TABLE {badges_table_name} ADD COLUMN cohort_id INTEGER REFERENCES {cohorts_table_name}(id)"
+            )
+
+        # Get all badges without cohort_id
+        cursor.execute(
+            f"SELECT id, user_id FROM {badges_table_name} WHERE cohort_id IS NULL"
+        )
+        badges = cursor.fetchall()
+
+        # For each badge, find the first cohort of the user and update the badge
+        for badge_id, user_id in badges:
+            cursor.execute(
+                f"""
+                SELECT uc.cohort_id 
+                FROM {user_cohorts_table_name} uc
+                WHERE uc.user_id = ?
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            result = cursor.fetchone()
+
+            if result:
+                cohort_id = result[0]
+                cursor.execute(
+                    f"UPDATE {badges_table_name} SET cohort_id = ? WHERE id = ?",
+                    (cohort_id, badge_id),
+                )
+
+        conn.commit()
+    except Exception as e:
+        print(f"Error seeding badges table with cohort_id: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def migrate_badges_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        # Make cohort_id NOT NULL after all badges have been updated
+        cursor.execute(
+            f"""
+            CREATE TABLE {badges_table_name}_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                value TEXT NOT NULL,
+                type TEXT NOT NULL,
+                image_path TEXT,
+                bg_color TEXT,
+                cohort_id INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+            )
+        """
+        )
+
+        # Copy data from old table to new table
+        cursor.execute(
+            f"""
+            INSERT INTO {badges_table_name}_new 
+            SELECT id, user_id, value, type, image_path, bg_color, cohort_id
+            FROM {badges_table_name}
+        """
+        )
+
+        # Drop old table and rename new table
+        cursor.execute(f"DROP TABLE {badges_table_name}")
+        cursor.execute(
+            f"ALTER TABLE {badges_table_name}_new RENAME TO {badges_table_name}"
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"Error migrating badges table: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
