@@ -164,11 +164,18 @@ def show_badges_tab():
                 badge["type"],
                 "learner",
                 badge_params,
+                badge["cohort_name"],
+                badge["org_name"],
                 width=300,
                 height=300,
             )
             show_download_badge_button(
-                badge["value"], badge["type"], badge_params, key=badge["id"]
+                badge["value"],
+                badge["type"],
+                badge_params,
+                badge["cohort_name"],
+                badge["org_name"],
+                key=badge["id"],
             )
 
 

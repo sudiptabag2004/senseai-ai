@@ -11,7 +11,7 @@ from lib.db import (
     create_badge_for_user,
     update_badge,
     get_badge_by_id,
-    get_badge_by_type_and_user_id,
+    get_cohort_badge_by_type_and_user_id,
     delete_badge_by_id,
 )
 from lib.image import (
@@ -81,6 +81,7 @@ def create_badge(
     user_id: int,
     emphasis_value: str,
     badge_type: str,
+    cohort_id: int,
 ) -> int:
     image_path = None
 
@@ -88,7 +89,9 @@ def create_badge(
 
         image_path = BADGE_TYPE_TO_IMAGE_PATH[badge_type]
 
-        existing_streak_badge = get_badge_by_type_and_user_id(user_id, badge_type)
+        existing_streak_badge = get_cohort_badge_by_type_and_user_id(
+            user_id, badge_type, cohort_id
+        )
 
         if existing_streak_badge:
             # no new streak badge to create
@@ -101,8 +104,8 @@ def create_badge(
                 # longest_streak badge exists; however, do nothing if a longest_streak
                 # badge already exists as it would automatically be updated as the
                 # current streak surpasses longest_streak elsewhere in the code
-                longest_streak_badge = get_badge_by_type_and_user_id(
-                    user_id, "longest_streak"
+                longest_streak_badge = get_cohort_badge_by_type_and_user_id(
+                    user_id, "longest_streak", cohort_id
                 )
                 if not longest_streak_badge:
                     update_badge(
@@ -118,7 +121,9 @@ def create_badge(
 
     elif badge_type == "longest_streak":
         image_path = BADGE_TYPE_TO_IMAGE_PATH[badge_type]
-        existing_streak_badge = get_badge_by_type_and_user_id(user_id, badge_type)
+        existing_streak_badge = get_cohort_badge_by_type_and_user_id(
+            user_id, badge_type, cohort_id
+        )
         if existing_streak_badge:
             delete_badge_by_id(existing_streak_badge["id"])
 
@@ -129,6 +134,7 @@ def create_badge(
         badge_type,
         badge_params["image_path"],
         badge_params["bg_color"],
+        cohort_id,
     )
 
     return created_badge_id
@@ -375,9 +381,7 @@ def _rain_emoji():
     )
 
 
-def _show_badge_in_dialog_box(
-    badge_details: Dict, cohort_name: str, org_name: str, key: str = None
-):
+def _show_badge_in_dialog_box(badge_details: Dict, key: str = None):
     badge_params = {
         "image_path": badge_details["image_path"],
         "bg_color": badge_details["bg_color"],
@@ -392,8 +396,8 @@ def _show_badge_in_dialog_box(
                 badge_details["type"],
                 "learner",
                 badge_params,
-                cohort_name,
-                org_name,
+                badge_details["cohort_name"],
+                badge_details["org_name"],
             )
 
         show_share_badge_prompt()
@@ -402,17 +406,17 @@ def _show_badge_in_dialog_box(
             badge_details["value"],
             badge_details["type"],
             badge_params,
-            cohort_name,
-            org_name,
+            badge_details["cohort_name"],
+            badge_details["org_name"],
             key=key,
         )
 
 
 @st.dialog(f"You unlocked a new badge! {generate_emoji()}")
-def show_badge_dialog(badge_id: int, cohort_name: str, org_name: str):
+def show_badge_dialog(badge_id: int):
     _rain_emoji()
     badge_details = get_badge_by_id(badge_id)
-    _show_badge_in_dialog_box(badge_details, cohort_name, org_name)
+    _show_badge_in_dialog_box(badge_details)
 
 
 def get_badge_type_to_tab_details(badge_type: str) -> Dict:
@@ -430,7 +434,7 @@ def get_badge_type_to_tab_details(badge_type: str) -> Dict:
 
 
 @st.dialog(f"You unlocked new badges! {generate_emoji()}")
-def show_multiple_badges_dialog(badge_ids: List[int], cohort_name: str, org_name: str):
+def show_multiple_badges_dialog(badge_ids: List[int]):
     _rain_emoji()
 
     # st.markdown("You can view all your badges any time in your profile")
@@ -457,16 +461,14 @@ def show_multiple_badges_dialog(badge_ids: List[int], cohort_name: str, org_name
     for index, tab in enumerate(tabs):
         with tab:
             st.markdown(all_tab_details[index]["help_text"])
-            _show_badge_in_dialog_box(
-                all_badge_details[index], cohort_name, org_name, key=f"{index}"
-            )
+            _show_badge_in_dialog_box(all_badge_details[index], key=f"{index}")
 
 
 def standardize_badge_image(image_path: str):
     standardize_image_size(image_path, image_path, 600, 600)
 
 
-def check_for_badges_unlocked(user_id: int, user_streak: List):
+def check_for_badges_unlocked(user_id: int, user_streak: List, cohort_id: int):
     # scenarios:
     # 1. streak does not exist - nothing to check in this case
     # 2. streak exists and now 1 more day is added to it
@@ -494,6 +496,7 @@ def check_for_badges_unlocked(user_id: int, user_streak: List):
         user_id,
         str(current_streak),
         "streak",
+        cohort_id,
     )
 
     if streak_badge_id is None:
@@ -501,8 +504,10 @@ def check_for_badges_unlocked(user_id: int, user_streak: List):
 
     badges_to_show = [streak_badge_id]
 
-    longest_streak_badge = get_badge_by_type_and_user_id(
-        st.session_state.user["id"], "longest_streak"
+    longest_streak_badge = get_cohort_badge_by_type_and_user_id(
+        st.session_state.user["id"],
+        "longest_streak",
+        cohort_id,
     )
 
     # if no longest streak badge exists, then, the current streak is the first and longest streak
@@ -514,7 +519,7 @@ def check_for_badges_unlocked(user_id: int, user_streak: List):
     ):
 
         longest_streak_badge_id = create_badge(
-            user_id, str(current_streak), "longest_streak"
+            user_id, str(current_streak), "longest_streak", cohort_id
         )
         badges_to_show.append(longest_streak_badge_id)
 

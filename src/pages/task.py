@@ -19,7 +19,6 @@ from lib.db import (
     store_message as store_message_to_db,
     get_task_chat_history_for_user,
     get_user_streak,
-    get_badge_by_type_and_user_id,
     get_scoring_criteria_for_task,
     get_cohort_by_id,
 )
@@ -50,7 +49,6 @@ from lib.s3 import (
     get_audio_upload_s3_key,
     download_file_from_s3_as_bytes,
 )
-from components.badge import create_badge
 from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
 from auth import get_logged_in_user
@@ -219,11 +217,11 @@ if "badges_to_show" not in st.session_state:
 if st.session_state.badges_to_show:
     if len(st.session_state.badges_to_show) == 1:
         show_badge_dialog(
-            st.session_state.badges_to_show[0], cohort["name"], task["org_name"]
+            st.session_state.badges_to_show[0],
         )
     else:
         show_multiple_badges_dialog(
-            st.session_state.badges_to_show, cohort["name"], task["org_name"]
+            st.session_state.badges_to_show,
         )
     st.session_state.badges_to_show = []
 
@@ -268,7 +266,7 @@ with description_container:
 
 def identify_and_show_unlocked_badges():
     badges_to_show = check_for_badges_unlocked(
-        task_user_id, st.session_state.user_streak
+        task_user_id, st.session_state.user_streak, cohort_id
     )
     if not badges_to_show:
         return
