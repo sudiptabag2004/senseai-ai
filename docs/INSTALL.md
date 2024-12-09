@@ -35,7 +35,7 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   export PATH="/path/to/poppler/bin:$PATH"
   ```
   You can get the path to poppler using `brew list poppler`
-- Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials.
+- Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials. Refer to [ENV.md](./ENV.md) for more details on the environment variables.
 - Running the app locally
     ```
     cd src; streamlit run home.py
