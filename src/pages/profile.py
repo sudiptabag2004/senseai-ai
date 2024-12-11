@@ -5,6 +5,10 @@ st.set_page_config(page_title="Profile | SensAI", layout="wide")
 
 from typing import Dict, Literal
 
+from lib.init import init_app
+
+init_app()
+
 from lib.db import get_user_by_id, update_user as update_user_in_db
 from lib.db import get_badges_by_user_id
 from lib.profile import get_user_name, show_placeholder_icon

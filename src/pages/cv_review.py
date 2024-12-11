@@ -15,8 +15,11 @@ from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 import pandas as pd
 
+from lib.init import init_app
+
+init_app()
+
 from lib.db import add_cv_review_usage
-from lib.init import init_env_vars
 from lib.config import PDF_PAGE_DIMS
 from lib.ui import display_waiting_indicator
 from lib.pdf import get_raw_images_from_pdf, get_links_from_pdf
@@ -26,7 +29,6 @@ from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 from auth import redirect_if_not_logged_in
 
-init_env_vars()
 redirect_if_not_logged_in(key="id")
 back_to_home_button()
 

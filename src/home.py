@@ -2,13 +2,14 @@ import streamlit as st
 
 st.set_page_config(layout="wide", page_title="Home | SensAI")
 
-from auth import login_or_signup_user, get_logged_in_user, login
 from lib.init import init_app
+
+init_app()
+
+from auth import login_or_signup_user, get_logged_in_user, login
 from views.home import show_home
 
 # init_auth_from_cookies()
-
-init_app()
 
 if "email" in st.query_params:
     login_or_signup_user(st.query_params["email"])

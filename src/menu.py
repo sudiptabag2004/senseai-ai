@@ -5,12 +5,24 @@ from lib.organization import show_create_org_dialog
 from lib.toast import set_toast, show_toast
 from auth import get_hva_org_id
 
+# if not theme:
+#     theme = {"base": "light"}
+
 
 def menu_header():
-    st.logo("./lib/assets/logo.png")
+    if "theme" not in st.session_state or not st.session_state.theme:
+        st.session_state.theme = {"base": "light"}
+
+    if st.session_state.theme["base"] == "dark":
+        st.logo("./lib/assets/dark_logo.svg")
+        subtitle_color = "#fff"
+    else:
+        st.logo("./lib/assets/light_logo.svg")
+        subtitle_color = "#1E2F4D"
+
     st.sidebar.markdown(
-        """
-        <p style='margin-top: -25px; margin-bottom: 15px; color: #1E2F4D'>
+        f"""
+        <p style='margin-top: -25px; margin-bottom: 15px; color: {subtitle_color}'>
         Your personal AI tutor
         </p>
         """,
@@ -71,19 +83,13 @@ def menu_footer(selected_cohort: Dict, role: str):
     st.sidebar.text("Built with ❤️ by HyperVerge Academy")
 
     if st.session_state.email:
-        if st.sidebar.button("Logout"):
-            clear_auth()
+        with st.sidebar.expander("More Options"):
+            if st.button("Logout"):
+                clear_auth()
 
 
 def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
     with st.sidebar:
-        # display_name = get_logged_in_user_display_name("first")
-        # st.markdown(
-        #     f"""
-        #     <h3 style="margin: 0;">Welcome, {display_name}!</h3>
-        #     """,
-        #     unsafe_allow_html=True,
-        # )
         st.page_link(
             f"{os.environ.get('APP_URL')}/profile?id={logged_in_user['id']}",
             label="Your Profile",

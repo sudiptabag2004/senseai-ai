@@ -28,30 +28,38 @@ def generate_progress_bar_background_color(header_background_color: str):
     return progress_color
 
 
-task_view_style = """.task-list-container {
-        background-color: #fff;
+def get_task_view_style():
+    if "theme" not in st.session_state:
+        st.session_state.theme = {"base": "light"}
+
+    container_color = "#fff"
+    if st.session_state.theme["base"] == "dark":
+        container_color = "#0E1117"
+
+    task_view_style = f""".task-list-container {{
+        background-color: {container_color};
         padding: 8px 16px;
         max-height: calc(2 * (20px + 1.4em * 3 + 8px + 32px + 20px)); /* Approximate height of 2 tasks */
         overflow-y: auto;
         margin-bottom: 20px;
-    }
+    }}
     
-    .task-item {
+    .task-item {{
         display: flex;
         align-items: flex-start;
         padding-bottom: 20px;
         margin-bottom: 20px;
-    }
-    .task-item:last-child {
+    }}
+    .task-item:last-child {{
         margin-bottom: 0;
         padding-bottom: 0;
-    }
+    }}
 
-    .task-item:not(:last-child) {
+    .task-item:not(:last-child) {{
         border-bottom: 1px solid #e0e0e0;
-    }
+    }}
     
-    .task-checkbox {
+    .task-checkbox {{
         flex-shrink: 0;
         margin-top: 15px;
         margin-right: 12px;
@@ -60,29 +68,29 @@ task_view_style = """.task-list-container {
         justify-content: center;
         width: 15px;
         height: 15px;
-    }
-    .task-checkbox svg {
+    }}
+    .task-checkbox svg {{
         width: 100%;
         height: 100%;
-    }
-    .task-content {
+    }}
+    .task-content {{
         flex-grow: 1;
         min-width: 0; /* Allows content to shrink below its minimum content size */
-    }
-    .task-header {
+    }}
+    .task-header {{
         display: flex;
         justify-content: space-between;
         align-items: center;
         width: 100%;
-    }
-    .task-name {
+    }}
+    .task-name {{
         font-size: 16px;
         font-weight: 500;
         margin-bottom: 0;  /* Remove bottom margin since it's now in a flex container */
         flex: 1;          /* Allow task name to take available space */
         margin-right: 16px; /* Add some space between name and button */
-    }
-    .open-task-btn {
+    }}
+    .open-task-btn {{
         background-color: #4CAF50;
         color: white;
         border: none;
@@ -94,27 +102,28 @@ task_view_style = """.task-list-container {
         margin-top: 8px;
         cursor: pointer;
         border-radius: 4px;
-    }
-    a:link {
+    }}
+    a:link {{
         color: white;
         text-decoration: none;
-    }
-    a:visited {
+    }}
+    a:visited {{
         color: white;
         text-decoration: none;
-    }
-    a:hover {
+    }}
+    a:hover {{
         color: white;
         text-decoration: none;
-    }
-    a:active {
+    }}
+    a:active {{
         color: white;
         text-decoration: none;
-    }"""
+    }}"""
+    return task_view_style
 
 
 def set_task_view_style():
-    st.markdown(f"""<style>{task_view_style}</style>""", unsafe_allow_html=True)
+    st.markdown(f"""<style>{get_task_view_style()}</style>""", unsafe_allow_html=True)
 
 
 def get_task_url(task: Dict, cohort_id: int, course_id: int):
@@ -122,9 +131,18 @@ def get_task_url(task: Dict, cohort_id: int, course_id: int):
 
 
 def get_task_view(task: Dict, cohort_id: int, course_id: int, show_button: bool = True):
+    if "theme" not in st.session_state or not st.session_state.theme:
+        st.session_state.theme = {"base": "light"}
+
     task_url = get_task_url(task, cohort_id, course_id)
 
-    progress_icon_name = "green_tick.svg" if task["completed"] else "border_circle.svg"
+    incomplete_task_icon_name = "border_circle.svg"
+    if st.session_state.theme["base"] == "dark":
+        incomplete_task_icon_name = "border_circle_white.svg"
+
+    progress_icon_name = (
+        "green_tick.svg" if task["completed"] else incomplete_task_icon_name
+    )
     progress_icon = open(f"lib/assets/{progress_icon_name}").read()
 
     # Escape HTML characters in task name and description
@@ -207,7 +225,7 @@ def show_milestone_card(
         font-size: 14px;
         margin-bottom: 4px;
     }}
-    {task_view_style}
+    {get_task_view_style()}
     </style>
     """,
         unsafe_allow_html=True,
