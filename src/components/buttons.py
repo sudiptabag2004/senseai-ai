@@ -1,9 +1,10 @@
 import os
 import streamlit as st
-from lib.init import init_app
+
+# from lib.init import init_app
 from auth import get_logged_in_user
 
-init_app()
+# init_app()
 
 
 def back_to_home_button():

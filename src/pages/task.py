@@ -10,6 +10,10 @@ st.set_page_config(
     page_title="Task | SensAI", layout="wide", initial_sidebar_state="collapsed"
 )
 
+from lib.init import init_app
+
+init_app()
+
 from lib.llm import logger, get_formatted_history
 from components.buttons import back_to_home_button
 from auth import login_or_signup_user
@@ -49,7 +53,6 @@ from lib.s3 import (
     get_audio_upload_s3_key,
     download_file_from_s3_as_bytes,
 )
-from lib.init import init_env_vars, init_db
 from lib.chat import MessageHistory
 from auth import get_logged_in_user
 from components.code import (
@@ -65,9 +68,6 @@ from components.badge import (
     check_for_badges_unlocked,
 )
 from views.task import display_milestone_tasks_in_sidebar, show_task_name
-
-init_env_vars()
-init_db()
 
 # set_verbose(True)
 # set_debug(True)

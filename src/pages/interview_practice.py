@@ -12,15 +12,17 @@ from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 import pandas as pd
 
+from lib.init import init_app
+
+init_app()
+
 from auth import redirect_if_not_logged_in
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
-from lib.init import init_env_vars
 from lib.audio import validate_audio_input, prepare_audio_input_for_ai
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
-init_env_vars()
 
 redirect_if_not_logged_in(key="id")
 
