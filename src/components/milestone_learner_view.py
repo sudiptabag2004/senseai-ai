@@ -155,6 +155,23 @@ def get_task_view(task: Dict, cohort_id: int, course_id: int, show_button: bool 
     return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-header">\n\t\t\t<div class="task-name">{task_name}</div>\n{open_task_button_html}\t\t</div>\n\t</div>\n</div>"""
 
 
+def get_milestone_card_text_colors(header_bg_color: str):
+    # Convert hex to RGB for luminance calculation
+    hex_color = header_bg_color.lstrip("#")
+    r = int(hex_color[0:2], 16) / 255.0
+    g = int(hex_color[2:4], 16) / 255.0
+    b = int(hex_color[4:6], 16) / 255.0
+
+    # Calculate relative luminance using sRGB formula
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    # Use white text for dark backgrounds (luminance < 0.5)
+    text_color = "#ffffff" if luminance < 0.5 else "#000000"
+    num_completed_tasks_color = "#ebf0f0" if luminance < 0.5 else "#1b1c1c"
+
+    return text_color, num_completed_tasks_color
+
+
 def show_milestone_card(
     milestone: Dict,
     completed_tasks: int,
@@ -168,6 +185,10 @@ def show_milestone_card(
 
     header_bg_color = milestone["color"]
     progress_bg_color = generate_progress_bar_background_color(header_bg_color)
+
+    milestone_name_color, num_completed_tasks_color = get_milestone_card_text_colors(
+        header_bg_color
+    )
 
     # Generate a unique class name based on the milestone name
     milestone_class = f"milestone-{milestone['id']}"
@@ -189,18 +210,19 @@ def show_milestone_card(
         background-color: {header_bg_color};
         padding: 0px 20px 8px 20px;
     }}
-    .milestone-name {{
+    .{milestone_class} .milestone-name {{
         font-size: 16px;
         margin: 0;
         display: flex;
         align-items: center;
+        color: {milestone_name_color};
     }}
     .milestone-name svg {{
         margin-left: 8px;
         opacity: 0.6;
     }}
-    .completed-tasks {{
-        color: #666;
+    .{milestone_class} .completed-tasks {{
+        color: {num_completed_tasks_color};
         margin: -16px 0 0 0;
         font-size: 12px;
     }}
@@ -208,7 +230,7 @@ def show_milestone_card(
         padding: 4px 20px 4px 20px;
         background-color: {progress_bg_color};
     }}
-    .progress-container {{
+    .{milestone_class} .progress-container {{
         background-color: #E0E0E0;
         border-radius: 100px;
         height: 8px;
@@ -224,6 +246,7 @@ def show_milestone_card(
         text-align: right;
         font-size: 14px;
         margin-bottom: 4px;
+        color: #000;
     }}
     {get_task_view_style()}
     </style>
