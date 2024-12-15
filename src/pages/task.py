@@ -189,7 +189,7 @@ if "is_ai_running" not in st.session_state:
     reset_ai_running()
 
 
-def reset_ai_chat_history_for_report_tasks():
+def reset_ai_chat_history():
     # for ai chat history for report type tasks, only keep the first
     # message containing the task details for each run
     initial_ai_chat_history = [st.session_state.ai_chat_history.messages[0]]
@@ -240,7 +240,7 @@ show_task_name(
     st.session_state.is_solved,
 )
 
-if task["response_type"] == "chat":
+if task["response_type"] in ["chat", "exam"]:
     containers = get_chat_containers(task, st.session_state.is_review_mode)
     if task["type"] == "coding" and not st.session_state.is_review_mode:
         (
@@ -283,13 +283,13 @@ if "ai_chat_history" not in st.session_state:
 
     task_details = f"""Task:\n```\n{task['description']}\n```"""
 
-    if task["response_type"] == "chat":
+    if task["response_type"] in ["chat", "exam"]:
         task_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{task['answer']}\n```"""
 
     st.session_state.ai_chat_history.add_user_message(task_details)
 
-    # do not include history for report type tasks
-    if task["response_type"] == "chat" and task["type"] != "audio":
+    # do not include history for report or exam type tasks
+    if task["response_type"] in ["chat"]:
         for message in st.session_state.chat_history:
             if message["role"] == "user":
                 st.session_state.ai_chat_history.add_user_message(
@@ -301,7 +301,7 @@ if "ai_chat_history" not in st.session_state:
 
 if not st.session_state.chat_history:
     empty_container = None
-    if task["response_type"] == "chat":
+    if task["response_type"] in ["chat", "exam"]:
         if st.session_state.is_review_mode:
             chat_container.warning("No task history found")
         else:
@@ -315,7 +315,7 @@ if not st.session_state.chat_history:
             with user_input_display_container:
                 st.warning("Your response will appear here!")
 else:
-    if task["response_type"] == "chat":
+    if task["response_type"] in ["chat", "exam"]:
         # Display chat messages from history on app rerun
         for index, message in enumerate(st.session_state.chat_history):
             if message["role"] == "user":
@@ -377,6 +377,7 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
     # ipdb.set_trace()
     ai_response, result_dict = get_ai_chat_response(
         st.session_state.ai_chat_history.messages,
+        task["response_type"],
         chat_container,
     )
 
@@ -384,15 +385,24 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
         result_dict["is_correct"] if result_dict["is_correct"] is not None else False
     )
 
+    if task["response_type"] == "exam":
+        if is_solved:
+            ai_response = "✅ Your response is correct!"
+        else:
+            ai_response = "Not quite right. Try again!"
+
     if not st.session_state.is_solved and is_solved:
         st.balloons()
         st.session_state.is_solved = True
         time.sleep(2)
 
+    if task["response_type"] == "exam":
+        reset_ai_chat_history()
+    else:
+        st.session_state.ai_chat_history.add_ai_message(ai_response)
+
     identify_and_show_unlocked_badges()
     refresh_streak()
-
-    st.session_state.ai_chat_history.add_ai_message(ai_response)
 
     logger.info(get_formatted_history(st.session_state.ai_chat_history.messages))
 
@@ -487,7 +497,7 @@ def get_ai_feedback_report_text_input(user_response: str):
 
     # for ai chat history for report type tasks, only keep the first
     # message containing the task details for each run
-    reset_ai_chat_history_for_report_tasks()
+    reset_ai_chat_history()
 
     reset_ai_running()
     st.rerun()
@@ -574,7 +584,7 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
     )
     st.session_state.chat_history.append(new_ai_message)
 
-    reset_ai_chat_history_for_report_tasks()
+    reset_ai_chat_history()
 
     reset_ai_running()
     st.rerun()
@@ -613,11 +623,16 @@ def show_and_handle_chat_input():
     if st.session_state.is_review_mode:
         return
 
+    is_disabled = st.session_state.is_ai_running
+
+    if task["response_type"] == "exam":
+        is_disabled = is_disabled or st.session_state.is_solved
+
     if user_response := st.chat_input(
         user_response_placeholder,
         key="chat_input",
         on_submit=set_ai_running,
-        disabled=st.session_state.is_ai_running,
+        disabled=is_disabled,
     ):
         get_ai_feedback_chat(user_response, "text")
 
@@ -652,7 +667,7 @@ def show_and_handle_report_input():
         raise NotImplementedError(f"Task type {task['type']} not supported")
 
 
-if task["response_type"] == "chat":
+if task["response_type"] in ["chat", "exam"]:
     if chat_input_container:
         with chat_input_container:
             show_and_handle_chat_input()

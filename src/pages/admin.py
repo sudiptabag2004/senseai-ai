@@ -30,6 +30,7 @@ from lib.config import (
     group_role_mentor,
     task_ai_response_types,
     allowed_input_types,
+    response_type_help_text,
 )
 from lib.init import init_env_vars, init_db
 from lib.cache import (
@@ -634,8 +635,14 @@ def task_input_type_selector():
     if len(task_input_types) == 1:
         default_index = 0
 
+    disabled = len(task_input_types) == 1
+
     return st.selectbox(
-        "Select task type", task_input_types, key="task_type", index=default_index
+        "Select task type",
+        task_input_types,
+        key="task_type",
+        index=default_index,
+        disabled=disabled,
     )
 
 
@@ -649,6 +656,7 @@ def ai_response_type_selector():
         "Select AI response type",
         task_ai_response_types,
         key="ai_response_type",
+        help=response_type_help_text,
         index=task_ai_response_types.index("chat"),
         on_change=clear_task_input_type,
     )
@@ -810,7 +818,7 @@ def show_task_form():
         st.session_state.coding_languages = None
 
     final_answer = None
-    if ai_response_type == "chat":
+    if ai_response_type in ["chat", "exam"]:
         cols = st.columns([3.5, 1])
 
         cols[-1].container(height=10, border=False)
