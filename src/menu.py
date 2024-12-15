@@ -39,7 +39,7 @@ def menu_header():
 def show_links():
     with st.sidebar:
         st.page_link(
-            "https://script.google.com/macros/s/AKfycbzfH42BZ5t8Yo9O1B23ELpM920EDwQ2_1ecOpk4OGqN3bMZ_FURie8uzHLtlKp-CooC/exec",
+            "https://script.google.com/a/macros/hyperverge.co/s/AKfycbw-OKieiMdjBYp6qCMnF8J8iIusOkRN1xwA0Bamjn8C-ABHXGjfU6S6Km5xiZVViLvJ/exec",
             label="Apply for a leave",
             icon="🏖️",
         )
