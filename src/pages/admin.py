@@ -28,7 +28,8 @@ from lib.ui import show_singular_or_plural
 from lib.config import (
     group_role_learner,
     group_role_mentor,
-    task_ai_response_types,
+    all_ai_response_types,
+    all_input_types,
     allowed_input_types,
     response_type_help_text,
 )
@@ -71,6 +72,7 @@ from lib.db import (
     remove_tasks_from_courses,
     add_scoring_criteria_to_task,
     add_scoring_criteria_to_tasks,
+    remove_scoring_criteria_from_task,
     create_course,
     get_all_courses_for_org,
     add_course_to_cohorts,
@@ -84,6 +86,7 @@ from lib.db import (
     update_course_name as update_course_name_in_db,
     update_cohort_name as update_cohort_name_in_db,
     update_task_orders as update_task_orders_in_db,
+    get_scoring_criteria_for_task,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -190,12 +193,13 @@ if "final_answer" not in st.session_state:
     st.session_state.final_answer = ""
 
 
-def refresh_scoring_criteria():
+def reset_scoring_criteria():
     st.session_state.scoring_criteria = []
+    st.session_state.updated_scoring_criteria = None
 
 
 if "scoring_criteria" not in st.session_state:
-    refresh_scoring_criteria()
+    reset_scoring_criteria()
 
 if "task_uploader_key" not in st.session_state:
     st.session_state.task_uploader_key = 0
@@ -654,10 +658,10 @@ def clear_task_input_type():
 def ai_response_type_selector():
     return st.selectbox(
         "Select AI response type",
-        task_ai_response_types,
+        all_ai_response_types,
         key="ai_response_type",
         help=response_type_help_text,
-        index=task_ai_response_types.index("chat"),
+        index=all_ai_response_types.index("chat"),
         on_change=clear_task_input_type,
     )
 
@@ -677,8 +681,8 @@ def coding_language_selector():
     )
 
 
-def add_scoring_criterion():
-    st.session_state.scoring_criteria.append(
+def add_scoring_criterion(scoring_criteria):
+    scoring_criteria.append(
         {
             "category": st.session_state.new_scoring_criterion_category,
             "description": st.session_state.new_scoring_criterion_description,
@@ -706,12 +710,26 @@ def update_scoring_criterion(index: int):
     }
 
 
-def show_scoring_criteria_addition_form():
+def delete_scoring_criterion(scoring_criteria, index_to_delete: int):
+    scoring_criteria.pop(index_to_delete)
+
+
+def show_scoring_criteria_addition_form(scoring_criteria):
     st.subheader("Scoring Criterion")
-    for index, scoring_criterion in enumerate(st.session_state.scoring_criteria):
+    for index, scoring_criterion in enumerate(scoring_criteria):
         with st.expander(
             f"{scoring_criterion['category']} ({scoring_criterion['range'][0]} - {scoring_criterion['range'][1]})"
         ):
+            cols = st.columns([5, 1])
+            cols[-1].button(
+                "",
+                icon="🗑️",
+                key=f"delete_scoring_criterion_{index}",
+                on_click=delete_scoring_criterion,
+                args=(scoring_criteria, index),
+                help="Delete",
+            )
+
             updated_category = st.text_input(
                 "Category",
                 value=scoring_criterion["category"],
@@ -758,31 +776,36 @@ def show_scoring_criteria_addition_form():
                     args=(index,),
                 )
 
-    new_category = st.text_input(
-        "Add a new category to the scoring criterion",
-        placeholder="e.g. Correctness",
-        key="new_scoring_criterion_category",
-    )
-    new_description = st.text_area(
-        "Add a description for the new category",
-        placeholder="e.g. The answer provided is correct",
-        key="new_scoring_criterion_description",
-    )
-    cols = st.columns(2)
-    range_start = cols[0].number_input(
-        "Lowest possible score for this category",
-        min_value=0,
-        step=1,
-        key="new_scoring_criterion_range_start",
-    )
-    range_end = cols[1].number_input(
-        "Highest possible score for this category",
-        min_value=range_start + 1,
-        step=1,
-        key="new_scoring_criterion_range_end",
-    )
-    st.button("Add category", use_container_width=True, on_click=add_scoring_criterion)
-    st.divider()
+    with st.form("add_scoring_criterion"):
+        st.text_input(
+            "Add a new category to the scoring criterion",
+            placeholder="e.g. Correctness",
+            key="new_scoring_criterion_category",
+        )
+        st.text_area(
+            "Add a description for the new category",
+            placeholder="e.g. The answer provided is correct",
+            key="new_scoring_criterion_description",
+        )
+        cols = st.columns(2)
+        range_start = cols[0].number_input(
+            "Lowest possible score for this category",
+            min_value=0,
+            step=1,
+            key="new_scoring_criterion_range_start",
+        )
+        cols[1].number_input(
+            "Highest possible score for this category",
+            min_value=range_start + 1,
+            step=1,
+            key="new_scoring_criterion_range_end",
+        )
+        st.form_submit_button(
+            "Add criterion",
+            use_container_width=True,
+            on_click=add_scoring_criterion,
+            args=(scoring_criteria,),
+        )
 
 
 @st.dialog("Add a new task")
@@ -844,7 +867,8 @@ def show_task_form():
             final_answer = st.session_state.ai_answer
 
     elif ai_response_type == "report":
-        show_scoring_criteria_addition_form()
+        show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
+        st.divider()
 
     st.multiselect(
         "Tags",
@@ -1019,7 +1043,8 @@ def show_bulk_upload_tasks_form():
         st.session_state.coding_languages = None
 
     if ai_response_type == "report":
-        show_scoring_criteria_addition_form()
+        show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
+        st.divider()
 
     cols = st.columns(2)
     with cols[0]:
@@ -1222,6 +1247,45 @@ tab_names.append("Settings")
 tabs = st.tabs(tab_names)
 
 
+@st.dialog("Edit Scoring Criteria")
+def show_edit_scoring_criteria_dialog_form(task_id: int):
+    scoring_criteria = get_scoring_criteria_for_task(task_id)
+
+    if (
+        "updated_scoring_criteria" not in st.session_state
+        or st.session_state.updated_scoring_criteria is None
+    ):
+        st.session_state.updated_scoring_criteria = deepcopy(scoring_criteria)
+
+    show_scoring_criteria_addition_form(st.session_state.updated_scoring_criteria)
+
+    if st.button("Save Changes", type="primary", use_container_width=True):
+        if st.session_state.updated_scoring_criteria == scoring_criteria:
+            st.error("No changes found")
+            return
+
+        scoring_criteria_to_add = [
+            criterion
+            for criterion in st.session_state.updated_scoring_criteria
+            if criterion not in scoring_criteria
+        ]
+
+        scoring_criteria_to_remove = [
+            criterion["id"]
+            for criterion in scoring_criteria
+            if criterion not in st.session_state.updated_scoring_criteria
+        ]
+
+        if scoring_criteria_to_add:
+            add_scoring_criteria_to_task(task_id, scoring_criteria_to_add)
+
+        if scoring_criteria_to_remove:
+            remove_scoring_criteria_from_task(scoring_criteria_to_remove)
+
+        set_toast("Scoring criteria updated successfully!")
+        st.rerun()
+
+
 def show_tasks_tab():
     cols = st.columns([1, 8])
 
@@ -1233,11 +1297,11 @@ def show_tasks_tab():
         reset_tests()
         st.session_state.ai_answer = ""
         st.session_state.final_answer = ""
-        refresh_scoring_criteria()
+        reset_scoring_criteria()
         show_task_form()
 
     if bulk_upload_tasks:
-        refresh_scoring_criteria()
+        reset_scoring_criteria()
         update_task_uploader_key()
         show_bulk_upload_tasks_form()
 
@@ -1259,25 +1323,31 @@ def show_tasks_tab():
     df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
     cols = st.columns(4)
-    tasks_with_tags_df = df[df["tags"].notna()]
-    all_tags = np.unique(
-        list(itertools.chain(*[tags for tags in tasks_with_tags_df["tags"].tolist()]))
-    ).tolist()
-    filter_tags = cols[0].multiselect("Filter by tags", all_tags)
+    # tasks_with_tags_df = df[df["tags"].notna()]
+    # all_tags = np.unique(
+    #     list(itertools.chain(*[tags for tags in tasks_with_tags_df["tags"].tolist()]))
+    # ).tolist()
+    # filter_tags = cols[0].multiselect("Filter by tags", all_tags)
 
-    if filter_tags:
-        df = df[df["tags"].apply(lambda x: any(tag in x for tag in filter_tags))]
+    # if filter_tags:
+    #     df = df[df["tags"].apply(lambda x: any(tag in x for tag in filter_tags))]
 
-    verified_filter = cols[1].radio(
-        "Filter by verification status",
-        ["All", "Verified", "Unverified"],
-        horizontal=True,
+    filtered_response_types = cols[0].pills(
+        "Filter by response type",
+        all_ai_response_types,
     )
 
-    if verified_filter != "All":
-        df = df[df["verified"] == (verified_filter == "Verified")]
+    if filtered_response_types:
+        df = df[df["response_type"].apply(lambda x: x in filtered_response_types)]
 
-    # milestones = [milestone["id"] for milestone in st.session_state.milestones]
+    filtered_input_types = cols[1].pills(
+        "Filter by input type",
+        all_input_types,
+    )
+
+    if filtered_input_types:
+        df = df[df["type"].apply(lambda x: x in filtered_input_types)]
+
     filtered_milestones = cols[2].multiselect(
         "Filter by milestone",
         st.session_state.milestones,
@@ -1287,6 +1357,15 @@ def show_tasks_tab():
     if filtered_milestones:
         filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
         df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
+
+    verified_filter = cols[3].radio(
+        "Filter by verification status",
+        ["All", "Verified", "Unverified"],
+        horizontal=True,
+    )
+
+    if verified_filter != "All":
+        df = df[df["verified"] == (verified_filter == "Verified")]
 
     (
         edit_mode_col,
@@ -1397,16 +1476,24 @@ def show_tasks_tab():
                     task_ids,
                 )
 
-            if (
-                len(task_ids) == 1
-                and df.iloc[event.selection["rows"]]["type"].tolist()[0] == "coding"
-            ):
-                if add_tests_col.button("Add/Edit tests"):
-                    reset_tests()
-                    edit_tests_for_task(
-                        df,
-                        task_ids[0],
-                    )
+            if len(task_ids) == 1:
+                # if only one task is selected and that task is a coding task we can add/edit tests
+                if df.iloc[event.selection["rows"]]["type"].tolist()[0] == "coding":
+                    if add_tests_col.button("Add/Edit tests"):
+                        reset_tests()
+                        edit_tests_for_task(
+                            df,
+                            task_ids[0],
+                        )
+
+                # if only one task is selected and that task is a report task we can add/edit scoring criteria
+                if (
+                    df.iloc[event.selection["rows"]]["response_type"].tolist()[0]
+                    == "report"
+                ):
+                    if add_tests_col.button("Add/Edit Scoring Criteria"):
+                        reset_scoring_criteria()
+                        show_edit_scoring_criteria_dialog_form(task_ids[0])
 
     else:
         edited_df = st.data_editor(

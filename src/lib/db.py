@@ -739,7 +739,7 @@ def get_scoring_criteria_for_task(task_id: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        f"SELECT category, description, min_score, max_score FROM {task_scoring_criteria_table_name} WHERE task_id = ?",
+        f"SELECT id, category, description, min_score, max_score FROM {task_scoring_criteria_table_name} WHERE task_id = ?",
         (task_id,),
     )
 
@@ -747,9 +747,10 @@ def get_scoring_criteria_for_task(task_id: int):
 
     return [
         {
-            "category": row[0],
-            "description": row[1],
-            "range": [row[2], row[3]],
+            "id": row[0],
+            "category": row[1],
+            "description": row[2],
+            "range": [row[3], row[4]],
         }
         for row in rows
     ]
@@ -2726,6 +2727,9 @@ def update_task_orders(task_orders: List[Tuple[int, int]]):
 
 
 def add_scoring_criteria_to_task(task_id: int, scoring_criteria: List[Dict]):
+    if not scoring_criteria:
+        return
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -2749,7 +2753,26 @@ def add_scoring_criteria_to_task(task_id: int, scoring_criteria: List[Dict]):
     conn.close()
 
 
+def remove_scoring_criteria_from_task(scoring_criteria_ids: List[int]):
+    if not scoring_criteria_ids:
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""DELETE FROM {task_scoring_criteria_table_name} 
+            WHERE id IN ({', '.join(map(str, scoring_criteria_ids))})""",
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def add_scoring_criteria_to_tasks(task_ids: List[int], scoring_criteria: List[Dict]):
+    if not scoring_criteria:
+        return
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
