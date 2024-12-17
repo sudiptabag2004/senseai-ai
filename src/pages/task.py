@@ -378,6 +378,7 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
     ai_response, result_dict = get_ai_chat_response(
         st.session_state.ai_chat_history.messages,
         task["response_type"],
+        task["context"],
         chat_container,
     )
 
@@ -451,6 +452,7 @@ def get_ai_feedback_report_text_input(user_response: str):
     rows = get_ai_report_response(
         st.session_state.ai_chat_history.messages,
         st.session_state.scoring_criteria,
+        task["context"],
         ai_report_container,
         task["type"],
     )
@@ -531,6 +533,7 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
     rows = get_ai_report_response(
         st.session_state.ai_chat_history.messages,
         st.session_state.scoring_criteria,
+        task["context"],
         ai_report_container,
         task["type"],
     )

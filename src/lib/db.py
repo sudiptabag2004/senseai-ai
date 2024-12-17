@@ -258,6 +258,7 @@ def create_tasks_table(cursor):
                     milestone_id INTEGER,
                     org_id INTEGER NOT NULL,
                     response_type TEXT NOT NULL,
+                    context TEXT,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
@@ -469,6 +470,7 @@ def store_task(
     tests: List[dict],
     milestone_id: int,
     org_id: int,
+    context: str,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -478,8 +480,8 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id, response_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id, response_type, context)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
@@ -492,6 +494,7 @@ def store_task(
                 milestone_id,
                 org_id,
                 response_type,
+                context,
             ),
         )
 
@@ -615,6 +618,7 @@ def convert_task_db_to_dict(task, tests):
         "org_id": task[12],
         "org_name": task[13],
         "response_type": task[14],
+        "context": task[15],
         "tests": tests,
     }
 
@@ -632,7 +636,7 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tags,
         t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        t.response_type
+        t.response_type, t.context
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
@@ -701,7 +705,7 @@ def get_task_by_id(task_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type
+        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
@@ -3105,46 +3109,20 @@ def seed_badges_table_with_cohort_id():
         conn.close()
 
 
-def migrate_badges_table():
+def migrate_tasks_table():
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
+        # Add context column to tasks table
+        cursor.execute(f"PRAGMA table_info({tasks_table_name})")
+        columns = cursor.fetchall()
 
-        # Make cohort_id NOT NULL after all badges have been updated
-        cursor.execute(
-            f"""
-            CREATE TABLE {badges_table_name}_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                value TEXT NOT NULL,
-                type TEXT NOT NULL,
-                image_path TEXT,
-                bg_color TEXT,
-                cohort_id INTEGER NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
-            )
-        """
-        )
+        if not any(column[1] == "context" for column in columns):
+            cursor.execute(f"ALTER TABLE {tasks_table_name} ADD COLUMN context TEXT")
 
-        # Copy data from old table to new table
-        cursor.execute(
-            f"""
-            INSERT INTO {badges_table_name}_new 
-            SELECT id, user_id, value, type, image_path, bg_color, cohort_id
-            FROM {badges_table_name}
-        """
-        )
-
-        # Drop old table and rename new table
-        cursor.execute(f"DROP TABLE {badges_table_name}")
-        cursor.execute(
-            f"ALTER TABLE {badges_table_name}_new RENAME TO {badges_table_name}"
-        )
         conn.commit()
     except Exception as e:
-        print(f"Error migrating badges table: {e}")
+        print(f"Error adding context column to tasks table: {e}")
         conn.rollback()
     finally:
         conn.close()
