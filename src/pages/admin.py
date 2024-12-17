@@ -394,6 +394,13 @@ def validate_task_metadata_params():
     return error_text
 
 
+def get_task_context():
+    if "task_context" in st.session_state and st.session_state.task_context:
+        return st.session_state.task_context
+
+    return None
+
+
 def add_verified_task_to_list(final_answer):
     error_text = ""
     if not st.session_state.task_name:
@@ -408,7 +415,7 @@ def add_verified_task_to_list(final_answer):
         st.error(error_text)
         return
 
-    context = st.session_state.task_context if st.session_state.task_context else None
+    context = get_task_context()
 
     task_id = store_task_to_db(
         st.session_state.task_name,
@@ -1015,7 +1022,7 @@ def bulk_upload_tasks_to_db(
         else:
             answer = None
 
-        context = st.session_state.task_context if st.session_state.task_context else None
+        context = get_task_context()
 
         task_id = store_task_to_db(
             row["Name"],
