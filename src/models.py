@@ -11,6 +11,7 @@ class ChatRole(str, Enum):
 class ResponseType(str, Enum):
     TEXT = "text"
     CODE = "code"
+    AUDIO = "audio"
 
 
 class ChatMessage(BaseModel):
@@ -30,7 +31,7 @@ class Task(BaseModel):
     id: int
     name: str
     description: str
-    answer: str
+    answer: Optional[str]
     tags: List[str]
     generation_model: str
     verified: bool

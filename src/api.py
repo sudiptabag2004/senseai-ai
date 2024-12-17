@@ -24,7 +24,7 @@ async def get_chat_history() -> List[ChatMessage]:
     "/tasks",
     response_model=List[Task],
 )
-async def get_tasks(org_id: int = None) -> List[Task]:
+async def get_tasks(org_id: int) -> List[Task]:
     return get_all_tasks_for_org_or_course(org_id=org_id)
 
 
