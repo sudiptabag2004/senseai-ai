@@ -408,6 +408,8 @@ def add_verified_task_to_list(final_answer):
         st.error(error_text)
         return
 
+    context = st.session_state.task_context if st.session_state.task_context else None
+
     task_id = store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
@@ -421,6 +423,7 @@ def add_verified_task_to_list(final_answer):
         st.session_state.tests,  # Add this line to include the tests
         st.session_state.milestone["id"] if st.session_state.milestone else None,
         st.session_state.org_id,
+        context,
     )
 
     if st.session_state.selected_task_courses:
@@ -598,6 +601,18 @@ def edit_tests_for_task(
         ):
             update_tests_for_task_in_db(task_id, [], "Tests deleted successfully!")
             st.rerun()
+
+
+def context_addition_form():
+    if st.checkbox(
+        "I want to add supporting material for AI to use as reference", False
+    ):
+        st.text_area(
+            "Supporting material",
+            key="task_context",
+            placeholder="e.g. any information that is proprietary or not available in the public domain but is required to answer the task",
+            help="AI will use this supporting material to assess the student's response and give feedback",
+        )
 
 
 def milestone_selector():
@@ -810,11 +825,14 @@ def show_scoring_criteria_addition_form(scoring_criteria):
 
 @st.dialog("Add a new task")
 def show_task_form():
-    st.text_input("Name", key="task_name")
+    st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales")
     st.text_area(
         "Description",
         key="task_description",
+        placeholder="e.g. Write a short story about a cat",
     )
+
+    context_addition_form()
 
     cols = st.columns(2)
 
@@ -845,15 +863,25 @@ def show_task_form():
         cols = st.columns([3.5, 1])
 
         cols[-1].container(height=10, border=False)
+
+        is_task_details_missing = (
+            not st.session_state.task_description or not st.session_state.task_name
+        )
+        is_generate_answer_disabled = (
+            is_task_details_missing
+            or st.session_state.final_answer != ""
+            or st.session_state.ai_answer != ""
+        )
+        generate_help_text = (
+            "Task name or description is missing"
+            if is_task_details_missing
+            else "Answer already added" if is_generate_answer_disabled else ""
+        )
         if cols[-1].button(
             "Generate",
-            disabled=(
-                not st.session_state.task_description
-                or not st.session_state.task_name
-                or st.session_state.final_answer != ""
-                or st.session_state.ai_answer != ""
-            ),
+            disabled=is_generate_answer_disabled,
             key="generate_answer",
+            help=generate_help_text,
         ):
             with cols[0]:
                 generate_answer_for_form_task()
@@ -861,6 +889,7 @@ def show_task_form():
         final_answer = cols[0].text_area(
             "Answer",
             key="final_answer",
+            placeholder="If your task has a correct answer, write it here",
             value=st.session_state.ai_answer,
         )
         if not final_answer and st.session_state.ai_answer:
@@ -986,6 +1015,8 @@ def bulk_upload_tasks_to_db(
         else:
             answer = None
 
+        context = st.session_state.task_context if st.session_state.task_context else None
+
         task_id = store_task_to_db(
             row["Name"],
             row["Description"],
@@ -1003,6 +1034,7 @@ def bulk_upload_tasks_to_db(
                 else None
             ),
             st.session_state.org_id,
+            context,
         )
         new_task_ids.append(task_id)
 
@@ -1026,6 +1058,8 @@ def bulk_upload_tasks_to_db(
 
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
+    context_addition_form()
+
     cols = st.columns(2)
 
     with cols[0]:
