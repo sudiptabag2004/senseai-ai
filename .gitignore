@@ -16,3 +16,4 @@ demo/db/
 src/db
 scripts
 .env.aws
+*.pkl

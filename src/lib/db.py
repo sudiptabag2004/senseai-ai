@@ -187,7 +187,7 @@ def create_milestones_table(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                color TEXT
+                color TEXT,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -199,7 +199,7 @@ def create_tag_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -259,6 +259,7 @@ def create_tasks_table(cursor):
                     org_id INTEGER NOT NULL,
                     response_type TEXT NOT NULL,
                     context TEXT,
+                    deleted_at DATETIME,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
@@ -645,7 +646,7 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
 
     query_params = ()
     if org_id is not None:
-        query += " WHERE t.org_id = ?"
+        query += " WHERE t.org_id = ? AND t.deleted_at IS NULL"
         query_params += (org_id,)
         query += f"""
         GROUP BY t.id
@@ -654,7 +655,7 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
     elif course_id is not None:
         query += f""" 
         INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
-        WHERE ct.course_id = ?
+        WHERE ct.course_id = ? AND t.deleted_at IS NULL
         GROUP BY t.id
         ORDER BY ct.ordering ASC
         """
@@ -711,7 +712,7 @@ def get_task_by_id(task_id: int):
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
     LEFT JOIN {organizations_table_name} o ON t.org_id = o.id
-    WHERE t.id = ?
+    WHERE t.id = ? AND t.deleted_at IS NULL
     GROUP BY t.id
     """,
         (task_id,),
@@ -767,44 +768,9 @@ def delete_task(task_id: int):
     try:
         cursor.execute(
             f"""
-        DELETE FROM {tests_table_name} WHERE task_id = ?
+        UPDATE {tasks_table_name} SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL
         """,
-            (task_id,),
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {course_tasks_table_name} WHERE task_id = ?
-        """,
-            (task_id,),
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {task_tags_table_name} WHERE task_id = ?
-        """,
-            (task_id,),
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {chat_history_table_name} WHERE task_id = ?
-        """,
-            (task_id,),
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {task_scoring_criteria_table_name} WHERE task_id = ?
-        """,
-            (task_id,),
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {tasks_table_name} WHERE id = ?
-        """,
-            (task_id,),
+            (datetime.now(), task_id),
         )
 
         conn.commit()
@@ -824,38 +790,9 @@ def delete_tasks(task_ids: List[int]):
     try:
         cursor.execute(
             f"""
-        DELETE FROM {tests_table_name} WHERE task_id IN ({task_ids_as_str})
-        """
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {course_tasks_table_name} WHERE task_id IN ({task_ids_as_str})
-        """
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {task_tags_table_name} WHERE task_id IN ({task_ids_as_str})
-        """
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {chat_history_table_name} WHERE task_id IN ({task_ids_as_str})
-        """
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {task_scoring_criteria_table_name} WHERE task_id IN ({task_ids_as_str})
-        """
-        )
-
-        cursor.execute(
-            f"""
-        DELETE FROM {tasks_table_name} WHERE id IN ({task_ids_as_str})
-        """
+        UPDATE {tasks_table_name} SET deleted_at = ? WHERE id IN ({task_ids_as_str}) AND deleted_at IS NULL
+        """,
+            (datetime.now(),),
         )
 
         conn.commit()
@@ -864,20 +801,6 @@ def delete_tasks(task_ids: List[int]):
         raise e
     finally:
         conn.close()
-
-
-def delete_all_tasks():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        f"""
-    DELETE FROM {tasks_table_name}
-    """
-    )
-
-    conn.commit()
-    conn.close()
 
 
 def store_message(
@@ -944,7 +867,8 @@ def get_all_chat_history():
     SELECT message.id, message.timestamp, user.id AS user_id, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
     FROM {chat_history_table_name} message
     INNER JOIN {tasks_table_name} task ON message.task_id = task.id
-    INNER JOIN {users_table_name} user ON message.user_id = user.id
+    INNER JOIN {users_table_name} user ON message.user_id = user.id 
+    WHERE task.deleted_at IS NULL
     ORDER BY message.timestamp ASC
     """
     )
@@ -1017,7 +941,7 @@ def get_solved_tasks_for_user(
         JOIN {tasks_table_name} t ON t.id = ch.task_id
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-        WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ?
+        WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ? AND t.deleted_at IS NULL
         """,
             (user_id, cohort_id),
         )
@@ -1038,7 +962,7 @@ def get_solved_tasks_for_user(
             JOIN {tasks_table_name} t ON t.id = ch.task_id
             JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
             JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-            WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ?
+            WHERE ch.user_id = ? AND ch.is_solved = 1 AND cc.cohort_id = ? AND t.deleted_at IS NULL
             GROUP BY ch.task_id
         )
         SELECT DISTINCT task_id 
@@ -1821,6 +1745,7 @@ def get_all_milestone_progress(user_id: int, course_id: int):
                 JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
                 WHERE t2.milestone_id = m.id 
                 AND ct2.course_id = ?
+                AND t2.deleted_at IS NULL
             )
         ) AS completed_tasks
     FROM 
@@ -1830,7 +1755,7 @@ def get_all_milestone_progress(user_id: int, course_id: int):
     LEFT JOIN
         {course_tasks_table_name} ct ON t.id = ct.task_id
     WHERE 
-        t.verified = 1 AND ct.course_id = ?
+        t.verified = 1 AND ct.course_id = ? AND t.deleted_at IS NULL
     GROUP BY 
         m.id, m.name, m.color
     HAVING 
@@ -1862,6 +1787,7 @@ def get_all_milestone_progress(user_id: int, course_id: int):
                 JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
                 WHERE t2.milestone_id IS NULL 
                 AND ct2.course_id = ?
+                AND t2.deleted_at IS NULL
             )
         ) AS completed_tasks
     FROM 
@@ -1871,6 +1797,7 @@ def get_all_milestone_progress(user_id: int, course_id: int):
     WHERE 
         t.milestone_id IS NULL 
         AND t.verified = 1 
+        AND t.deleted_at IS NULL
         AND ct.course_id = ?
     HAVING
         COUNT(DISTINCT t.id) > 0
@@ -3032,7 +2959,8 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
         LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
-        WHERE ct.course_id = ?"""
+        WHERE ct.course_id = ? AND t.deleted_at IS NULL
+        """
 
     params = [course_id]
 
@@ -3112,17 +3040,19 @@ def seed_badges_table_with_cohort_id():
 def migrate_tasks_table():
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Add deleted_at column if it doesn't exist
+    cursor.execute(f"PRAGMA table_info({tasks_table_name})")
+    columns = cursor.fetchall()
+
     try:
-        # Add context column to tasks table
-        cursor.execute(f"PRAGMA table_info({tasks_table_name})")
-        columns = cursor.fetchall()
-
-        if not any(column[1] == "context" for column in columns):
-            cursor.execute(f"ALTER TABLE {tasks_table_name} ADD COLUMN context TEXT")
-
+        if not any(column[1] == "deleted_at" for column in columns):
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN deleted_at DATETIME"
+            )
         conn.commit()
     except Exception as e:
-        print(f"Error adding context column to tasks table: {e}")
+        print(f"Error adding deleted_at column to tasks table: {e}")
         conn.rollback()
     finally:
         conn.close()

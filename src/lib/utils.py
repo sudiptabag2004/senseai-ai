@@ -1,6 +1,7 @@
 import json
 import random
 import colorsys
+import pickle
 from datetime import datetime, timezone, timedelta
 
 
@@ -11,6 +12,16 @@ def load_json(path: str) -> dict:
 
 def save_json(path: str, data: dict, indent: int = 4):
     json.dump(data, open(path, "w"), indent=indent)
+
+
+def load_pickle(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+def save_pickle(path, data):
+    with open(path, "wb") as f:
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 
 def get_date_from_str(date_str: str, source_timezone: str) -> datetime.date:
