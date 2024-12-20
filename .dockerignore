@@ -1,0 +1,5 @@
+venv/
+src/lib/db/
+__pycache__/
+src/experimental/
+*.pkl

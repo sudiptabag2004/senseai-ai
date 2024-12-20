@@ -232,6 +232,7 @@ async def call_openai_chat_model(
         "top_p": 1,
         "frequency_penalty": 0,
         "presence_penalty": 0,
+        "store": True,
     }
     llm = ChatOpenAI(model=model, **common_model_args, **openai_model_kwargs)
     # if not kwargs.get("skip_token_limit_check"):
