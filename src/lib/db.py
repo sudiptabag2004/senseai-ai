@@ -1663,7 +1663,7 @@ def get_all_milestones():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {milestones_table_name}")
+    cursor.execute(f"SELECT id, name, color FROM {milestones_table_name}")
     milestones = cursor.fetchall()
 
     conn.close()
@@ -1675,7 +1675,10 @@ def get_all_milestones_for_org(org_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"SELECT * FROM {milestones_table_name} WHERE org_id = ?", (org_id,))
+    cursor.execute(
+        f"SELECT id, name, color FROM {milestones_table_name} WHERE org_id = ?",
+        (org_id,),
+    )
     milestones = cursor.fetchall()
 
     conn.close()

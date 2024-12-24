@@ -21,7 +21,7 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   ```
 - Install packages
   ```
-  pip install -r requirements.txt
+  pip install -r requirements-dev.txt
   ```
 - Install `ffmpeg` and `poppler`
 
