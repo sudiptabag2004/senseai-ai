@@ -44,6 +44,10 @@ from lib.output_formats.chat import (
     display_user_chat_message,
     get_ai_chat_response,
 )
+from lib.output_formats.reading import (
+    get_containers as get_reading_containers,
+)
+
 from lib.ui import (
     cleanup_ai_response,
 )
@@ -121,6 +125,7 @@ except ValueError:
 
 task = get_task_by_id(task_id)
 
+
 if not task:
     st.error("No task found")
     st.stop()
@@ -160,7 +165,7 @@ if "chat_history" not in st.session_state:
         task_id, task_user_id
     )
 
-    if task["type"] == "audio":
+    if task["input_type"] == "audio":
         with st.spinner("Loading..."):
             for message in st.session_state.chat_history:
                 if message["role"] == "user":
@@ -169,9 +174,10 @@ if "chat_history" not in st.session_state:
                     )
 
 if "is_solved" not in st.session_state:
+    last_user_message_index = -1 if task["type"] == "reading_material" else -2
     st.session_state.is_solved = (
         len(st.session_state.chat_history)
-        and st.session_state.chat_history[-2]["is_solved"]
+        and st.session_state.chat_history[last_user_message_index]["is_solved"]
     )
 
 if "displayed_attempt_index" not in st.session_state:
@@ -233,6 +239,25 @@ if st.session_state.is_solved:
 
 back_to_home_button()
 
+
+def mark_as_read():
+    st.balloons()
+    st.session_state.is_solved = True
+    time.sleep(2)
+    store_message_to_db(
+        task_user_id, task_id, "user", None, st.session_state.is_solved, None
+    )
+
+
+if task["type"] == "reading_material":
+    button_text = "✅ Marked as Read" if st.session_state.is_solved else "Mark as Read"
+    st.button(
+        button_text,
+        on_click=mark_as_read,
+        type="primary",
+        disabled=st.session_state.is_solved,
+    )
+
 show_task_name(
     task,
     task_name_container_background_color,
@@ -240,24 +265,30 @@ show_task_name(
     st.session_state.is_solved,
 )
 
-if task["response_type"] in ["chat", "exam"]:
-    containers = get_chat_containers(task, st.session_state.is_review_mode)
-    if task["type"] == "coding" and not st.session_state.is_review_mode:
-        (
-            description_container,
-            chat_container,
-            chat_input_container,
-            code_editor_container,
-        ) = containers
+if task["type"] == "question":
+    if task["response_type"] in ["chat", "exam"]:
+        containers = get_chat_containers(task, st.session_state.is_review_mode)
+        if task["input_type"] == "coding" and not st.session_state.is_review_mode:
+            (
+                description_container,
+                chat_container,
+                chat_input_container,
+                code_editor_container,
+            ) = containers
+        else:
+            description_container, chat_container, chat_input_container = containers
+
     else:
-        description_container, chat_container, chat_input_container = containers
+        (
+            navigation_container,
+            description_container,
+            user_input_display_container,
+            ai_report_container,
+        ) = get_report_containers()
+
 else:
-    (
-        navigation_container,
-        description_container,
-        user_input_display_container,
-        ai_report_container,
-    ) = get_report_containers()
+    user_input_display_container = None
+    description_container = get_reading_containers()
 
 
 with description_container:
@@ -298,66 +329,70 @@ if "ai_chat_history" not in st.session_state:
             else:
                 st.session_state.ai_chat_history.add_ai_message(message["content"])
 
-
-if not st.session_state.chat_history:
-    empty_container = None
-    if task["response_type"] in ["chat", "exam"]:
-        if st.session_state.is_review_mode:
-            chat_container.warning("No task history found")
-        else:
-            empty_container = chat_container.empty()
-            with empty_container:
-                st.warning("Your task history will appear here!")
-    else:
-        if st.session_state.is_review_mode:
-            user_input_display_container.warning("No task history found")
-        else:
-            with user_input_display_container:
-                st.warning("Your response will appear here!")
-else:
-    if task["response_type"] in ["chat", "exam"]:
-        # Display chat messages from history on app rerun
-        for index, message in enumerate(st.session_state.chat_history):
-            if message["role"] == "user":
-                # import ipdb; ipdb.set_trace()
-                display_user_chat_message(chat_container, message["content"])
+if task["type"] == "question":
+    if not st.session_state.chat_history:
+        empty_container = None
+        if task["response_type"] in ["chat", "exam"]:
+            if st.session_state.is_review_mode:
+                chat_container.warning("No task history found")
             else:
-                with chat_container.chat_message(message["role"]):
-                    ai_message = cleanup_ai_response(message["content"])
-
-                    st.markdown(ai_message, unsafe_allow_html=True)
-    else:
-        st.session_state.current_num_attempts = len(st.session_state.chat_history) // 2
-
-        set_display_for_restoring_history()
-
-        if st.session_state.current_num_attempts > 1:
-            show_attempt_picker(navigation_container)
-
-        displayed_user_message_index = (
-            st.session_state.displayed_attempt_index - 1
-        ) * 2
-
-        if task["type"] == "text":
-            display_user_text_input_report(
-                user_input_display_container,
-                st.session_state.chat_history[displayed_user_message_index]["content"],
-            )
+                empty_container = chat_container.empty()
+                with empty_container:
+                    st.warning("Your task history will appear here!")
         else:
-            display_user_audio_input_report(
-                user_input_display_container,
-                st.session_state.chat_history[displayed_user_message_index]["data"],
+            if st.session_state.is_review_mode:
+                user_input_display_container.warning("No task history found")
+            else:
+                with user_input_display_container:
+                    st.warning("Your response will appear here!")
+    else:
+        if task["response_type"] in ["chat", "exam"]:
+            # Display chat messages from history on app rerun
+            for index, message in enumerate(st.session_state.chat_history):
+                if message["role"] == "user":
+                    # import ipdb; ipdb.set_trace()
+                    display_user_chat_message(chat_container, message["content"])
+                else:
+                    with chat_container.chat_message(message["role"]):
+                        ai_message = cleanup_ai_response(message["content"])
+
+                        st.markdown(ai_message, unsafe_allow_html=True)
+        else:
+            st.session_state.current_num_attempts = (
+                len(st.session_state.chat_history) // 2
             )
 
-        show_ai_report(
-            json.loads(
-                st.session_state.chat_history[displayed_user_message_index + 1][
-                    "content"
-                ]
-            ),
-            ["Category", "Feedback", "Score"],
-            ai_report_container,
-        )
+            set_display_for_restoring_history()
+
+            if st.session_state.current_num_attempts > 1:
+                show_attempt_picker(navigation_container)
+
+            displayed_user_message_index = (
+                st.session_state.displayed_attempt_index - 1
+            ) * 2
+
+            if task["input_type"] == "text":
+                display_user_text_input_report(
+                    user_input_display_container,
+                    st.session_state.chat_history[displayed_user_message_index][
+                        "content"
+                    ],
+                )
+            else:
+                display_user_audio_input_report(
+                    user_input_display_container,
+                    st.session_state.chat_history[displayed_user_message_index]["data"],
+                )
+
+            show_ai_report(
+                json.loads(
+                    st.session_state.chat_history[displayed_user_message_index + 1][
+                        "content"
+                    ]
+                ),
+                ["Category", "Feedback", "Score"],
+                ai_report_container,
+            )
 
 
 def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]):
@@ -454,7 +489,7 @@ def get_ai_feedback_report_text_input(user_response: str):
         st.session_state.scoring_criteria,
         task["context"],
         ai_report_container,
-        task["type"],
+        task["input_type"],
     )
 
     is_solved = all(
@@ -535,7 +570,7 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
         st.session_state.scoring_criteria,
         task["context"],
         ai_report_container,
-        task["type"],
+        task["input_type"],
     )
 
     is_solved = all(
@@ -607,14 +642,14 @@ def set_ai_running():
     retain_code()
 
 
-if task["type"] == "coding" and not st.session_state.is_review_mode:
+if task["input_type"] == "coding" and not st.session_state.is_review_mode:
     show_code_editor(
         task, code_editor_container, set_ai_running, get_ai_feedback_on_code
     )
 
 user_response_placeholder = "Your response"
 
-if task["type"] == "coding":
+if task["input_type"] == "coding":
     user_response_placeholder = (
         "Use the code editor for submitting code and ask/tell anything else here"
     )
@@ -644,7 +679,7 @@ def show_and_handle_report_input():
     if st.session_state.is_review_mode:
         return
 
-    if task["type"] == "text":
+    if task["input_type"] == "text":
         if user_response := st.chat_input(
             user_response_placeholder,
             key="report_input",
@@ -652,7 +687,7 @@ def show_and_handle_report_input():
             disabled=st.session_state.is_ai_running,
         ):
             get_ai_feedback_report_text_input(user_response)
-    elif task["type"] == "audio":
+    elif task["input_type"] == "audio":
         audio_value = st.audio_input(
             "Record a voice message by pressing on the mic icon",
             disabled=st.session_state.is_ai_running,
@@ -667,14 +702,15 @@ def show_and_handle_report_input():
             audio_data = audio_value.read()
             get_ai_feedback_report_audio_input(audio_data)
     else:
-        raise NotImplementedError(f"Task type {task['type']} not supported")
+        raise NotImplementedError(f"Task type {task['input_type']} not supported")
 
 
-if task["response_type"] in ["chat", "exam"]:
-    if chat_input_container:
-        with chat_input_container:
+if task["type"] == "question":
+    if task["response_type"] in ["chat", "exam"]:
+        if chat_input_container:
+            with chat_input_container:
+                show_and_handle_chat_input()
+        else:
             show_and_handle_chat_input()
     else:
-        show_and_handle_chat_input()
-else:
-    show_and_handle_report_input()
+        show_and_handle_report_input()

@@ -58,6 +58,7 @@ leaderboard_view_types = [
 ]
 all_input_types = ["coding", "text", "audio"]
 all_ai_response_types = ["chat", "report", "exam"]
+all_task_types = ["reading_material", "question"]
 response_type_help_text = """`chat`: AI provides feedback on the student's response and asks questions to nudge them towards the solution\n\n`report`: AI generates a report on the student's response based on a scoring criteria set by you\n\n`exam`: AI checks if the the student's response matches the reference solution without providing any further guidance"""
 
 allowed_input_types = {
@@ -65,5 +66,10 @@ allowed_input_types = {
     "report": ["text", "audio"],
     "exam": ["coding", "text"],
 }
+
+task_type_mapping = [
+    {"label": "Question", "value": "question"},
+    {"label": "Reading Material", "value": "reading_material"}
+]
 
 PDF_PAGE_DIMS = [595, 842]
