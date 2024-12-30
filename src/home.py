@@ -24,6 +24,5 @@ if not logged_in_user:
     login()
 else:
     show_home()
-
 if not st.query_params:
     st.query_params.clear()

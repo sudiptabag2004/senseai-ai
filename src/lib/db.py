@@ -97,7 +97,7 @@ def create_user_organizations_table(cursor):
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, org_id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -113,7 +113,7 @@ def create_badges_table(cursor):
                 image_path TEXT NOT NULL,
                 bg_color TEXT NOT NULL,
                 cohort_id INTEGER NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
                 FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
     )
@@ -160,7 +160,7 @@ def create_cohort_tables(cursor):
                 user_id INTEGER NOT NULL,
                 group_id INTEGER NOT NULL,
                 UNIQUE(user_id, group_id),
-                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id)
+                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
             )"""
     )
@@ -250,16 +250,17 @@ def create_tasks_table(cursor):
                     name TEXT NOT NULL,
                     description TEXT NOT NULL,
                     answer TEXT,
-                    type TEXT NOT NULL DEFAULT 'text',
+                    input_type TEXT,
                     coding_language TEXT,
-                    generation_model TEXT NOT NULL,
+                    generation_model TEXT,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     milestone_id INTEGER,
                     org_id INTEGER NOT NULL,
-                    response_type TEXT NOT NULL,
+                    response_type TEXT,
                     context TEXT,
                     deleted_at DATETIME,
+                    type TEXT,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
@@ -288,11 +289,11 @@ def create_chat_history_table(cursor):
                     user_id INTEGER NOT NULL,
                     task_id INTEGER NOT NULL,
                     role TEXT NOT NULL,
-                    content TEXT NOT NULL,
+                    content TEXT,
                     is_solved BOOLEAN NOT NULL DEFAULT 0,
                     response_type TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                    FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
                     FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
                 )
                 """
@@ -335,7 +336,6 @@ def init_db():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
     if exists(sqlite_db_path):
         if not check_table_exists(organizations_table_name, cursor):
             create_organizations_table(cursor)
@@ -463,7 +463,7 @@ def store_task(
     description: str,
     answer: str,
     tags: List[Dict],
-    task_type: str,
+    input_type: str,
     response_type: str,
     coding_languages: List[str],
     generation_model: str,
@@ -472,6 +472,7 @@ def store_task(
     milestone_id: int,
     org_id: int,
     context: str,
+    task_type: str,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
@@ -481,14 +482,14 @@ def store_task(
     try:
         cursor.execute(
             f"""
-        INSERT INTO {tasks_table_name} (name, description, answer, type, coding_language, generation_model, verified, milestone_id, org_id, response_type, context)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO {tasks_table_name} (name, description, answer, input_type, coding_language, generation_model, verified, milestone_id, org_id, response_type, context, type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 name,
                 description,
                 answer,
-                task_type,
+                input_type,
                 coding_language_str,
                 generation_model,
                 verified,
@@ -496,6 +497,7 @@ def store_task(
                 org_id,
                 response_type,
                 context,
+                task_type,
             ),
         )
 
@@ -541,7 +543,7 @@ def update_task(
     name: str,
     description: str,
     answer: str,
-    task_type: str,
+    input_type: str,
     response_type: str,
     coding_languages: List[str],
     generation_model: str,
@@ -555,14 +557,14 @@ def update_task(
     cursor.execute(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, type = ?, coding_language = ?, generation_model = ?, verified = ?, response_type = ?
+    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, generation_model = ?, verified = ?, response_type = ?
     WHERE id = ?
     """,
         (
             name,
             description,
             answer,
-            task_type,
+            input_type,
             coding_language_str,
             generation_model,
             verified,
@@ -609,7 +611,7 @@ def convert_task_db_to_dict(task, tests):
         "description": task[2],
         "answer": task[3],
         "tags": deserialise_list_from_str(task[4]),
-        "type": task[5],
+        "input_type": task[5],
         "coding_language": deserialise_list_from_str(task[6]),
         "generation_model": task[7],
         "verified": bool(task[8]),
@@ -620,6 +622,7 @@ def convert_task_db_to_dict(task, tests):
         "org_name": task[13],
         "response_type": task[14],
         "context": task[15],
+        "type": task[16],
         "tests": tests,
     }
 
@@ -636,8 +639,8 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
     query = f"""
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        t.response_type, t.context
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
+        t.response_type, t.context, t.type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
@@ -706,7 +709,7 @@ def get_task_by_id(task_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tags,
-        t.type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context, t.type
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
@@ -2958,7 +2961,7 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
         LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
@@ -3044,18 +3047,118 @@ def migrate_tasks_table():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Add deleted_at column if it doesn't exist
     cursor.execute(f"PRAGMA table_info({tasks_table_name})")
     columns = cursor.fetchall()
 
     try:
-        if not any(column[1] == "deleted_at" for column in columns):
+        if not any(column[1] == "input_type" for column in columns):
             cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN deleted_at DATETIME"
+                f"""CREATE TABLE IF NOT EXISTS {tasks_table_name}_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    answer TEXT,
+                    input_type TEXT ,
+                    coding_language TEXT,
+                    generation_model TEXT,
+                    verified BOOLEAN NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    milestone_id INTEGER,
+                    org_id INTEGER NOT NULL,
+                    response_type TEXT,
+                    context TEXT,
+                    deleted_at DATETIME,
+                    type TEXT NOT NULL,
+                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                )"""
             )
+            cursor.execute(
+                f"""
+                INSERT INTO {tasks_table_name}_new 
+                (
+                    id, name, description, answer, input_type, coding_language, generation_model, 
+                    verified, timestamp, milestone_id, org_id, response_type, context, deleted_at, type
+                )
+                SELECT 
+                    id, 
+                    name, 
+                    description, 
+                    answer, 
+                    type as input_type, 
+                    coding_language, 
+                    generation_model, 
+                    verified, 
+                    timestamp, 
+                    milestone_id, 
+                    org_id, 
+                    response_type, 
+                    context, 
+                    deleted_at,
+                    CASE 
+                        WHEN type = 'NA' THEN 'reading_material'
+                        ELSE 'question'
+                    END AS type 
+                FROM {tasks_table_name}
+            """
+            )
+            cursor.execute(f"DROP TABLE {tasks_table_name}")
+            cursor.execute(
+                f"ALTER TABLE {tasks_table_name}_new RENAME TO {tasks_table_name}"
+            )
+
         conn.commit()
     except Exception as e:
         print(f"Error adding deleted_at column to tasks table: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def migrate_chat_history_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""CREATE TABLE IF NOT EXISTS {chat_history_table_name}_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                task_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT,
+                is_solved BOOLEAN NOT NULL DEFAULT 0,
+                response_type TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES tasks (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )"""
+        )
+        cursor.execute(
+            f"""
+            INSERT INTO {chat_history_table_name}_new
+            (
+                id, user_id, task_id, role, content, is_solved, response_type, timestamp
+            )
+            SELECT 
+                id, 
+                user_id, 
+                task_id, 
+                role, 
+                content, 
+                is_solved, 
+                response_type, 
+                timestamp
+            FROM {chat_history_table_name}
+        """
+        )
+        cursor.execute(f"DROP TABLE {chat_history_table_name}")
+        cursor.execute(
+            f"ALTER TABLE {chat_history_table_name}_new RENAME TO {chat_history_table_name}"
+        )
+
+        conn.commit()
+    except Exception as e:
+        print(f"Error migrating chat history table: {e}")
         conn.rollback()
     finally:
         conn.close()

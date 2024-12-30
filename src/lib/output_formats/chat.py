@@ -41,7 +41,7 @@ def delete_user_chat_message(index_to_delete: int):
 
 
 def get_containers(task, is_review_mode):
-    if task["type"] == "coding" and not is_review_mode:
+    if task["input_type"] == "coding" and not is_review_mode:
         chat_column, code_column = st.columns(2)
         description_container = chat_column.container(height=200)
         chat_container = chat_column.container(height=325)

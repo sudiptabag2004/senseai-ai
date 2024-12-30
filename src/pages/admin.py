@@ -30,6 +30,8 @@ from lib.config import (
     group_role_mentor,
     all_ai_response_types,
     all_input_types,
+    all_task_types,
+    task_type_mapping,
     allowed_input_types,
     response_type_help_text,
 )
@@ -379,10 +381,11 @@ def validate_task_metadata_params():
     error_text = ""
     if not st.session_state.ai_response_type:
         error_text = "Please select the AI response type"
-    elif not st.session_state.task_type:
-        error_text = "Please select a task type"
+    elif not st.session_state.input_type:
+        error_text = "Please select a task input type"
     elif (
-        st.session_state.task_type == "coding" and not st.session_state.coding_languages
+        st.session_state.input_type == "coding"
+        and not st.session_state.coding_languages
     ):
         error_text = "Please select at least one coding language"
     elif (
@@ -407,30 +410,38 @@ def add_verified_task_to_list(final_answer):
         error_text = "Please enter a task name"
     elif not st.session_state.task_description:
         error_text = "Please enter a task description"
-    elif st.session_state.ai_response_type == "chat" and not final_answer:
-        error_text = "Please enter an answer"
-    else:
-        error_text = validate_task_metadata_params()
+
+    if not st.session_state.is_task_type_reading:
+        if st.session_state.ai_response_type == "chat" and not final_answer:
+            error_text = "Please enter an answer"
+        else:
+            error_text = validate_task_metadata_params()
     if error_text:
         st.error(error_text)
         return
-
     context = get_task_context()
+
+    model_version = (
+        None
+        if st.session_state["task_type"]["value"] == "reading_material"
+        else model["version"]
+    )
 
     task_id = store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
         final_answer,
         st.session_state.task_tags,
-        st.session_state.task_type,
-        st.session_state.ai_response_type,
+        st.session_state.get("input_type"),
+        st.session_state.get("ai_response_type"),
         st.session_state.coding_languages,
-        model["version"],
+        model_version,
         True,
-        st.session_state.tests,  # Add this line to include the tests
+        st.session_state.tests,
         st.session_state.milestone["id"] if st.session_state.milestone else None,
         st.session_state.org_id,
         context,
+        st.session_state["task_type"]["value"],
     )
 
     if st.session_state.selected_task_courses:
@@ -656,6 +667,7 @@ def course_selector(key_prefix: str, default=None):
 
 
 def task_input_type_selector():
+
     task_input_types = allowed_input_types[st.session_state.ai_response_type]
     default_index = None
     if len(task_input_types) == 1:
@@ -664,17 +676,17 @@ def task_input_type_selector():
     disabled = len(task_input_types) == 1
 
     return st.selectbox(
-        "Select task type",
+        "Select input type",
         task_input_types,
-        key="task_type",
+        key="input_type",
         index=default_index,
         disabled=disabled,
     )
 
 
 def clear_task_input_type():
-    if "task_type" in st.session_state:
-        del st.session_state.task_type
+    if "input_type" in st.session_state:
+        del st.session_state.input_type
 
 
 def ai_response_type_selector():
@@ -684,6 +696,17 @@ def ai_response_type_selector():
         key="ai_response_type",
         help=response_type_help_text,
         index=all_ai_response_types.index("chat"),
+        on_change=clear_task_input_type,
+    )
+
+
+def task_type_selector():
+    return st.selectbox(
+        "Select task type",
+        task_type_mapping,
+        key="task_type",
+        format_func=lambda value: value["label"],
+        index=0,
         on_change=clear_task_input_type,
     )
 
@@ -832,79 +855,82 @@ def show_scoring_criteria_addition_form(scoring_criteria):
 
 @st.dialog("Add a new task")
 def show_task_form():
+
+    task_type_selector()
+
+    st.session_state.is_task_type_reading = (
+        st.session_state["task_type"]["value"] == "reading_material"
+    )
     st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales")
     st.text_area(
         "Description",
         key="task_description",
         placeholder="e.g. Write a short story about a cat",
     )
-
-    context_addition_form()
-
-    cols = st.columns(2)
-
-    with cols[0]:
-        ai_response_type = ai_response_type_selector()
-
-    if not ai_response_type:
-        return
-
-    with cols[1]:
-        task_type = task_input_type_selector()
-
-    if task_type == "coding":
-        coding_language_selector()
-
-        # test cases
-        if st.checkbox("I want to add tests", False):
-            add_tests_to_task(
-                st.session_state.task_name,
-                st.session_state.task_description,
-                mode="add",
-            )
-    else:
-        st.session_state.coding_languages = None
-
     final_answer = None
-    if ai_response_type in ["chat", "exam"]:
-        cols = st.columns([3.5, 1])
+    if not st.session_state.is_task_type_reading:
+        context_addition_form()
+        cols = st.columns(2)
 
-        cols[-1].container(height=10, border=False)
+        with cols[0]:
+            ai_response_type = ai_response_type_selector()
 
-        is_task_details_missing = (
-            not st.session_state.task_description or not st.session_state.task_name
-        )
-        is_generate_answer_disabled = (
-            is_task_details_missing
-            or st.session_state.final_answer != ""
-            or st.session_state.ai_answer != ""
-        )
-        generate_help_text = (
-            "Task name or description is missing"
-            if is_task_details_missing
-            else "Answer already added" if is_generate_answer_disabled else ""
-        )
-        if cols[-1].button(
-            "Generate",
-            disabled=is_generate_answer_disabled,
-            key="generate_answer",
-            help=generate_help_text,
-        ):
-            with cols[0]:
-                generate_answer_for_form_task()
+        if not ai_response_type:
+            return
 
-        final_answer = cols[0].text_area(
-            "Answer",
-            key="final_answer",
-            placeholder="If your task has a correct answer, write it here",
-            value=st.session_state.ai_answer,
-        )
-        if not final_answer and st.session_state.ai_answer:
-            final_answer = st.session_state.ai_answer
+        with cols[1]:
+            input_type = task_input_type_selector()
 
-    elif ai_response_type == "report":
-        show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
-        st.divider()
+        if input_type == "coding":
+            coding_language_selector()
+
+            # test cases
+            if st.checkbox("I want to add tests", False):
+                add_tests_to_task(
+                    st.session_state.task_name,
+                    st.session_state.task_description,
+                    mode="add",
+                )
+
+        final_answer = None
+        if ai_response_type in ["chat", "exam"]:
+            cols = st.columns([3.5, 1])
+
+            cols[-1].container(height=10, border=False)
+            is_task_details_missing = (
+                not st.session_state.task_description or not st.session_state.task_name
+            )
+            is_generate_answer_disabled = (
+                is_task_details_missing
+                or st.session_state.final_answer != ""
+                or st.session_state.ai_answer != ""
+            )
+            generate_help_text = (
+                "Task name or description is missing"
+                if is_task_details_missing
+                else "Answer already added" if is_generate_answer_disabled else ""
+            )
+            if cols[-1].button(
+                "Generate",
+                disabled=is_generate_answer_disabled,
+                key="generate_answer",
+                help=generate_help_text,
+            ):
+                with cols[0]:
+                    generate_answer_for_form_task()
+
+            final_answer = cols[0].text_area(
+                "Answer",
+                key="final_answer",
+                placeholder="If your task has a correct answer, write it here",
+                value=st.session_state.ai_answer,
+            )
+            if not final_answer and st.session_state.ai_answer:
+                final_answer = st.session_state.ai_answer
+
+        elif ai_response_type == "report":
+            show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
+            st.divider()
 
     st.multiselect(
         "Tags",
@@ -1023,13 +1049,12 @@ def bulk_upload_tasks_to_db(
             answer = None
 
         context = get_task_context()
-
         task_id = store_task_to_db(
             row["Name"],
             row["Description"],
             answer,
             task_tags,
-            st.session_state.task_type,
+            st.session_state.input_type,
             st.session_state.ai_response_type,
             st.session_state.coding_languages,
             model["version"],
@@ -1042,6 +1067,7 @@ def bulk_upload_tasks_to_db(
             ),
             st.session_state.org_id,
             context,
+            "question",
         )
         new_task_ids.append(task_id)
 
@@ -1066,7 +1092,6 @@ def bulk_upload_tasks_to_db(
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
     context_addition_form()
-
     cols = st.columns(2)
 
     with cols[0]:
@@ -1076,9 +1101,9 @@ def show_bulk_upload_tasks_form():
         return
 
     with cols[1]:
-        task_type = task_input_type_selector()
+        input_type = task_input_type_selector()
 
-    if task_type == "coding":
+    if input_type == "coding":
         coding_language_selector()
     else:
         st.session_state.coding_languages = None
@@ -1338,6 +1363,7 @@ def show_tasks_tab():
         reset_tests()
         st.session_state.ai_answer = ""
         st.session_state.final_answer = ""
+        st.session_state.coding_languages = None
         reset_scoring_criteria()
         show_task_form()
 
@@ -1358,12 +1384,14 @@ def show_tasks_tab():
         return
 
     df = pd.DataFrame(st.session_state.tasks)
+    # print(st.session_state.tasks)
+    # print(df)
     df["coding_language"] = df["coding_language"].apply(
         lambda x: x.split(",") if isinstance(x, str) else x
     )
     df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
-    cols = st.columns(4)
+    cols = st.columns(5)
     # tasks_with_tags_df = df[df["tags"].notna()]
     # all_tags = np.unique(
     #     list(itertools.chain(*[tags for tags in tasks_with_tags_df["tags"].tolist()]))
@@ -1379,7 +1407,11 @@ def show_tasks_tab():
     )
 
     if filtered_response_types:
-        df = df[df["response_type"].apply(lambda x: x in filtered_response_types)]
+        df = df[
+            df["response_type"].apply(
+                lambda x: x in filtered_response_types if x is not None else False
+            )
+        ]
 
     filtered_input_types = cols[1].pills(
         "Filter by input type",
@@ -1387,9 +1419,21 @@ def show_tasks_tab():
     )
 
     if filtered_input_types:
-        df = df[df["type"].apply(lambda x: x in filtered_input_types)]
+        df = df[
+            df["input_type"].apply(
+                lambda x: x in filtered_input_types if x is not None else False
+            )
+        ]
 
-    filtered_milestones = cols[2].multiselect(
+    filtered_types = cols[2].pills(
+        "Filter by type",
+        all_task_types,
+    )
+
+    if filtered_types:
+        df = df[df["type"].apply(lambda x: x in filtered_types)]
+
+    filtered_milestones = cols[3].multiselect(
         "Filter by milestone",
         st.session_state.milestones,
         format_func=lambda x: x["name"],
@@ -1399,7 +1443,7 @@ def show_tasks_tab():
         filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
         df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
-    verified_filter = cols[3].radio(
+    verified_filter = cols[4].radio(
         "Filter by verification status",
         ["All", "Verified", "Unverified"],
         horizontal=True,
@@ -1436,13 +1480,14 @@ def show_tasks_tab():
         "id",
         "verified",
         "num_tests",
+        "type",
         "name",
         "description",
         "answer",
         "tags",
         "milestone_name",
         "course_names",
-        "type",
+        "input_type",
         "response_type",
         "coding_language",
         "generation_model",
