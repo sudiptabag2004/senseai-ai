@@ -1,4 +1,4 @@
-FROM python:3.9.19-slim-bookworm
+FROM python:3.13.1-slim-bookworm
 
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -35,6 +35,8 @@ RUN wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/w
 # Verify wkhtmltopdf installation
 RUN wkhtmltopdf --version
 
+COPY streamlit-1.41.0-py2.py3-none-any.whl ./
+
 # Copy requirements.txt to the container
 COPY requirements.txt ./
 
@@ -64,6 +66,14 @@ ARG APP_URL
 ARG S3_BUCKET_NAME
 
 ARG S3_FOLDER_NAME
+
+ARG ENV
+
+RUN if [ "$ENV" = "dev" ]; then \
+    cp /src/.streamlit/secrets.dev.toml /src/.streamlit/secrets.toml; \
+    else \
+    cp /src/.streamlit/secrets.prod.toml /src/.streamlit/secrets.toml; \
+    fi
 
 RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME" >> /src/lib/.env
 

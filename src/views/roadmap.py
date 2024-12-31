@@ -8,14 +8,10 @@ from lib.db import (
     get_courses_for_cohort,
 )
 from components.milestone_learner_view import show_milestone_card
-from auth import get_logged_in_user
 
 
-def show_empty_error_message(is_review_mode: bool = False):
-    if is_review_mode:
-        error_message = "No tasks added yet!"
-    else:
-        error_message = "No tasks added yet. Ask your admin to add tasks!"
+def show_empty_error_message():
+    error_message = "No tasks added yet!"
 
     st.error(error_message)
 
@@ -30,14 +26,14 @@ def show_roadmap_as_list(
     df = pd.DataFrame(tasks)
 
     if not len(df):
-        return show_empty_error_message(is_review_mode)
+        return show_empty_error_message()
 
     df["status"] = df.apply(lambda x: "✅" if x["completed"] else "", axis=1)
 
     filtered_df = df[df["verified"]][["status", "id", "name", "description", "tags"]]
 
     if not len(filtered_df):
-        return show_empty_error_message(is_review_mode)
+        return show_empty_error_message()
 
     st.write("Select a task by clicking beside the `id` of the task")
 
@@ -70,7 +66,7 @@ def show_roadmap_as_list(
 
         df_actions.write(confirmation_message)
         task_id = filtered_df.iloc[event.selection["rows"][0]]["id"]
-        link = f"/task?id={task_id}&email={st.session_state.email}&course={course_id}&cohort={cohort_id}"
+        link = f"/task?id={task_id}&course={course_id}&cohort={cohort_id}"
 
         if is_review_mode:
             link += f"&learner={learner_id}&mode=review"
@@ -130,6 +126,10 @@ def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: D
 def show_roadmap_by_course(user_id: int, cohort_id: int):
     cohort_courses = get_courses_for_cohort(cohort_id)
 
+    if not cohort_courses:
+        st.error("No courses found for this cohort")
+        return
+
     tabs = st.tabs([course["name"] for course in cohort_courses])
 
     for tab, course in zip(tabs, cohort_courses):
@@ -152,8 +152,6 @@ def update_task_view():
 
 
 def show_roadmap(cohort_id: int):
-    logged_in_user = get_logged_in_user()
-
     st.toggle(
         "Show List View",
         key="show_list_view",
@@ -161,4 +159,4 @@ def show_roadmap(cohort_id: int):
         on_change=update_task_view,
     )
 
-    show_roadmap_by_course(user_id=logged_in_user["id"], cohort_id=cohort_id)
+    show_roadmap_by_course(user_id=st.session_state.user["id"], cohort_id=cohort_id)

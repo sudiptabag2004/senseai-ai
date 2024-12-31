@@ -1,16 +1,12 @@
 import streamlit as st
 import time
-from typing import Literal, Dict
-from email_validator import validate_email, EmailNotValidError
+from typing import Dict
 from lib.db import (
     insert_or_return_user,
-    get_user_by_email,
-    get_user_by_id,
     get_user_organizations,
     get_db_connection,
     get_org_by_id,
 )
-from lib.profile import get_display_name_for_user
 
 
 def update_user_orgs(user: Dict):
@@ -24,9 +20,12 @@ def set_logged_in_user_orgs(user: Dict):
     update_user_orgs(user)
 
 
-def login_or_signup_user(email: str):
+def login_or_signup_user(email: str, given_name: str = None, family_name: str = None):
+    if "user" in st.session_state:
+        return st.session_state.user
+
     st.session_state.email = email
-    st.session_state.user = insert_or_return_user(email)
+    st.session_state.user = insert_or_return_user(email, given_name, family_name)
     set_logged_in_user_orgs(st.session_state.user)
 
 
@@ -46,23 +45,6 @@ def get_hva_org_id():
     return hva_org_id
 
 
-def get_logged_in_user():
-    # TODO: when logged in, set session_state.id and use that everywhere or return it from here or something like that
-    # TODO: add a cache to avoid making DB calls and invalidate cache when user logs out or when user changes their profile details
-    if "user" in st.session_state and st.session_state.user:
-        return st.session_state.user
-
-    if "email" not in st.session_state and "id" not in st.session_state:
-        return None
-
-    if "email" in st.session_state:
-        st.session_state.user = get_user_by_email(st.session_state.email)
-    else:
-        st.session_state.user = get_user_by_id(st.session_state.id)
-
-    return st.session_state.user
-
-
 def unauthorized_redirect_to_home(
     error_message: str = "Not authorized. Redirecting to home page...",
 ):
@@ -71,60 +53,39 @@ def unauthorized_redirect_to_home(
     st.switch_page("./home.py")
 
 
-def set_logged_in_user(
-    value: str,
-    key: str = "email",
-):
-    if key == "id":
-        value = int(value)
-        st.session_state[key] = value
-        st.session_state.user = get_user_by_id(value)
-    else:
-        st.session_state[key] = value
-        st.session_state.user = get_user_by_email(value)
-
-
-def redirect_if_not_logged_in(key: str = "email"):
-    if key not in st.query_params:
+def redirect_if_not_logged_in():
+    if not st.experimental_user.is_authenticated:
         unauthorized_redirect_to_home()
-    else:
-        set_logged_in_user(st.query_params[key], key)
 
 
 def login():
-    logged_in = False
-    placeholder = st.empty()
+    cols = st.columns([2, 3, 1])
 
-    with placeholder.form("login_form"):
-        email = st.text_input("Email")
+    if st.session_state.theme["base"] == "dark":
+        logo_path = "./lib/assets/dark_logo.svg"
+        subtitle_color = "#fff"
+    else:
+        logo_path = "./lib/assets/light_logo.svg"
+        subtitle_color = "#1E2F4D"
 
-        if st.form_submit_button("Login"):
-            try:
-                # Check that the email address is valid. Turn on check_deliverability
-                # for first-time validations like on account creation pages (but not
-                # login pages).
-                emailinfo = validate_email(email, check_deliverability=True)
+    cols[1].image(logo_path, width=400)
 
-                # After this point, use only the normalized form of the email address,
-                # especially before going to a database query.
-                login_or_signup_user(emailinfo.normalized)
-                st.query_params.email = st.session_state.email
-                # st.rerun()
-                logged_in = True
+    cols[1].markdown(
+        f"""
+        <p style='margin-top: 20px; margin-left: 40px; font-size: 2rem; color: {subtitle_color}'>
+        Your personal AI tutor
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
 
-            except EmailNotValidError as e:
-                # The exception message is human-readable explanation of why it's
-                # not a valid (or deliverable) email address.
-                st.error("Invalid email")
+    cols[1].container(height=20, border=False)
 
-    if logged_in:
-        placeholder.empty()
-        st.rerun()
+    sub_cols = cols[1].columns([0.4, 1, 1])
+    google_button = sub_cols[1].button("Login with Google", type="primary")
 
-
-def get_logged_in_user_display_name(name_type: Literal["full", "first"] = "full"):
-    user = get_logged_in_user()
-    return get_display_name_for_user(user, name_type)
+    if google_button:
+        st.experimental_user.login(provider="google")
 
 
 def get_org_details_from_org_id(org_id: int):

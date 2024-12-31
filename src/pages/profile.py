@@ -18,9 +18,10 @@ from components.badge import (
     show_download_badge_button,
 )
 from components.buttons import back_to_home_button
-from auth import redirect_if_not_logged_in
+from auth import redirect_if_not_logged_in, login_or_signup_user
 
-redirect_if_not_logged_in("id")
+redirect_if_not_logged_in()
+login_or_signup_user(st.experimental_user.email)
 
 back_to_home_button()
 
@@ -51,16 +52,12 @@ def profile_header(user: Dict):
         st.text(user["email"])
 
 
-# Assuming the user ID is passed in the query params
-user_id = st.query_params.get("id")
-
-
 def refresh_user():
-    st.session_state.user = get_user_by_id(user_id)
+    st.session_state.user = get_user_by_id(st.session_state.user["id"])
 
 
 def refresh_badges():
-    st.session_state.badges = get_badges_by_user_id(user_id)
+    st.session_state.badges = get_badges_by_user_id(st.session_state.user["id"])
 
 
 refresh_user()
@@ -96,7 +93,9 @@ def update_account_details(
 
     error_placeholder.empty()
 
-    update_user_in_db(user_id, first_name, middle_name, last_name, profile_color)
+    update_user_in_db(
+        st.session_state.user["id"], first_name, middle_name, last_name, profile_color
+    )
     st.rerun()
 
 
@@ -126,9 +125,8 @@ with tabs[0]:
         with cols[0]:
             email = st.text_input(
                 "Email",
-                value=st.session_state.user["email"],
+                value=st.session_state.email,
                 disabled=True,
-                key="email",
             )
 
         with cols[1]:

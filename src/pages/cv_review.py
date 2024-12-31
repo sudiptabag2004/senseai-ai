@@ -27,9 +27,11 @@ from lib.image import get_base64_images
 from lib.llm import get_formatted_history, logger
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
-from auth import redirect_if_not_logged_in
+from auth import redirect_if_not_logged_in, login_or_signup_user
 
-redirect_if_not_logged_in(key="id")
+redirect_if_not_logged_in()
+login_or_signup_user(st.experimental_user.email)
+
 back_to_home_button()
 
 with st.expander("Learn more"):
@@ -334,7 +336,7 @@ def generate_cv_report(pdf: pypdf.PdfReader):
     show_ai_report()
 
     add_cv_review_usage(
-        st.session_state["id"], st.session_state.job_role, json.dumps(rows)
+        st.session_state.user["id"], st.session_state.job_role, json.dumps(rows)
     )
 
 

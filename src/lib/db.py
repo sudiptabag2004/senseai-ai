@@ -1333,7 +1333,7 @@ def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
         users_to_add = []
         for email in emails:
             # Get or create user
-            user = insert_or_return_user(email, conn, cursor)
+            user = insert_or_return_user(email, conn=conn, cursor=cursor)
             users_to_add.append(user["id"])
 
         # Add users to cohort
@@ -1844,7 +1844,23 @@ def convert_user_db_to_dict(user: Tuple) -> Dict:
     }
 
 
-def insert_or_return_user(email: str, conn=None, cursor=None):
+def insert_or_return_user(
+    email: str,
+    given_name: str = None,
+    family_name: str = None,
+    conn=None,
+    cursor=None,
+):
+    if given_name is None:
+        first_name = None
+        middle_name = None
+    else:
+        given_name_parts = given_name.split(" ")
+        first_name = given_name_parts[0]
+        middle_name = " ".join(given_name_parts[1:])
+        if not middle_name:
+            middle_name = None
+
     is_master_connection = False
     if conn is None:
         conn = get_db_connection()
@@ -1861,7 +1877,17 @@ def insert_or_return_user(email: str, conn=None, cursor=None):
         user = cursor.fetchone()
 
         if user:
-            return convert_user_db_to_dict(user)
+            user = convert_user_db_to_dict(user)
+            if user["first_name"] is None and first_name:
+                user = update_user(
+                    user["id"],
+                    first_name,
+                    middle_name,
+                    family_name,
+                    user["default_dp_color"],
+                )
+
+            return user
 
         # create a new user
         color = generate_random_color()
@@ -1917,6 +1943,9 @@ def update_user(
     )
     conn.commit()
     conn.close()
+
+    user = get_user_by_id(user_id)
+    return user
 
 
 def get_all_users():
@@ -2338,7 +2367,7 @@ def add_user_to_org_by_email(
     cursor = conn.cursor()
 
     try:
-        user = insert_or_return_user(email, conn, cursor)
+        user = insert_or_return_user(email, conn=conn, cursor=cursor)
 
         cursor.execute(
             f"""INSERT INTO {user_organizations_table_name}

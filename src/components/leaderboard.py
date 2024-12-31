@@ -5,7 +5,6 @@ from lib.config import leaderboard_view_types
 from lib.profile import get_display_name_for_user
 from models import LeaderboardViewType
 from .base import set_box_style, show_box_header
-from auth import get_logged_in_user
 
 
 def show_user_info(name, email, streak, tasks, rank, show_separator=False):
@@ -116,15 +115,14 @@ def show_leaderboard(cohort_id: int):
                         is_logged_in_user_top_performer = True
 
                 if not is_logged_in_user_top_performer:
-                    logged_in_user = get_logged_in_user()
-
                     streak_count = (
-                        len(get_user_streak(logged_in_user["id"], cohort_id)) or 0
+                        len(get_user_streak(st.session_state.user["id"], cohort_id))
+                        or 0
                     )
                     tasks_completed = (
                         len(
                             get_solved_tasks_for_user(
-                                logged_in_user["id"],
+                                st.session_state.user["id"],
                                 cohort_id,
                                 leaderboard_view_types[tab_index],
                             ),
@@ -134,8 +132,8 @@ def show_leaderboard(cohort_id: int):
                     show_separator = len(top_performers) > 0
 
                     show_user_info(
-                        get_display_name_for_user(logged_in_user),
-                        logged_in_user["email"],
+                        get_display_name_for_user(st.session_state.user),
+                        st.session_state.user["email"],
                         streak_count,
                         tasks_completed,
                         rank=4,

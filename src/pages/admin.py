@@ -35,7 +35,7 @@ from lib.config import (
     allowed_input_types,
     response_type_help_text,
 )
-from lib.init import init_env_vars, init_db
+from lib.init import init_app
 from lib.cache import (
     clear_course_cache_for_cohorts,
     clear_cohort_cache_for_courses,
@@ -99,12 +99,16 @@ from auth import (
     unauthorized_redirect_to_home,
     get_hva_org_id,
     get_org_details_from_org_id,
+    login_or_signup_user,
 )
+from components.buttons import back_to_home_button
 
-init_env_vars()
-init_db()
+init_app()
 
-redirect_if_not_logged_in("id")
+redirect_if_not_logged_in()
+login_or_signup_user(st.experimental_user["email"])
+
+back_to_home_button()
 
 if "org_id" not in st.query_params:
     unauthorized_redirect_to_home("`org_id` not given. Redirecting to home page...")

@@ -61,7 +61,7 @@ def show_links():
 
 
 def clear_auth():
-    st.query_params.clear()
+    st.experimental_user.logout()
     st.session_state.user = None
     st.session_state.email = None
     st.rerun()
@@ -88,10 +88,10 @@ def menu_footer(selected_cohort: Dict, role: str):
                 clear_auth()
 
 
-def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
+def authenticated_menu(selected_cohort: Dict, role: str):
     with st.sidebar:
         st.page_link(
-            f"{os.environ.get('APP_URL')}/profile?id={logged_in_user['id']}",
+            f"{os.environ.get('APP_URL')}/profile",
             label="Your Profile",
             icon="👔",
         )
@@ -115,11 +115,11 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
                 icon="➕",
                 help="Create an organization",
                 on_click=show_create_org_dialog,
-                args=(logged_in_user["id"],),
+                args=(st.session_state.user["id"],),
             )
 
             st.page_link(
-                f"{os.environ.get('APP_URL')}/admin?id={logged_in_user['id']}&org_id={selected_org['id']}",
+                f"{os.environ.get('APP_URL')}/admin?org_id={selected_org['id']}",
                 label="Admin Panel",
                 icon="⚙️",
             )
@@ -139,23 +139,24 @@ def authenticated_menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
         )
 
         st.page_link(
-            f"{os.environ.get('APP_URL')}/interview_practice?id={logged_in_user['id']}",
+            f"{os.environ.get('APP_URL')}/interview_practice",
             label="Practice for Interviews with AI",
             icon="🎙️",
         )
 
         st.page_link(
-            f"{os.environ.get('APP_URL')}/cv_review?id={logged_in_user['id']}",
+            f"{os.environ.get('APP_URL')}/cv_review",
             label="Polish your CV with AI",
             icon="📄",
         )
 
 
-def menu(logged_in_user: Dict, selected_cohort: Dict, role: str):
+def menu(selected_cohort: Dict, role: str):
     show_toast()
     menu_header()
-    if logged_in_user:
-        authenticated_menu(logged_in_user, selected_cohort, role)
+
+    if st.experimental_user.is_authenticated:
+        authenticated_menu(selected_cohort, role)
 
     menu_footer(selected_cohort, role)
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

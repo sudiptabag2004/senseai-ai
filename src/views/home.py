@@ -14,7 +14,6 @@ from lib.db import (
 from components.streak import show_streak
 from components.leaderboard import show_leaderboard
 from lib.url import update_query_params
-from auth import get_logged_in_user
 from menu import menu
 from views.roadmap import show_roadmap
 
@@ -40,15 +39,15 @@ def get_mentor_groups(user_id: int, cohort_id: int):
 
 
 def mentor_view(selected_cohort: Dict):
-    logged_in_user = get_logged_in_user()
-
     selected_group = None
     selected_learner = None
 
     if not selected_cohort:
         return
 
-    mentor_groups = get_mentor_groups(logged_in_user["id"], selected_cohort["id"])
+    mentor_groups = get_mentor_groups(
+        st.session_state.user["id"], selected_cohort["id"]
+    )
 
     cohort_courses = get_courses_for_cohort(selected_cohort["id"])
 
@@ -132,16 +131,14 @@ def mentor_view(selected_cohort: Dict):
     milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
     df_actions.link_button(
         "Yes",
-        f"/roadmap?milestone_id={milestone_id}&email={st.session_state.email}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&course={selected_course['id']}&mode=review",
+        f"/roadmap?milestone_id={milestone_id}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&course={selected_course['id']}&mode=review",
     )
     # print()
     # delete_tasks(event.selection['rows'])
 
 
 def show_home():
-    logged_in_user = get_logged_in_user()
-
-    user_cohorts = get_user_cohorts(logged_in_user["id"])
+    user_cohorts = get_user_cohorts(st.session_state.user["id"])
 
     if "selected_org" not in st.session_state:
         st.session_state["selected_org"] = st.session_state.user_orgs[0]
@@ -170,9 +167,7 @@ def show_home():
 
         if role == "mentor":
             cols[1].container(height=2, border=False)
-            is_mentor = cols[1].toggle(
-                "Switch to mentor view", key="is_mentor", value=True
-            )
+            is_mentor = cols[1].toggle("Mentor view", key="is_mentor", value=True)
             st.divider()
 
         if is_mentor:
@@ -188,4 +183,4 @@ def show_home():
         )
         selected_cohort = None
 
-    menu(logged_in_user, selected_cohort, role)
+    menu(selected_cohort, role)

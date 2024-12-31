@@ -127,7 +127,7 @@ def set_task_view_style():
 
 
 def get_task_url(task: Dict, cohort_id: int, course_id: int):
-    return f"/task?id={task['id']}&email={st.session_state.email}&cohort={cohort_id}&course={course_id}"
+    return f"/task?id={task['id']}&cohort={cohort_id}&course={course_id}"
 
 
 def get_task_view(task: Dict, cohort_id: int, course_id: int, show_button: bool = True):

@@ -16,7 +16,7 @@ from lib.init import init_app
 
 init_app()
 
-from auth import redirect_if_not_logged_in
+from auth import redirect_if_not_logged_in, login_or_signup_user
 from lib.ui import display_waiting_indicator
 from lib.llm import logger, get_formatted_history
 from lib.audio import validate_audio_input, prepare_audio_input_for_ai
@@ -24,7 +24,8 @@ from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
 
-redirect_if_not_logged_in(key="id")
+redirect_if_not_logged_in()
+login_or_signup_user(st.experimental_user.email)
 
 questions = [
     "Tell me about yourself",

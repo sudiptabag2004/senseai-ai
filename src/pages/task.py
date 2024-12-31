@@ -58,7 +58,6 @@ from lib.s3 import (
     download_file_from_s3_as_bytes,
 )
 from lib.chat import MessageHistory
-from auth import get_logged_in_user
 from components.code import (
     get_code_for_ai_feedback,
     retain_code,
@@ -90,12 +89,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-if "email" not in st.query_params:
-    st.error("Not authorized. Redirecting to home page...")
-    time.sleep(2)
-    st.switch_page("./home.py")
-
 if "cohort" not in st.query_params:
     st.error("Not authorized. Redirecting to home page...")
     time.sleep(2)
@@ -109,7 +102,7 @@ if "course" not in st.query_params:
 cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
 
-login_or_signup_user(st.query_params["email"])
+login_or_signup_user(st.experimental_user["email"])
 
 task_id = st.query_params.get("id")
 
@@ -139,9 +132,6 @@ if not task["verified"]:
 st.session_state.scoring_criteria = None
 if task["response_type"] == "report":
     st.session_state.scoring_criteria = get_scoring_criteria_for_task(task_id)
-
-if "user" not in st.session_state:
-    st.session_state.user = get_logged_in_user()
 
 if "learner" in st.query_params:
     task_user_id = st.query_params["learner"]

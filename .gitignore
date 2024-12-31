@@ -17,3 +17,5 @@ src/db
 scripts
 .env.aws
 *.pkl
+secrets.toml
+secrets.*.toml
