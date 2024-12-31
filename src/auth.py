@@ -81,11 +81,15 @@ def login():
 
     cols[1].container(height=20, border=False)
 
-    sub_cols = cols[1].columns([0.4, 1, 1])
-    google_button = sub_cols[1].button("Login with Google", type="primary")
+    sub_cols = cols[1].columns([0.6, 1])
+    google_button = sub_cols[0].button("Sign up or Sign in with Google", type="primary")
 
     if google_button:
         st.experimental_user.login(provider="google")
+
+    sub_cols[-1].link_button(
+        "See Documentation", "https://hypervergeacademy.mintlify.app/"
+    )
 
 
 def get_org_details_from_org_id(org_id: int):

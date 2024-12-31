@@ -174,7 +174,9 @@ def show_home():
             mentor_view(selected_cohort)
         else:
             if role == "admin":
-                st.info("You are seeing the learner view")
+                st.info(
+                    "You are an admin for the cohort. You are seeing the learner view"
+                )
 
             learner_view(selected_cohort)
     else:
