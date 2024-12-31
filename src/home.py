@@ -15,7 +15,7 @@ else:
     login_or_signup_user(
         st.experimental_user.email,
         st.experimental_user.given_name,
-        st.experimental_user.family_name,
+        st.experimental_user.get("family_name"),
     )
     show_home()
 
