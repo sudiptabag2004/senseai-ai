@@ -106,7 +106,7 @@ from components.buttons import back_to_home_button
 init_app()
 
 redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user["email"])
+login_or_signup_user(st.experimental_user.email)
 
 back_to_home_button()
 

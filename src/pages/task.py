@@ -102,7 +102,7 @@ if "course" not in st.query_params:
 cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
 
-login_or_signup_user(st.experimental_user["email"])
+login_or_signup_user(st.experimental_user.email)
 
 task_id = st.query_params.get("id")
 

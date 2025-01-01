@@ -11,7 +11,7 @@ from views.roadmap import get_tasks_with_completion_status, show_roadmap_as_list
 
 init_app()
 redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user["email"])
+login_or_signup_user(st.experimental_user.email)
 
 if (
     "mode" not in st.query_params
