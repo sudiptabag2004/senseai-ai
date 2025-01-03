@@ -69,11 +69,10 @@ ARG S3_FOLDER_NAME
 
 ARG ENV
 
-RUN if [ "$ENV" = "dev" ]; then \
-    cp /src/.streamlit/secrets.dev.toml /src/.streamlit/secrets.toml; \
-    else \
-    cp /src/.streamlit/secrets.prod.toml /src/.streamlit/secrets.toml; \
-    fi
+COPY src/.streamlit/secrets.${ENV}.toml /src/.streamlit/secrets.toml
+
+RUN test -f /src/.streamlit/secrets.dev.toml && rm -f /src/.streamlit/secrets.dev.toml || true
+RUN test -f /src/.streamlit/secrets.prod.toml && rm -f /src/.streamlit/secrets.prod.toml || true
 
 RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME" >> /src/lib/.env
 

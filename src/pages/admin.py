@@ -1837,10 +1837,10 @@ def group_create_edit_form(
             st.rerun()
 
 
-@st.dialog("Create Cohort Groups")
-def show_create_groups_dialog(cohort_id: int, cohort_info: dict):
+@st.dialog("Create Cohort Group")
+def show_create_group_dialog(cohort_id: int, cohort_info: dict):
     group_create_edit_form(
-        "create_groups_form",
+        "create_group_form",
         cohort_id,
         cohort_info,
     )
@@ -1997,8 +1997,8 @@ def show_cohort_overview(selected_cohort: Dict):
     cols = st.columns([1, 2, 3.5])
     if cols[0].button("Add Members"):
         show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
-    if cols[1].button("Create Groups"):
-        show_create_groups_dialog(selected_cohort["id"], cohort_info)
+    if cols[1].button("Create Group"):
+        show_create_group_dialog(selected_cohort["id"], cohort_info)
 
     learners = []
     mentors = []
