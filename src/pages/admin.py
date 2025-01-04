@@ -1200,14 +1200,20 @@ def update_tasks_with_new_value(
 @st.dialog("Edit tasks")
 def show_task_edit_dialog(task_ids):
     column_to_update = st.selectbox(
-        "Select a column to update", ["type", "coding_language", "milestone"]
+        "Select a column to update",
+        [
+            {"label": "Task type", "value": "type"},
+            {"label": "Coding language", "value": "coding_language"},
+            {"label": "Milestone", "value": "milestone"},
+        ],
+        format_func=lambda x: x["label"],
     )
     kwargs = {}
     db_column = None
-    if column_to_update == "type":
+    if column_to_update["value"] == "type":
         option_component = st.selectbox
-        options = ["text", "coding"]
-    elif column_to_update == "milestone":
+        options = all_input_types
+    elif column_to_update["value"] == "milestone":
         option_component = st.selectbox
         options = st.session_state.milestones
         kwargs["format_func"] = lambda row: row["name"]
@@ -1227,7 +1233,7 @@ def show_task_edit_dialog(task_ids):
             new_value = new_value[value_key]
 
         if db_column is None:
-            db_column = column_to_update
+            db_column = column_to_update["value"]
 
         update_tasks_with_new_value(task_ids, db_column, new_value)
         st.rerun()
@@ -1395,15 +1401,7 @@ def show_tasks_tab():
     )
     df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
 
-    cols = st.columns(5)
-    # tasks_with_tags_df = df[df["tags"].notna()]
-    # all_tags = np.unique(
-    #     list(itertools.chain(*[tags for tags in tasks_with_tags_df["tags"].tolist()]))
-    # ).tolist()
-    # filter_tags = cols[0].multiselect("Filter by tags", all_tags)
-
-    # if filter_tags:
-    #     df = df[df["tags"].apply(lambda x: any(tag in x for tag in filter_tags))]
+    cols = st.columns([1, 1, 1, 1, 1.5])
 
     filtered_response_types = cols[0].pills(
         "Filter by response type",
@@ -1431,11 +1429,14 @@ def show_tasks_tab():
 
     filtered_types = cols[2].pills(
         "Filter by type",
-        all_task_types,
+        task_type_mapping,
+        format_func=lambda x: x["label"],
+        selection_mode="multi",
     )
 
     if filtered_types:
-        df = df[df["type"].apply(lambda x: x in filtered_types)]
+        filtered_type_values = [x["value"] for x in filtered_types]
+        df = df[df["type"].apply(lambda x: x in filtered_type_values)]
 
     filtered_milestones = cols[3].multiselect(
         "Filter by milestone",
@@ -1456,6 +1457,10 @@ def show_tasks_tab():
     if verified_filter != "All":
         df = df[df["verified"] == (verified_filter == "Verified")]
 
+    if not len(df):
+        st.error("No tasks matching the filters")
+        return
+
     (
         edit_mode_col,
         _,
@@ -1470,32 +1475,40 @@ def show_tasks_tab():
 
     column_config = {
         # 'id': None
-        "description": st.column_config.TextColumn(width="medium"),
-        "answer": st.column_config.TextColumn(width="medium"),
-        "milestone_name": st.column_config.TextColumn(label="milestone"),
+        "verified": st.column_config.CheckboxColumn(label="Is task verified?"),
+        "type": st.column_config.SelectboxColumn(
+            label="Task type", options=all_task_types
+        ),
+        "name": st.column_config.TextColumn(label="Name"),
+        "description": st.column_config.TextColumn(width="medium", label="Description"),
+        "answer": st.column_config.TextColumn(width="medium", label="Answer"),
+        "milestone_name": st.column_config.TextColumn(label="Milestone"),
+        "response_type": st.column_config.TextColumn(label="AI response type"),
+        "input_type": st.column_config.TextColumn(label="User input type"),
+        "tags": st.column_config.ListColumn(label="Tags"),
     }
 
     task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
     df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
 
-    df["course_names"] = df["courses"].apply(lambda x: [course["name"] for course in x])
+    df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
 
     column_order = [
-        "id",
+        # "id",
         "verified",
-        "num_tests",
+        # "num_tests",
         "type",
         "name",
         "description",
         "answer",
         "tags",
         "milestone_name",
-        "course_names",
+        "Courses",
         "input_type",
         "response_type",
-        "coding_language",
-        "generation_model",
-        "timestamp",
+        # "coding_language",
+        # "generation_model",
+        # "timestamp",
     ]
 
     def save_changes_in_edit_mode(edited_df):
@@ -1594,11 +1607,13 @@ def show_tasks_tab():
             use_container_width=True,
             disabled=[
                 "id",
-                "num_tests",
+                # "num_tests",
                 "type",
-                "generation_model",
-                "timestamp",
+                # "generation_model",
+                # "timestamp",
                 "milestone_name",
+                "input_type",
+                "response_type",
             ],
         )
 
@@ -2176,9 +2191,27 @@ def show_cohort_name_update_form(selected_cohort):
 
 def show_cohorts_tab():
     cols = st.columns([1.2, 0.5, 3])
+
+    if (
+        "current_cohort" in st.session_state
+        and st.session_state.current_cohort not in st.session_state.cohorts
+        and "current_cohort_index" in st.session_state
+    ):
+        st.session_state.current_cohort = st.session_state.cohorts[
+            st.session_state.current_cohort_index
+        ]
+
     selected_cohort = cols[0].selectbox(
-        "Select a cohort", st.session_state.cohorts, format_func=lambda row: row["name"]
+        "Select a cohort",
+        st.session_state.cohorts,
+        format_func=lambda cohort: cohort["name"],
+        key="current_cohort",
     )
+
+    if selected_cohort:
+        st.session_state.current_cohort_index = st.session_state.cohorts.index(
+            selected_cohort
+        )
 
     cols[1].container(height=10, border=False)
     if cols[1].button("Create Cohort", type="primary"):
@@ -2461,11 +2494,26 @@ def show_course_name_update_form(selected_course):
 def show_courses_tab():
     cols = st.columns([1.2, 0.5, 0.55, 2.5])
 
+    if (
+        "current_course" in st.session_state
+        and st.session_state.current_course not in st.session_state.courses
+        and "current_course_index" in st.session_state
+    ):
+        st.session_state.current_course = st.session_state.courses[
+            st.session_state.current_course_index
+        ]
+
     selected_course = cols[0].selectbox(
         "Select a course",
         st.session_state.courses,
         format_func=lambda course: course["name"],
+        key="current_course",
     )
+
+    if selected_course:
+        st.session_state.current_course_index = st.session_state.courses.index(
+            selected_course
+        )
 
     cols[1].container(height=10, border=False)
     if cols[1].button("Create Course", type="primary"):
