@@ -1648,6 +1648,7 @@ def show_create_cohort_dialog():
             if "tasks" in st.session_state and st.session_state.tasks:
                 refresh_tasks()
 
+            st.session_state.current_cohort_index = len(st.session_state.cohorts) - 1
             set_toast(f"Cohort `{cohort_name}` created successfully!")
             st.rerun()
 
@@ -1933,6 +1934,8 @@ def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
 
         # invalidate cache
         clear_cohort_cache_for_courses(cohort_info["courses"])
+
+        del st.session_state.current_cohort_index
 
         set_toast("Cohort deleted successfully!")
         st.rerun()
@@ -2274,6 +2277,7 @@ def show_create_course_dialog():
                 clear_course_cache_for_cohorts(st.session_state.course_cohorts)
 
             refresh_courses()
+            st.session_state.current_course_index = len(st.session_state.courses) - 1
             set_toast(f"Course `{course_name}` created successfully!")
             st.rerun()
 
@@ -2335,6 +2339,8 @@ def show_delete_course_confirmation_dialog(course):
 
         # invalidate cache
         clear_course_cache_for_cohorts(course["cohorts"])
+
+        del st.session_state.current_course_index
 
         set_toast("Course deleted successfully!")
         st.rerun()
