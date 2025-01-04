@@ -50,3 +50,10 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
 
     The api will be hosted on http://localhost:8001.
     The docs will be available on http://localhost:8001/docs
+
+
+### Additional steps for contributors
+- Set up `pre-commit` hooks. `pre-commit` should already be installed while installing requirements from the `requirements-dev.txt` file.
+  ```
+  pre-commit install
+  ```
