@@ -32,5 +32,9 @@ def show_create_org_dialog(user_id: int):
         if submit_button:
             create_organization_with_user(org_name, user_id, logo_color)
             update_user_orgs(st.session_state.user)
+
+            # updated currently selected org
+            st.session_state.selected_org = st.session_state.user_orgs[0]
+
             set_toast("Organization created successfully")
             st.rerun()
