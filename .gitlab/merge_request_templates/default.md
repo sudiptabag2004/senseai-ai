@@ -1,13 +1,21 @@
 ## Summary
 (a concise summary of the changes made in the MR)
 
+
+
 ## Tasks Done
 (list of tasks completed - if the changes are reasonably big)
 
+
+
 ## Steps to test
+
+
 
 ## Screenshots
 (if your changes has any UI updates, include screenshots or demo videos of the changes)
+
+
 
 ## MR Checklist
 - [ ] I have tested all my changes for all possible edge cases
