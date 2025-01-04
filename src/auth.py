@@ -4,7 +4,6 @@ from typing import Dict
 from lib.db import (
     insert_or_return_user,
     get_user_organizations,
-    get_db_connection,
     get_org_by_id,
 )
 
@@ -27,22 +26,6 @@ def login_or_signup_user(email: str, given_name: str = None, family_name: str = 
     st.session_state.email = email
     st.session_state.user = insert_or_return_user(email, given_name, family_name)
     set_logged_in_user_orgs(st.session_state.user)
-
-
-def get_hva_org_id():
-    if "hva_org_id" in st.session_state:
-        return st.session_state.hva_org_id
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id FROM organizations WHERE name = ?", ("HyperVerge Academy",)
-    )
-    hva_org_id = cursor.fetchone()[0]
-    conn.close()
-
-    st.session_state.hva_org_id = hva_org_id
-    return hva_org_id
 
 
 def unauthorized_redirect_to_home(

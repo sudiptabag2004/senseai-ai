@@ -3,7 +3,7 @@ from typing import Dict
 import os
 from lib.organization import show_create_org_dialog
 from lib.toast import set_toast, show_toast
-from auth import get_hva_org_id
+from lib.db import get_hva_org_id
 
 # if not theme:
 #     theme = {"base": "light"}

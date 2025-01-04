@@ -89,6 +89,7 @@ from lib.db import (
     update_cohort_name as update_cohort_name_in_db,
     update_task_orders as update_task_orders_in_db,
     get_scoring_criteria_for_task,
+    get_hva_org_id,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -97,7 +98,6 @@ from lib.toast import set_toast, show_toast
 from auth import (
     redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
-    get_hva_org_id,
     get_org_details_from_org_id,
     login_or_signup_user,
 )
