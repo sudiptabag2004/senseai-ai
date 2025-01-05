@@ -69,7 +69,10 @@ allowed_input_types = {
 
 task_type_mapping = [
     {"label": "Question", "value": "question"},
-    {"label": "Reading Material", "value": "reading_material"}
+    {"label": "Reading Material", "value": "reading_material"},
 ]
+task_type_to_label = {
+    task_type["value"]: task_type["label"] for task_type in task_type_mapping
+}
 
 PDF_PAGE_DIMS = [595, 842]

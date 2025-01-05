@@ -423,6 +423,26 @@ def init_db():
             raise exception
 
 
+def add_tags_to_task(task_id: int, tag_ids_to_add: List):
+    if not tag_ids_to_add:
+        return
+
+    execute_many_db_operation(
+        f"INSERT INTO {task_tags_table_name} (task_id, tag_id) VALUES (?, ?)",
+        [(task_id, tag_id) for tag_id in tag_ids_to_add],
+    )
+
+
+def remove_tags_from_task(task_id: int, tag_ids_to_remove: List):
+    if not tag_ids_to_remove:
+        return
+
+    execute_db_operation(
+        f"DELETE FROM {task_tags_table_name} WHERE task_id = ? AND tag_id IN ({','.join(map(str, tag_ids_to_remove))})",
+        (task_id,),
+    )
+
+
 def store_task(
     name: str,
     description: str,
@@ -479,18 +499,19 @@ def store_task(
                 tag_params,
             )
 
-            # Insert test cases
-            test_query = f"INSERT INTO {tests_table_name} (task_id, input, output, description) VALUES (?, ?, ?, ?)"
-            test_params = [
-                (
-                    task_id,
-                    json.dumps(test["input"]),
-                    test["output"],
-                    test.get("description", None),
-                )
-                for test in tests
-            ]
-            cursor.executemany(test_query, test_params)
+            if tests:
+                # Insert test cases
+                test_query = f"INSERT INTO {tests_table_name} (task_id, input, output, description) VALUES (?, ?, ?, ?)"
+                test_params = [
+                    (
+                        task_id,
+                        json.dumps(test["input"]),
+                        test["output"],
+                        test.get("description", None),
+                    )
+                    for test in tests
+                ]
+                cursor.executemany(test_query, test_params)
 
             conn.commit()
             return task_id
@@ -507,15 +528,15 @@ def update_task(
     input_type: str,
     response_type: str,
     coding_languages: List[str],
-    generation_model: str,
-    verified: bool,
+    milestone_id: int,
+    context: str,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
     execute_db_operation(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, generation_model = ?, verified = ?, response_type = ?
+    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, milestone_id = ?, context = ?
     WHERE id = ?
     """,
         (
@@ -524,9 +545,9 @@ def update_task(
             answer,
             input_type,
             coding_language_str,
-            generation_model,
-            verified,
             response_type,
+            milestone_id,
+            context,
             task_id,
         ),
     )
@@ -554,12 +575,17 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
 
 
 def convert_task_db_to_dict(task, tests):
+    tag_ids = list(map(int, deserialise_list_from_str(task[17])))
+    tag_names = deserialise_list_from_str(task[4])
+
+    tags = [{"id": tag_ids[i], "name": tag_names[i]} for i in range(len(tag_ids))]
+
     return {
         "id": task[0],
         "name": task[1],
         "description": task[2],
         "answer": task[3],
-        "tags": deserialise_list_from_str(task[4]),
+        "tags": tags,
         "input_type": task[5],
         "coding_language": deserialise_list_from_str(task[6]),
         "generation_model": task[7],
@@ -584,9 +610,9 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
 
     query = f"""
     SELECT t.id, t.name, t.description, t.answer,
-        GROUP_CONCAT(tg.name) as tags,
+        GROUP_CONCAT(tg.name) as tag_names,
         t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        t.response_type, t.context, t.type
+        t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
@@ -645,8 +671,8 @@ def get_task_by_id(task_id: int):
     task = execute_db_operation(
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
-        GROUP_CONCAT(tg.name) as tags,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context, t.type
+        GROUP_CONCAT(tg.name) as tag_names,
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids
     FROM {tasks_table_name} t
     LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
@@ -692,6 +718,37 @@ def get_scoring_criteria_for_task(task_id: int):
         }
         for row in rows
     ]
+
+
+def get_scoring_criteria_for_tasks(task_ids: List[int]):
+    rows = execute_db_operation(
+        f"""
+        SELECT id, category, description, min_score, max_score, task_id 
+        FROM {task_scoring_criteria_table_name} 
+        WHERE task_id IN ({','.join(map(str, task_ids))})
+        """,
+        fetch_all=True,
+    )
+
+    # Group scoring criteria by task_id
+    criteria_by_task = {}
+    for row in rows:
+        task_id = row[5]
+
+        if task_id not in criteria_by_task:
+            criteria_by_task[task_id] = []
+
+        criteria_by_task[task_id].append(
+            {
+                "id": row[0],
+                "category": row[1],
+                "description": row[2],
+                "range": [row[3], row[4]],
+            }
+        )
+
+    # Return criteria in same order as input task_ids
+    return [criteria_by_task.get(task_id, []) for task_id in task_ids]
 
 
 def delete_task(task_id: int):

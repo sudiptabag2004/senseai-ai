@@ -17,3 +17,4 @@ repos:
     rev: v2.3.1
     hooks:
     -   id: autopep8
+        args: [--ignore=E402, --diff]  # add any other args you need

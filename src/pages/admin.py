@@ -34,6 +34,7 @@ from lib.config import (
     task_type_mapping,
     allowed_input_types,
     response_type_help_text,
+    task_type_to_label,
 )
 from lib.init import init_app
 from lib.cache import (
@@ -89,7 +90,10 @@ from lib.db import (
     update_cohort_name as update_cohort_name_in_db,
     update_task_orders as update_task_orders_in_db,
     get_scoring_criteria_for_task,
+    get_scoring_criteria_for_tasks,
     get_hva_org_id,
+    add_tags_to_task,
+    remove_tags_from_task,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -192,6 +196,7 @@ def reset_tests():
 if "tests" not in st.session_state:
     reset_tests()
 
+
 if "ai_answer" not in st.session_state:
     st.session_state.ai_answer = ""
 
@@ -223,21 +228,29 @@ def update_cohort_uploader_key():
     st.session_state.cohort_uploader_key += 1
 
 
-show_toast()
+def reset_task_form():
+    st.session_state.task_type = None
+    st.session_state.task_name = ""
+    st.session_state.task_description = ""
+    st.session_state.task_milestone = None
+    st.session_state.task_ai_response_type = None
+    st.session_state.task_input_type = None
+    st.session_state.task_tags = []
+    st.session_state.task_courses = []
+    st.session_state.task_answer = ""
+    st.session_state.coding_languages = None
+    st.session_state.ai_answers = None
+    reset_ai_running()
+    reset_tests()
+    reset_scoring_criteria()
 
-# model = st.sidebar.selectbox(
-#     "Model",
-#     [
-#         {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"},
-#         {"label": "gpt-4o-mini", "version": "gpt-4o-mini-2024-07-18"},
-#     ],
-#     format_func=lambda val: val["label"],
-# )
+
+show_toast()
 
 model = {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"}
 
 
-async def generate_answer_for_task(task_name, task_description, verbose=True):
+async def generate_answer_for_task(task_name, task_description):
     system_prompt_template = """You are a helpful and encouraging tutor.\n\nYou will be given a task that has been assigned to a student along with its description.\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description and completely adhere to the requirements without making up anything on your own that is not already present in the description.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
 
     user_prompt_template = (
@@ -267,9 +280,8 @@ async def generate_answer_for_task(task_name, task_description, verbose=True):
             model=model["version"],
             output_parser=output_parser,
             max_tokens=2048,
-            verbose=verbose,
-            # labels=["final_answers", "audit rights"],
-            # model_type=model_type,
+            verbose=True,
+            labels=["generate_answer"],
         )
         return pred_dict["solution"]
     except Exception as exception:
@@ -278,10 +290,11 @@ async def generate_answer_for_task(task_name, task_description, verbose=True):
 
 
 @st.spinner("Generating answer...")
-def generate_answer_for_form_task(verbose=True):
+def generate_answer_for_form_task():
     st.session_state.ai_answer = asyncio.run(
         generate_answer_for_task(
-            st.session_state.task_name, st.session_state.task_description, verbose
+            st.session_state.task_name,
+            st.session_state.task_description,
         )
     )
 
@@ -381,70 +394,99 @@ def update_test_in_session_state(test_index):
     }
 
 
-def validate_task_metadata_params():
-    error_text = ""
-    if not st.session_state.ai_response_type:
-        error_text = "Please select the AI response type"
-    elif not st.session_state.input_type:
-        error_text = "Please select a task input type"
-    elif (
-        st.session_state.input_type == "coding"
-        and not st.session_state.coding_languages
-    ):
-        error_text = "Please select at least one coding language"
-    elif (
-        st.session_state.ai_response_type == "report"
-        and not st.session_state.scoring_criteria
-    ):
-        error_text = "Please add at least one scoring criterion for the report"
-
-    return error_text
-
-
 def get_task_context():
-    if "task_context" in st.session_state and st.session_state.task_context:
+    if not st.session_state.is_task_type_reading and st.session_state.task_has_context:
         return st.session_state.task_context
 
     return None
 
 
-def add_verified_task_to_list(final_answer):
-    error_text = ""
+def get_task_tests():
+    if (
+        not st.session_state.is_task_type_reading
+        and st.session_state.task_input_type == "coding"
+        and st.session_state.task_has_tests
+    ):
+        return st.session_state.tests
+
+    return []
+
+
+def get_model_version():
+    return None if st.session_state.is_task_type_reading else model["version"]
+
+
+def get_task_scoring_criteria():
+    if (
+        not st.session_state.is_task_type_reading
+        and st.session_state.task_ai_response_type == "report"
+    ):
+        return st.session_state.scoring_criteria
+
+    return []
+
+
+def validate_task_metadata_params():
+    if st.session_state.is_task_type_reading:
+        return
+
+    if not st.session_state.task_ai_response_type:
+        return "Please select the AI response type"
+    if not st.session_state.task_input_type:
+        return "Please select a task input type"
+    if (
+        st.session_state.task_input_type == "coding"
+        and not st.session_state.coding_languages
+    ):
+        return "Please select at least one coding language"
+    if (
+        st.session_state.task_ai_response_type == "report"
+        and not st.session_state.scoring_criteria
+    ):
+        return "Please add at least one scoring criterion for the report"
+
+
+def check_task_form_errors():
     if not st.session_state.task_name:
-        error_text = "Please enter a task name"
-    elif not st.session_state.task_description:
-        error_text = "Please enter a task description"
+        return "Please enter a task name"
+
+    if not st.session_state.task_description:
+        return "Please enter a task description"
 
     if not st.session_state.is_task_type_reading:
-        if st.session_state.ai_response_type == "chat" and not final_answer:
-            error_text = "Please enter an answer"
-        else:
-            error_text = validate_task_metadata_params()
+        if (
+            st.session_state.task_ai_response_type in ["chat", "exam"]
+            and not st.session_state.task_answer
+        ):
+            return "Please enter an answer"
+
+        return validate_task_metadata_params()
+
+
+def add_new_task():
+    error_text = check_task_form_errors()
     if error_text:
         st.error(error_text)
         return
-    context = get_task_context()
-
-    model_version = (
-        None
-        if st.session_state["task_type"]["value"] == "reading_material"
-        else model["version"]
-    )
 
     task_id = store_task_to_db(
         st.session_state.task_name,
         st.session_state.task_description,
-        final_answer,
+        st.session_state.task_answer,
         st.session_state.task_tags,
-        st.session_state.get("input_type"),
-        st.session_state.get("ai_response_type"),
+        st.session_state.task_input_type,
+        st.session_state.task_ai_response_type,
         st.session_state.coding_languages,
-        model_version,
+        get_model_version(),
         True,
-        st.session_state.tests,
-        st.session_state.milestone["id"] if st.session_state.milestone else None,
+        get_task_tests(),
+        (
+            st.session_state.task_milestone["id"]
+            if st.session_state.task_milestone
+            else None
+        ),
         st.session_state.org_id,
-        context,
+        get_task_context(),
         st.session_state["task_type"]["value"],
     )
 
@@ -460,7 +502,133 @@ def add_verified_task_to_list(final_answer):
         add_scoring_criteria_to_task(task_id, st.session_state.scoring_criteria)
 
     refresh_tasks()
-    reset_tests()
+    st.rerun()
+
+
+def update_task_courses(task_details: Dict):
+    task_id = task_details["id"]
+
+    if st.session_state.selected_task_courses != task_details["courses"]:
+        # Get current course IDs for this task
+        current_course_ids = [course["id"] for course in task_details["courses"]]
+        # Get selected course IDs
+        selected_course_ids = [
+            course["id"] for course in st.session_state.selected_task_courses
+        ]
+
+        # Find courses to add and remove
+        courses_to_add = [
+            [task_id, course_id]
+            for course_id in selected_course_ids
+            if course_id not in current_course_ids
+        ]
+        courses_to_remove = [
+            [task_id, course_id]
+            for course_id in current_course_ids
+            if course_id not in selected_course_ids
+        ]
+
+        # Add task to new courses
+        if courses_to_add:
+            add_tasks_to_courses(courses_to_add)
+
+        # Remove task from unselected courses
+        if courses_to_remove:
+            remove_tasks_from_courses(courses_to_remove)
+
+
+def is_scoring_criteria_changed(new_task_scoring_criteria, old_task_scoring_criteria):
+    for index, criterion in enumerate(new_task_scoring_criteria):
+        for key in new_task_scoring_criteria[0].keys():
+            if criterion[key] != old_task_scoring_criteria[index][key]:
+                return True
+
+    return False
+
+
+def update_task_scoring_criteria(task_details: Dict):
+    task_id = task_details["id"]
+    new_task_scoring_criteria = get_task_scoring_criteria()
+    old_task_scoring_criteria = task_details.get("scoring_criteria", [])
+
+    if is_scoring_criteria_changed(
+        new_task_scoring_criteria, old_task_scoring_criteria
+    ):
+        scoring_criteria_to_add = [
+            criterion
+            for criterion in new_task_scoring_criteria
+            if criterion not in old_task_scoring_criteria
+        ]
+
+        scoring_criteria_to_remove = [
+            criterion["id"]
+            for criterion in old_task_scoring_criteria
+            if criterion not in new_task_scoring_criteria
+        ]
+
+        if scoring_criteria_to_add:
+            add_scoring_criteria_to_task(task_id, scoring_criteria_to_add)
+
+        if scoring_criteria_to_remove:
+            remove_scoring_criteria_from_task(scoring_criteria_to_remove)
+
+
+def edit_task(task_details):
+    error_text = check_task_form_errors()
+
+    if error_text:
+        st.error(error_text)
+        return True
+
+    task_id = task_details["id"]
+
+    update_task_in_db(
+        task_id,
+        st.session_state.task_name,
+        st.session_state.task_description,
+        st.session_state.task_answer,
+        st.session_state.task_input_type,
+        st.session_state.task_ai_response_type,
+        st.session_state.coding_languages,
+        (
+            st.session_state.task_milestone["id"]
+            if st.session_state.task_milestone
+            else None
+        ),
+        get_task_context(),
+    )
+
+    update_task_courses(task_details)
+    update_task_scoring_criteria(task_details)
+
+    if st.session_state.task_tags != task_details["tags"]:
+        # Get current tag IDs for this task
+        current_tag_ids = [tag["id"] for tag in task_details["tags"]]
+        # Get selected tag IDs
+        selected_tag_ids = [tag["id"] for tag in st.session_state.task_tags]
+
+        # Find tags to add and remove
+        tags_to_add = [
+            tag_id for tag_id in selected_tag_ids if tag_id not in current_tag_ids
+        ]
+        tags_to_remove = [
+            tag_id for tag_id in current_tag_ids if tag_id not in selected_tag_ids
+        ]
+
+        # Add new tag associations
+        if tags_to_add:
+            add_tags_to_task(task_id, tags_to_add)
+
+        # Remove unselected tag associations
+        if tags_to_remove:
+            remove_tags_from_task(task_id, tags_to_remove)
+
+    task_tests = get_task_tests()
+    if task_tests != task_details["tests"]:
+        update_tests_for_task(task_id, task_tests)
+
+    refresh_tasks()
+    set_toast("Task updated")
     st.rerun()
 
 
@@ -535,99 +703,53 @@ def add_tests_to_task(
                 ),
             )
 
-    st.text("Inputs")
-    for i in range(num_test_inputs):
-        st.text_area(
-            f"Input {i + 1}", key=f"new_test_input_{i}", label_visibility="collapsed"
-        )
-
-    st.text("Output")
-    st.text_area("Output", key="test_output", label_visibility="collapsed")
-    st.text("Description (optional)")
-    st.text_area("Description", key="test_description", label_visibility="collapsed")
-
-    def add_test():
-        st.session_state.tests.append(
-            {
-                "input": [
-                    st.session_state[f"new_test_input_{i}"]
-                    for i in range(num_test_inputs)
-                ],
-                "output": st.session_state.test_output,
-                "description": st.session_state.test_description,
-            }
-        )
+    with st.form("add_test"):
+        st.text("Inputs")
         for i in range(num_test_inputs):
-            st.session_state[f"new_test_input_{i}"] = ""
+            st.text_area(
+                f"Input {i + 1}",
+                key=f"new_test_input_{i}",
+                label_visibility="collapsed",
+            )
 
-        st.session_state.test_output = ""
-        st.session_state.test_description = ""
-        set_toast("Added test!")
+        st.text("Output")
+        st.text_area("Output", key="test_output", label_visibility="collapsed")
+        st.text("Description (optional)")
+        st.text_area(
+            "Description", key="test_description", label_visibility="collapsed"
+        )
 
-    st.info(
-        "Tip: Click outside the boxes above after you are done typing the last input before clicking the button below"
-    )
-    st.button("Add Test", on_click=add_test)
+        def add_test():
+            st.session_state.tests.append(
+                {
+                    "input": [
+                        st.session_state[f"new_test_input_{i}"]
+                        for i in range(num_test_inputs)
+                    ],
+                    "output": st.session_state.test_output,
+                    "description": st.session_state.test_description,
+                }
+            )
+            for i in range(num_test_inputs):
+                st.session_state[f"new_test_input_{i}"] = ""
+
+            st.session_state.test_output = ""
+            st.session_state.test_description = ""
+            set_toast("Added test!")
+
+        # st.info(
+        #     "Tip: Click outside the boxes above after you are done typing the last input before clicking the button below"
+        # )
+        st.form_submit_button("Add Test", on_click=add_test)
 
     # st.session_state.tests
 
 
-def update_tests_for_task_in_db(task_id: int, tests, toast_message: str = None):
-    update_tests_for_task(task_id, tests)
-    refresh_tasks()
-    reset_tests()
-    set_toast(toast_message)
-
-
-@st.dialog("Edit tests for task")
-def edit_tests_for_task(
-    df,
-    task_id,
-):
-    task_details = df[df["id"] == task_id].iloc[0]
-    if not st.session_state.tests:
-        st.session_state.tests = deepcopy(task_details["tests"])
-
-    add_tests_to_task(
-        task_details["name"],
-        task_details["description"],
-        mode="edit",
-    )
-
-    cols = st.columns(2) if st.session_state.tests else st.columns(1)
-
-    is_tests_updated = task_details["tests"] != st.session_state.tests
-    if cols[0].button(
-        "Update tests",
-        type="primary",
-        use_container_width=True,
-        disabled=not is_tests_updated,
-        help=(
-            "Nothing to update"
-            if task_details["tests"] == st.session_state.tests
-            else ""
-        ),
-    ):
-        update_tests_for_task_in_db(
-            task_id,
-            st.session_state.tests,
-            toast_message="Tests updated successfully!",
-        )
-        st.rerun()
-
-    if len(cols) == 2:
-        if cols[1].button(
-            "Delete all tests",
-            type="primary" if not is_tests_updated else "secondary",
-            use_container_width=True,
-        ):
-            update_tests_for_task_in_db(task_id, [], "Tests deleted successfully!")
-            st.rerun()
-
-
 def context_addition_form():
     if st.checkbox(
-        "I want to add supporting material for AI to use as reference", False
+        "I want to add supporting material for AI to use as reference",
+        False,
+        key="task_has_context",
     ):
         st.text_area(
             "Supporting material",
@@ -641,7 +763,7 @@ def milestone_selector():
     return st.selectbox(
         "Milestone",
         st.session_state.milestones,
-        key="milestone",
+        key="task_milestone",
         format_func=lambda row: row["name"],
         index=None,
         help="If you don't see the milestone you want, you can create a new one from the `Milestones` tab",
@@ -671,8 +793,10 @@ def course_selector(key_prefix: str, default=None):
 
 
 def task_input_type_selector():
+    if not st.session_state.task_ai_response_type:
+        return
 
-    task_input_types = allowed_input_types[st.session_state.ai_response_type]
+    task_input_types = allowed_input_types[st.session_state.task_ai_response_type]
     default_index = None
     if len(task_input_types) == 1:
         default_index = 0
@@ -682,36 +806,36 @@ def task_input_type_selector():
     return st.selectbox(
         "Select input type",
         task_input_types,
-        key="input_type",
+        key="task_input_type",
         index=default_index,
         disabled=disabled,
     )
 
 
 def clear_task_input_type():
-    if "input_type" in st.session_state:
-        del st.session_state.input_type
+    if "task_input_type" in st.session_state:
+        st.session_state.task_input_type = None
 
 
 def ai_response_type_selector():
     return st.selectbox(
         "Select AI response type",
         all_ai_response_types,
-        key="ai_response_type",
+        key="task_ai_response_type",
         help=response_type_help_text,
-        index=all_ai_response_types.index("chat"),
         on_change=clear_task_input_type,
+        index=None,
     )
 
 
-def task_type_selector():
+def task_type_selector(disabled: bool = False):
     return st.selectbox(
         "Select task type",
         task_type_mapping,
         key="task_type",
         format_func=lambda value: value["label"],
-        index=0,
         on_change=clear_task_input_type,
+        disabled=disabled,
     )
 
 
@@ -769,14 +893,15 @@ def show_scoring_criteria_addition_form(scoring_criteria):
         with st.expander(
             f"{scoring_criterion['category']} ({scoring_criterion['range'][0]} - {scoring_criterion['range'][1]})"
         ):
-            cols = st.columns([5, 1])
+            cols = st.columns([2, 0.5, 1])
             cols[-1].button(
-                "",
+                "Delete",
                 icon="🗑️",
                 key=f"delete_scoring_criterion_{index}",
                 on_click=delete_scoring_criterion,
                 args=(scoring_criteria, index),
                 help="Delete",
+                type="primary",
             )
 
             updated_category = st.text_input(
@@ -857,10 +982,11 @@ def show_scoring_criteria_addition_form(scoring_criteria):
         )
 
 
-@st.dialog("Add a new task")
-def show_task_form():
+def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
+    task_type_selector(disabled=mode == "edit")
 
-    task_type_selector()
+    if not st.session_state.task_type:
+        return
 
     st.session_state.is_task_type_reading = (
         st.session_state["task_type"]["value"] == "reading_material"
@@ -871,7 +997,8 @@ def show_task_form():
         key="task_description",
         placeholder="e.g. Write a short story about a cat",
     )
-    final_answer = None
+
+    task_answer = None
     if not st.session_state.is_task_type_reading:
         context_addition_form()
         cols = st.columns(2)
@@ -889,14 +1016,13 @@ def show_task_form():
             coding_language_selector()
 
             # test cases
-            if st.checkbox("I want to add tests", False):
+            if st.checkbox("I want to add tests", False, key="task_has_tests"):
                 add_tests_to_task(
                     st.session_state.task_name,
                     st.session_state.task_description,
                     mode="add",
                 )
 
-        final_answer = None
         if ai_response_type in ["chat", "exam"]:
             cols = st.columns([3.5, 1])
 
@@ -923,14 +1049,14 @@ def show_task_form():
                 with cols[0]:
                     generate_answer_for_form_task()
 
-            final_answer = cols[0].text_area(
+            task_answer = cols[0].text_area(
                 "Answer",
                 key="final_answer",
                 placeholder="If your task has a correct answer, write it here",
                 value=st.session_state.ai_answer,
             )
-            if not final_answer and st.session_state.ai_answer:
-                final_answer = st.session_state.ai_answer
+            if not task_answer and st.session_state.ai_answer:
+                task_answer = st.session_state.ai_answer
 
         elif ai_response_type == "report":
             show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
@@ -950,21 +1076,42 @@ def show_task_form():
         milestone_selector()
 
     with cols[1]:
-        course_selector("task", default=None)
+        course_selector("task")
 
-    if st.button(
-        "Add task",
-        use_container_width=True,
-        type="primary",
-    ):
-        # st.session_state.vote = {"item": item, "reason": reason}
-        add_verified_task_to_list(final_answer)
+    st.session_state.task_answer = task_answer
+
+    if mode == "add":
+        if st.button(
+            "Add task",
+            use_container_width=True,
+            type="primary",
+        ):
+            add_new_task()
+
+    if mode == "edit":
+        if st.button(
+            "Update task",
+            use_container_width=True,
+            type="primary",
+        ):
+            edit_task(**kwargs)
 
 
-async def generate_answer_for_bulk_task(
-    task_row_index, task_name, task_description, verbose=True
-):
-    answer = await generate_answer_for_task(task_name, task_description, verbose)
+@st.dialog("Add a new task")
+def show_task_addition_form():
+    task_add_edit_form("add")
+
+
+@st.dialog("Edit a task")
+def show_task_edit_form(task_details):
+    task_add_edit_form("edit", task_details=task_details)
+
+
+async def generate_answer_for_bulk_task(task_row_index, task_name, task_description):
+    answer = await generate_answer_for_task(
+        task_name,
+        task_description,
+    )
     return task_row_index, answer
 
 
@@ -978,9 +1125,7 @@ async def generate_answers_for_tasks(tasks_df):
 
     for index, row in tasks_df.iterrows():
         coroutines.append(
-            generate_answer_for_bulk_task(
-                index, row["Name"], row["Description"], verbose=False
-            )
+            generate_answer_for_bulk_task(index, row["Name"], row["Description"])
         )
 
     num_tasks = len(tasks_df)
@@ -990,12 +1135,12 @@ async def generate_answers_for_tasks(tasks_df):
 
     count = 0
 
-    tasks_df["Answer"] = [None] * num_tasks
+    answers = [None] * num_tasks
 
     for completed_task in asyncio.as_completed(coroutines):
         task_row_index, answer = await completed_task
 
-        tasks_df.at[task_row_index, "Answer"] = answer
+        answers[task_row_index] = answer
         count += 1
 
         update_progress_bar(
@@ -1004,21 +1149,20 @@ async def generate_answers_for_tasks(tasks_df):
 
     progress_bar.empty()
     reset_ai_running()
-    return tasks_df
+
+    return answers
 
 
 def bulk_upload_tasks_to_db(
-    tasks_df: pd.DataFrame,
+    tasks_df: pd.DataFrame, display_container, button_container
 ):
     error_text = validate_task_metadata_params()
     if error_text:
         st.error(error_text)
         return
 
-    verified = True
-    if st.session_state.ai_response_type == "chat" and "Answer" not in tasks_df.columns:
-        tasks_df = asyncio.run(generate_answers_for_tasks(tasks_df))
-        verified = False
+    # all tasks are verified for now, the verified/non-verified flow is confusing
+    # verified = True
 
     has_tags = "Tags" in tasks_df.columns
 
@@ -1047,7 +1191,10 @@ def bulk_upload_tasks_to_db(
                 tag for tag in st.session_state.tags if tag["name"] in task_tag_names
             ]
 
-        if st.session_state.ai_response_type == "chat":
+        if (
+            not st.session_state.is_task_type_reading
+            and st.session_state.task_ai_response_type == "chat"
+        ):
             answer = row["Answer"]
         else:
             answer = None
@@ -1058,20 +1205,20 @@ def bulk_upload_tasks_to_db(
             row["Description"],
             answer,
             task_tags,
-            st.session_state.input_type,
-            st.session_state.ai_response_type,
+            st.session_state.task_input_type,
+            st.session_state.task_ai_response_type,
             st.session_state.coding_languages,
             model["version"],
-            verified,
+            True,
             [],
             (
-                st.session_state.milestone["id"]
-                if st.session_state.milestone is not None
+                st.session_state.task_milestone["id"]
+                if st.session_state.task_milestone is not None
                 else None
             ),
             st.session_state.org_id,
             context,
-            "question",
+            st.session_state.task_type["value"],
         )
         new_task_ids.append(task_id)
 
@@ -1093,28 +1240,109 @@ def bulk_upload_tasks_to_db(
     st.rerun()
 
 
+def complete_bulk_update_tasks():
+    refresh_tasks()
+    set_toast("Tasks updated")
+    st.rerun()
+
+
+def show_bulk_update_milestone_tab(all_tasks):
+    with st.form("bulk_update_tasks_milestone_form", border=False):
+        milestone_selector()
+
+        if st.form_submit_button(
+            "Update all tasks", type="primary", use_container_width=True
+        ):
+            task_ids = [task["id"] for task in all_tasks]
+            update_column_for_task_ids(
+                task_ids, "milestone_id", st.session_state.task_milestone["id"]
+            )
+
+            complete_bulk_update_tasks()
+
+
+def show_bulk_update_courses_tab(all_tasks):
+    with st.form("bulk_update_tasks_courses_form", border=False):
+        course_selector("task")
+
+        if st.form_submit_button(
+            "Update all tasks", type="primary", use_container_width=True
+        ):
+            for task in all_tasks:
+                update_task_courses(task)
+
+            complete_bulk_update_tasks()
+
+
+def show_bulk_update_scoring_criteria_tab(all_tasks):
+    show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
+
+    if st.button("Update all tasks", type="primary", use_container_width=True):
+        for task in all_tasks:
+            update_task_scoring_criteria(task)
+
+        complete_bulk_update_tasks()
+
+
+@st.dialog("Bulk edit tasks")
+def show_bulk_edit_tasks_form(all_tasks):
+    # is_incomplete = show_bulk_tasks_metadata_form(mode="edit")
+    unique_task_response_types = list(
+        set([task["response_type"] for task in all_tasks])
+    )
+
+    update_type_tabs = ["Milestone", "Courses"]
+
+    if (
+        len(unique_task_response_types) == 1
+        and unique_task_response_types[0] == "report"
+    ):
+        st.session_state.task_ai_response_type = "report"
+        update_type_tabs.append("Scoring criteria")
+
+    tabs = st.tabs(update_type_tabs)
+
+    with tabs[0]:
+        show_bulk_update_milestone_tab(all_tasks)
+
+    with tabs[1]:
+        show_bulk_update_courses_tab(all_tasks)
+
+    if len(tabs) == 3:
+        with tabs[2]:
+            show_bulk_update_scoring_criteria_tab(all_tasks)
+
+
 @st.dialog("Bulk upload tasks")
 def show_bulk_upload_tasks_form():
-    context_addition_form()
-    cols = st.columns(2)
+    task_type_selector()
 
-    with cols[0]:
-        ai_response_type = ai_response_type_selector()
-
-    if not ai_response_type:
+    if not st.session_state.task_type:
         return
 
-    with cols[1]:
-        input_type = task_input_type_selector()
+    st.session_state.is_task_type_reading = (
+        st.session_state["task_type"]["value"] == "reading_material"
+    )
 
-    if input_type == "coding":
-        coding_language_selector()
-    else:
-        st.session_state.coding_languages = None
+    context_addition_form()
 
-    if ai_response_type == "report":
-        show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
-        st.divider()
+    if not st.session_state.is_task_type_reading:
+        cols = st.columns(2)
+        with cols[0]:
+            ai_response_type = ai_response_type_selector()
+
+        if not ai_response_type:
+            return
+
+        with cols[1]:
+            input_type = task_input_type_selector()
+
+        if input_type == "coding":
+            coding_language_selector()
+
+        if ai_response_type == "report":
+            show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
+            st.divider()
 
     cols = st.columns(2)
     with cols[0]:
@@ -1124,7 +1352,10 @@ def show_bulk_upload_tasks_form():
         course_selector("task", default=None)
 
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
-    if ai_response_type == "chat":
+    if (
+        not st.session_state.is_task_type_reading
+        and st.session_state.task_ai_response_type == "chat"
+    ):
         file_uploader_label += ", `Answer` (optional)"
 
     uploaded_file = st.file_uploader(
@@ -1134,9 +1365,18 @@ def show_bulk_upload_tasks_form():
     )
 
     if uploaded_file:
+        display_container = st.empty()
+        button_container = st.empty()
         tasks_df = pd.read_csv(uploaded_file)
 
-        st.dataframe(tasks_df, hide_index=True)
+        column_config = {
+            "Name": st.column_config.TextColumn(width="small"),
+            "Description": st.column_config.TextColumn(width="medium"),
+        }
+
+        display_container.dataframe(
+            tasks_df, hide_index=True, column_config=column_config
+        )
 
         error_message = None
         for index, row in tasks_df.iterrows():
@@ -1155,13 +1395,32 @@ def show_bulk_upload_tasks_form():
             st.error(error_message)
             return
 
-        if st.button(
+        if (
+            not st.session_state.is_task_type_reading
+            and st.session_state.task_ai_response_type == "chat"
+            and "Answer" not in tasks_df.columns
+        ):
+            if "ai_answers" in st.session_state and st.session_state.ai_answers:
+                tasks_df["Answer"] = st.session_state.ai_answers
+            else:
+                st.session_state.ai_answers = asyncio.run(
+                    generate_answers_for_tasks(tasks_df)
+                )
+                st.toast("Added AI generated answers")
+                tasks_df["Answer"] = st.session_state.ai_answers
+
+            # verified = False
+            display_container.dataframe(
+                tasks_df, hide_index=True, column_config=column_config
+            )
+
+        if button_container.button(
             "Add tasks",
             use_container_width=True,
             type="primary",
             disabled=st.session_state.is_ai_running,
         ):
-            bulk_upload_tasks_to_db(tasks_df)
+            bulk_upload_tasks_to_db(tasks_df, display_container, button_container)
 
 
 def delete_tasks_from_list(task_ids):
@@ -1197,121 +1456,6 @@ def update_tasks_with_new_value(
     st.rerun()
 
 
-@st.dialog("Edit tasks")
-def show_task_edit_dialog(task_ids):
-    column_to_update = st.selectbox(
-        "Select a column to update",
-        [
-            {"label": "Task type", "value": "type"},
-            {"label": "Coding language", "value": "coding_language"},
-            {"label": "Milestone", "value": "milestone"},
-        ],
-        format_func=lambda x: x["label"],
-    )
-    kwargs = {}
-    db_column = None
-    if column_to_update["value"] == "type":
-        option_component = st.selectbox
-        options = all_input_types
-    elif column_to_update["value"] == "milestone":
-        option_component = st.selectbox
-        options = st.session_state.milestones
-        kwargs["format_func"] = lambda row: row["name"]
-        value_key = "id"
-        db_column = "milestone_id"
-    else:
-        option_component = st.multiselect
-        options = coding_languages_supported
-
-    new_value = option_component("Select the new value", options, **kwargs)
-
-    st.write("Are you sure you want to update the selected tasks?")
-
-    confirm_col, cancel_col, _, _ = st.columns([1, 1, 2, 2])
-    if confirm_col.button("Yes", use_container_width=True):
-        if option_component == st.selectbox and isinstance(new_value, dict):
-            new_value = new_value[value_key]
-
-        if db_column is None:
-            db_column = column_to_update["value"]
-
-        update_tasks_with_new_value(task_ids, db_column, new_value)
-        st.rerun()
-
-    if cancel_col.button("No", use_container_width=True, type="primary"):
-        st.rerun()
-
-
-@st.dialog("Update courses for tasks")
-def show_update_task_courses(task_ids, existing_task_course_pairs):
-    # Find courses that all selected tasks belong to
-    task_course_dict = {}
-    for task_id, course_id in existing_task_course_pairs:
-        if task_id not in task_course_dict:
-            task_course_dict[task_id] = set()
-
-        task_course_dict[task_id].add(course_id)
-
-    # Get intersection of course IDs across all tasks
-    common_course_ids = None
-    for task_id in task_ids:
-        task_courses = task_course_dict.get(task_id, set())
-
-        if common_course_ids is None:
-            common_course_ids = task_courses
-            continue
-
-        common_course_ids = common_course_ids.intersection(task_courses)
-
-    # Convert course IDs to course objects for default selection
-    default_courses = [
-        course
-        for course in st.session_state.courses
-        if course["id"] in (common_course_ids or set())
-    ]
-
-    with st.form("update_task_courses_form", border=False):
-        selected_courses = st.multiselect(
-            "Select courses to assign tasks to",
-            st.session_state.courses,
-            format_func=lambda x: x["name"],
-            default=default_courses,
-        )
-
-        st.container(height=30, border=False)
-
-        if st.form_submit_button("Update", use_container_width=True, type="primary"):
-            # our SQL query takes care of existing pairs, so we don't need to filter them here
-            course_tasks_to_keep = list(
-                itertools.chain(
-                    *[
-                        [(task_id, course["id"]) for course in selected_courses]
-                        for task_id in task_ids
-                    ]
-                )
-            )
-
-            if sorted(course_tasks_to_keep, key=lambda x: x[0]) == sorted(
-                existing_task_course_pairs, key=lambda x: x[0]
-            ):
-                st.error("No changes made")
-                return
-
-            course_tasks_to_remove = [
-                pair
-                for pair in existing_task_course_pairs
-                if pair not in course_tasks_to_keep
-            ]
-
-            if course_tasks_to_keep:
-                add_tasks_to_courses(course_tasks_to_keep)
-
-            if course_tasks_to_remove:
-                remove_tasks_from_courses(course_tasks_to_remove)
-
-            st.rerun()
-
-
 tab_names = ["Cohorts", "Courses", "Tasks", "Milestones", "Tags"]
 
 is_hva_org = get_hva_org_id() == st.session_state.org_id
@@ -1323,43 +1467,165 @@ tab_names.append("Settings")
 tabs = st.tabs(tab_names)
 
 
-@st.dialog("Edit Scoring Criteria")
-def show_edit_scoring_criteria_dialog_form(task_id: int):
-    scoring_criteria = get_scoring_criteria_for_task(task_id)
+def set_task_form_with_task_details(task_details: dict):
+    st.session_state.task_name = task_details["name"]
+    st.session_state.task_description = task_details["description"]
 
-    if (
-        "updated_scoring_criteria" not in st.session_state
-        or st.session_state.updated_scoring_criteria is None
-    ):
-        st.session_state.updated_scoring_criteria = deepcopy(scoring_criteria)
+    _all_task_types = [task_type["value"] for task_type in task_type_mapping]
+    st.session_state["task_type"] = task_type_mapping[
+        _all_task_types.index(task_details["type"])
+    ]
 
-    show_scoring_criteria_addition_form(st.session_state.updated_scoring_criteria)
+    st.session_state.task_has_context = bool(task_details["context"])
+    st.session_state.task_context = task_details["context"]
 
-    if st.button("Save Changes", type="primary", use_container_width=True):
-        if st.session_state.updated_scoring_criteria == scoring_criteria:
-            st.error("No changes found")
-            return
-
-        scoring_criteria_to_add = [
-            criterion
-            for criterion in st.session_state.updated_scoring_criteria
-            if criterion not in scoring_criteria
+    if task_details["milestone_id"]:
+        all_milestone_ids = [
+            milestone["id"] for milestone in st.session_state.milestones
+        ]
+        selected_milestone_index = all_milestone_ids.index(task_details["milestone_id"])
+        st.session_state["task_milestone"] = st.session_state.milestones[
+            selected_milestone_index
         ]
 
-        scoring_criteria_to_remove = [
-            criterion["id"]
-            for criterion in scoring_criteria
-            if criterion not in st.session_state.updated_scoring_criteria
+    all_tag_ids = [tag["id"] for tag in st.session_state.tags]
+    task_tag_ids = [tag["id"] for tag in task_details["tags"]]
+    selected_tag_indices = [
+        index for index, tag_id in enumerate(all_tag_ids) if tag_id in task_tag_ids
+    ]
+    st.session_state["task_tags"] = [
+        st.session_state.tags[index] for index in selected_tag_indices
+    ]
+
+    all_course_ids = [course["id"] for course in st.session_state.courses]
+    task_course_ids = [course["id"] for course in task_details["courses"]]
+    selected_course_indices = [
+        index
+        for index, course_id in enumerate(all_course_ids)
+        if course_id in task_course_ids
+    ]
+    st.session_state["selected_task_courses"] = [
+        st.session_state.courses[index] for index in selected_course_indices
+    ]
+
+    if task_details["type"] == "reading_material":
+        return
+
+    st.session_state["task_ai_response_type"] = task_details["response_type"]
+    st.session_state["task_input_type"] = task_details["input_type"]
+
+    if task_details["response_type"] in ["exam", "chat"]:
+        st.session_state.final_answer = task_details["answer"]
+    elif task_details["response_type"] == "report":
+        # response_type = report
+        task_details["scoring_criteria"] = get_scoring_criteria_for_task(
+            task_details["id"]
+        )
+        st.session_state.scoring_criteria = deepcopy(task_details["scoring_criteria"])
+        for scoring_criterion in st.session_state.scoring_criteria:
+            scoring_criterion.pop("id")
+    else:
+        raise NotImplementedError()
+
+    if task_details["input_type"] == "coding":
+        st.session_state.coding_languages = task_details["coding_language"]
+
+    if task_details["tests"]:
+        st.session_state.task_has_tests = True
+        st.session_state.tests = task_details["tests"]
+
+
+def set_bulk_task_form_with_task_details(all_tasks: List[dict]):
+    st.session_state.is_task_type_reading = all_tasks[0]["type"] == "reading_material"
+
+    # all_task_contexts = [task["context"] for task in all_tasks]
+    # all_task_contexts = list(set(all_task_contexts))
+    # if len(all_task_contexts) == 1 and all_task_contexts[0]:
+    #     st.session_state.task_has_context = True
+    #     st.session_state.task_context = all_task_contexts[0]
+
+    all_task_ai_response_types = [task["response_type"] for task in all_tasks]
+    all_task_ai_response_types = list(set(all_task_ai_response_types))
+    if len(all_task_ai_response_types) == 1:
+        default_task_ai_response_type = all_task_ai_response_types[0]
+        # st.session_state["task_ai_response_type"] = default_task_ai_response_type
+
+        if default_task_ai_response_type == "report":
+            scoring_criteria_all_tasks = get_scoring_criteria_for_tasks(
+                [task["id"] for task in all_tasks]
+            )
+            for task, task_scoring_criteria in zip(
+                all_tasks, scoring_criteria_all_tasks
+            ):
+                task["scoring_criteria"] = task_scoring_criteria
+
+            combined_scoring_criteria = list(
+                itertools.chain.from_iterable(scoring_criteria_all_tasks)
+            )
+
+            if len(combined_scoring_criteria):
+                sc_df = pd.DataFrame(combined_scoring_criteria)
+
+                sc_df = sc_df.drop(columns=["id"])
+                sc_df["range"] = sc_df["range"].apply(lambda x: f"{x[0]}-{x[1]}")
+
+                sc_df = sc_df.drop_duplicates()
+
+                if len(sc_df) == len(scoring_criteria_all_tasks[0]):
+                    st.session_state.scoring_criteria = deepcopy(
+                        scoring_criteria_all_tasks[0]
+                    )
+                    for scoring_criterion in st.session_state.scoring_criteria:
+                        scoring_criterion.pop("id")
+
+    # all_task_input_types = [task["input_type"] for task in all_tasks]
+    # all_task_input_types = list(set(all_task_input_types))
+    # if len(all_task_input_types) == 1:
+    #     default_task_input_type = all_task_input_types[0]
+    #     st.session_state["task_input_type"] = default_task_input_type
+
+    #     if default_task_input_type == "coding":
+    #         all_task_coding_languages = [task["coding_language"] for task in all_tasks]
+    #         all_task_coding_languages = list(set(all_task_coding_languages))
+    #         if len(all_task_coding_languages) == 1:
+    #             st.session_state.coding_languages = all_task_coding_languages[0]
+
+    all_task_milestone_ids = [task["milestone_id"] for task in all_tasks]
+    all_task_milestone_ids = list(set(all_task_milestone_ids))
+    if len(all_task_milestone_ids) == 1 and all_task_milestone_ids[0]:
+        all_milestone_ids = [
+            milestone["id"] for milestone in st.session_state.milestones
+        ]
+        selected_milestone_index = all_milestone_ids.index(all_task_milestone_ids[0])
+        st.session_state.task_milestone = st.session_state.milestones[
+            selected_milestone_index
         ]
 
-        if scoring_criteria_to_add:
-            add_scoring_criteria_to_task(task_id, scoring_criteria_to_add)
+    all_task_course_ids = [
+        [course["id"] for course in task["courses"]] for task in all_tasks
+    ]
 
-        if scoring_criteria_to_remove:
-            remove_scoring_criteria_from_task(scoring_criteria_to_remove)
+    has_same_courses = False
+    try:
+        all_task_course_ids = np.unique(all_task_course_ids, axis=0)
+        if len(all_task_course_ids) == 1:
+            has_same_courses = True
+    except:
+        # list of lists is not convertible to numpy array
+        # as all the sublists don't have the same length
+        pass
 
-        set_toast("Scoring criteria updated successfully!")
-        st.rerun()
+    if has_same_courses:
+        default_course_ids = all_task_course_ids[0]
+        all_course_ids = [course["id"] for course in st.session_state.courses]
+        selected_course_indices = [
+            index
+            for index, course_id in enumerate(all_course_ids)
+            if course_id in default_course_ids
+        ]
+        st.session_state["selected_task_courses"] = [
+            st.session_state.courses[index] for index in selected_course_indices
+        ]
 
 
 def show_tasks_tab():
@@ -1370,22 +1636,13 @@ def show_tasks_tab():
     bulk_upload_tasks = cols[1].button("Bulk upload tasks")
 
     if add_task:
-        reset_tests()
-        st.session_state.ai_answer = ""
-        st.session_state.final_answer = ""
-        st.session_state.coding_languages = None
-        reset_scoring_criteria()
-        show_task_form()
+        reset_task_form()
+        show_task_addition_form()
 
     if bulk_upload_tasks:
-        reset_scoring_criteria()
+        reset_task_form()
         update_task_uploader_key()
         show_bulk_upload_tasks_form()
-
-    tasks_description = f"You can select multiple tasks by clicking beside the `id` column of each task and do any of the following:\n\n- Update the cohort for the selected tasks\n\n- Edit task attributes in bulk (e.g. task type, coding language in the code editor (for coding tasks only), milestone)\n\n- You can also go through the unverified answers and verify them for learners to access them by selecting `Edit Mode`.\n\n- Add/Modify tests for one task at a time (for coding tasks only)\n\n- Delete tasks"
-
-    with st.expander("User Guide"):
-        st.write(tasks_description)
 
     refresh_tasks()
 
@@ -1394,8 +1651,8 @@ def show_tasks_tab():
         return
 
     df = pd.DataFrame(st.session_state.tasks)
-    # print(st.session_state.tasks)
-    # print(df)
+    df = df.replace({np.nan: None})
+
     df["coding_language"] = df["coding_language"].apply(
         lambda x: x.split(",") if isinstance(x, str) else x
     )
@@ -1448,60 +1705,37 @@ def show_tasks_tab():
         filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
         df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
-    verified_filter = cols[4].radio(
-        "Filter by verification status",
-        ["All", "Verified", "Unverified"],
-        horizontal=True,
-    )
-
-    if verified_filter != "All":
-        df = df[df["verified"] == (verified_filter == "Verified")]
-
     if not len(df):
         st.error("No tasks matching the filters")
         return
 
-    (
-        edit_mode_col,
-        _,
-        save_col,
-    ) = st.columns([1.25, 7.5, 1])
-
-    is_edit_mode = edit_mode_col.checkbox(
-        "Edit Mode",
-        value=False,
-        help="Select this to go through the unverified answers and verify them for learners to access them or make any other changes to the tasks.",
-    )
-
     column_config = {
         # 'id': None
-        "verified": st.column_config.CheckboxColumn(label="Is task verified?"),
-        "type": st.column_config.SelectboxColumn(
-            label="Task type", options=all_task_types
-        ),
+        # "verified": st.column_config.CheckboxColumn(label="Is task verified?"),
         "name": st.column_config.TextColumn(label="Name"),
         "description": st.column_config.TextColumn(width="medium", label="Description"),
         "answer": st.column_config.TextColumn(width="medium", label="Answer"),
         "milestone_name": st.column_config.TextColumn(label="Milestone"),
         "response_type": st.column_config.TextColumn(label="AI response type"),
         "input_type": st.column_config.TextColumn(label="User input type"),
-        "tags": st.column_config.ListColumn(label="Tags"),
     }
 
     task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
     df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
 
     df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
+    df["Tags"] = df["tags"].apply(lambda x: [tag["name"] for tag in x])
+    df["Task Type"] = df["type"].apply(lambda x: task_type_to_label[x])
 
     column_order = [
-        # "id",
-        "verified",
+        "id",
+        # "verified",
         # "num_tests",
-        "type",
+        "Task Type",
         "name",
         "description",
-        "answer",
-        "tags",
+        # "answer",
+        "Tags",
         "milestone_name",
         "Courses",
         "input_type",
@@ -1511,118 +1745,51 @@ def show_tasks_tab():
         # "timestamp",
     ]
 
-    def save_changes_in_edit_mode(edited_df):
-        # identify the rows that have been changed
-        # and update the db with the new values
-        # import ipdb; ipdb.set_trace()
-        changed_rows = edited_df[(df != edited_df).any(axis=1)]
+    delete_col, edit_task_col = st.columns([1, 8])
 
-        print(f"Changed rows: {len(changed_rows)}", flush=True)
+    error_container = st.container()
 
-        for _, row in changed_rows.iterrows():
-            task_id = row["id"]
-            # print(task_id)
-            update_task_in_db(
-                task_id,
-                row["name"],
-                row["description"],
-                row["answer"],
-                row["type"],
-                row["response_type"],
-                row["coding_language"],
-                row["generation_model"],
-                row["verified"],
+    event = st.dataframe(
+        df,
+        on_select="rerun",
+        selection_mode="multi-row",
+        hide_index=True,
+        use_container_width=True,
+        column_config=column_config,
+        column_order=column_order,
+    )
+
+    if len(event.selection["rows"]):
+        task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
+
+        if delete_col.button("Delete task", icon="🗑️"):
+            # import ipdb; ipdb.set_trace()
+            show_tasks_delete_confirmation(
+                task_ids,
             )
 
-        # Refresh the tasks in the session state
-        refresh_tasks()
-        st.toast("Changes saved successfully!")
-        # st.rerun()
+        all_tasks = [
+            row.to_dict() for _, row in df.iloc[event.selection["rows"]].iterrows()
+        ]
 
-    if not is_edit_mode:
-        delete_col, update_course_col, edit_col, add_tests_col = st.columns(
-            [0.4, 1, 1.2, 6]
-        )
+        if len(task_ids) == 1:
+            task_details = all_tasks[0]
+            if edit_task_col.button("Edit task", icon="🖊️"):
+                reset_task_form()
+                set_task_form_with_task_details(task_details)
+                show_task_edit_form(task_details=task_details)
+        else:
+            if edit_task_col.button("Bulk edit tasks", icon="🖊️"):
+                task_types = set([task["type"] for task in all_tasks])
+                if len(task_types) > 1:
+                    error_container.error(
+                        """All tasks must be of the same type (i.e. either all tasks are `"Reading Material"` or all tasks are `"Question"`) for bulk editing"""
+                    )
+                    return
 
-        event = st.dataframe(
-            df,
-            on_select="rerun",
-            selection_mode="multi-row",
-            hide_index=True,
-            use_container_width=True,
-            column_config=column_config,
-            column_order=column_order,
-        )
-
-        if len(event.selection["rows"]):
-            task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
-
-            if delete_col.button("🗑️", help="Delete selected tasks"):
-                # import ipdb; ipdb.set_trace()
-                show_tasks_delete_confirmation(
-                    task_ids,
-                )
-
-            if update_course_col.button("Update courses"):
-                # import ipdb; ipdb.set_trace()
-                existing_task_course_pairs = []
-
-                for task_id in task_ids:
-                    for course in task_id_to_courses[task_id]:
-                        existing_task_course_pairs.append((task_id, course["id"]))
-
-                show_update_task_courses(task_ids, existing_task_course_pairs)
-
-            if edit_col.button("Edit task attributes"):
-                # import ipdb; ipdb.set_trace()
-                show_task_edit_dialog(
-                    task_ids,
-                )
-
-            if len(task_ids) == 1:
-                # if only one task is selected and that task is a coding task we can add/edit tests
-                if df.iloc[event.selection["rows"]]["type"].tolist()[0] == "coding":
-                    if add_tests_col.button("Add/Edit tests"):
-                        reset_tests()
-                        edit_tests_for_task(
-                            df,
-                            task_ids[0],
-                        )
-
-                # if only one task is selected and that task is a report task we can add/edit scoring criteria
-                if (
-                    df.iloc[event.selection["rows"]]["response_type"].tolist()[0]
-                    == "report"
-                ):
-                    if add_tests_col.button("Add/Edit Scoring Criteria"):
-                        reset_scoring_criteria()
-                        show_edit_scoring_criteria_dialog_form(task_ids[0])
-
-    else:
-        edited_df = st.data_editor(
-            df,
-            hide_index=True,
-            column_config=column_config,
-            column_order=column_order,
-            use_container_width=True,
-            disabled=[
-                "id",
-                # "num_tests",
-                "type",
-                # "generation_model",
-                # "timestamp",
-                "milestone_name",
-                "input_type",
-                "response_type",
-            ],
-        )
-
-        if not df.equals(edited_df):
-            save_col.button(
-                "Save changes",
-                type="primary",
-                on_click=partial(save_changes_in_edit_mode, edited_df),
-            )
+                reset_task_form()
+                set_bulk_task_form_with_task_details(all_tasks)
+                show_bulk_edit_tasks_form(all_tasks)
 
 
 with tabs[2]:
@@ -2569,8 +2736,7 @@ def add_milestone(new_milestone, milestone_color):
     insert_milestone_to_db(new_milestone, milestone_color, st.session_state.org_id)
     st.toast("New milestone added")
     refresh_milestones()
-
-    st.session_state.new_milestone = ""
+    st.rerun()
 
 
 def delete_milestone(milestone):
@@ -2603,31 +2769,37 @@ def update_milestone_color(milestone_id, milestone_color):
 
 
 def show_milestones_tab():
-    cols = st.columns([1, 0.15, 1, 1])
-    new_milestone = cols[0].text_input(
-        "Enter milestone and press `Enter`", key="new_milestone"
-    )
+    with st.form(
+        "new_milestone_form",
+        border=False,
+        clear_on_submit=True,
+    ):
+        cols = st.columns([1, 0.15, 1, 1])
+        new_milestone = cols[0].text_input(
+            "Enter milestone",
+            key="new_milestone",
+        )
 
-    if "new_milestone_color" not in st.session_state:
-        st.session_state.new_milestone_color = generate_random_color()
+        if (
+            "new_milestone_init_color" not in st.session_state
+            or st.session_state["new_milestone_init_color"] == "#000000"
+        ):
+            print("here")
+            st.session_state.new_milestone_init_color = generate_random_color()
 
-    if new_milestone:
         cols[1].container(height=10, border=False)
+
         milestone_color = cols[1].color_picker(
             "Pick A Color",
             key="new_milestone_color",
             label_visibility="collapsed",
+            value=st.session_state.new_milestone_init_color,
         )
+
         cols[2].container(height=10, border=False)
-        cols[2].button(
-            "Add Milestone",
-            on_click=add_milestone,
-            args=(
-                new_milestone,
-                milestone_color,
-            ),
-            key="add_milestone",
-        )
+        if cols[2].form_submit_button("Add Milestone"):
+            del st.session_state.new_milestone_init_color
+            add_milestone(new_milestone, milestone_color)
 
     if not st.session_state.milestones:
         st.info("No milestones added yet")
@@ -2684,8 +2856,7 @@ def add_tag(new_tag):
     create_tag_in_db(new_tag, st.session_state.org_id)
     st.toast("New tag added")
     refresh_tags()
-
-    st.session_state.new_tag = ""
+    st.rerun()
 
 
 def delete_tag(tag):
@@ -2712,15 +2883,13 @@ def show_tag_delete_confirmation_dialog(tag):
 
 
 def show_tags_tab():
-    cols = st.columns(4)
-    new_tag = cols[0].text_input("Enter Tag", key="new_tag")
-    cols[1].container(height=10, border=False)
-    cols[1].button(
-        "Add",
-        on_click=add_tag,
-        args=(new_tag,),
-        key="add_tag",
-    )
+    with st.form("new_tag_form", clear_on_submit=True, border=False):
+        cols = st.columns(4)
+        new_tag = cols[0].text_input("Enter Tag", key="new_tag")
+
+        cols[1].container(height=10, border=False)
+        if cols[1].form_submit_button("Add"):
+            add_tag(new_tag)
 
     if not st.session_state.tags:
         st.info("No tags added yet")
