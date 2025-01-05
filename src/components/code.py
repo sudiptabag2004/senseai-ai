@@ -9,7 +9,6 @@ import streamlit.components.v1 as components
 import sqlite3
 import pandas as pd
 from streamlit_ace import st_ace, THEMES
-import streamlit.components.v1 as components
 from lib.config import coding_languages_supported
 
 supported_language_keys = [
@@ -21,6 +20,19 @@ supported_language_keys = [
     "react_code",
     "sql_code",
 ]
+
+
+def default_css():
+    """Return default CSS styles."""
+    return """
+    body {
+        background-color: white;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        color: black;
+    }
+    """
 
 
 def show_react_help_text():
@@ -106,7 +118,7 @@ def replace_inputs_in_code(
     offset = 0
     for i, (start, end) in enumerate(user_input_instances):
         replacement = f"{repr(inputs[i])}"
-        code = code[: start + offset] + replacement + code[end + offset :]
+        code = code[: start + offset] + replacement + code[end + offset:]
         offset += len(replacement) - (end - start)
 
     return code
@@ -124,17 +136,30 @@ def replace_inputs_in_code_with_test_inputs(code: str, inputs: List[str]):
 
 def run_react_code(jsx_code: str, css_code: str) -> str:
     """Generate HTML for executing React code."""
+
+    if not css_code:
+        css_code = default_css()
+
     react_template = f"""
-    <style>
-        {css_code}
-    </style>
-    <div id="root"></div>
-    <script src="https://unpkg.com/react/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/babel-standalone/babel.min.js"></script>
-    <script type="text/babel">
-        {jsx_code}
-    </script>
+    <html>
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>React Test</title>
+            <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+            <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+            <script src="https://unpkg.com/babel-standalone/babel.min.js"></script>
+            <style>
+                {css_code}
+            </style>
+        </head>
+        <body>
+            <div id="root"></div>
+            <script type="text/babel">
+                {jsx_code}
+            </script>
+        </body>
+    </html>
     """
     return react_template
 
