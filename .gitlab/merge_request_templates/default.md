@@ -23,3 +23,4 @@
 - [ ] I committed my changes with `pre-commit` being set up on my local machine (refer to `docs/INSTALL.md`) to handle issues like code formatting, linting, etc.
 - [ ] I have made sure that all of the APIs are working fine.
 - [ ] I have added appropriate comments to the code to explain the changes made.
+- [ ] I have updated `requirements.txt` if any new packages have been used.
