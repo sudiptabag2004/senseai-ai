@@ -21,7 +21,7 @@ class ChatMessage(BaseModel):
     task_id: int
     task_name: str
     role: ChatRole
-    content: str
+    content: Optional[str]
     is_solved: bool
     response_type: Optional[ResponseType]
     timestamp: str
@@ -33,7 +33,7 @@ class Task(BaseModel):
     description: str
     answer: Optional[str]
     tags: List[str]
-    generation_model: str
+    generation_model: Optional[str]
     verified: bool
     timestamp: str
     milestone_id: Optional[int]
