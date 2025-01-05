@@ -169,16 +169,9 @@ async def call_openai_chat_model(
     messages: List,
     model: str,
     max_tokens: int,
-    verbose: bool = False,
-    # message_format: str = "langchain",
-    # labels: str = [],
+    verbose: bool = True,
     **kwargs,
 ):
-    # llm_pricing_calculator = LLMPricingCalculator()
-
-    # if message_format != "langchain":
-    # messages = get_messages_in_langchain_format(messages)
-
     common_model_args = {
         "temperature": 0,
         "max_tokens": max_tokens,
@@ -188,46 +181,6 @@ async def call_openai_chat_model(
     output_tokens = 0
     total_cost = 0
 
-    # if kwargs.get("model_type") == "bedrock":
-    #     from langchain_aws import ChatBedrock
-    #     from llm_utils.callbacks import BedrockHandler
-
-    #     # TODO: make this generic so that it works inside the deployed instance too
-    #     os.environ["AWS_DEFAULT_REGION"] = "ap-south-1"
-    #     callback = BedrockHandler()
-
-    #     llm = ChatBedrock(
-    #         credentials_profile_name="crossaccount",
-    #         model_id=model,
-    #         model_kwargs=common_model_args,
-    #         callbacks=[callback],
-    #     )
-    #     ai_response = await llm.ainvoke(messages)
-    #     input_tokens, output_tokens, total_cost = get_llm_metrics_for_custom_model(
-    #         llm, model, messages, ai_response
-    #     )
-
-    # elif kwargs.get("model_type") == "anthropic":
-    #     from langchain_anthropic import ChatAnthropic
-
-    #     # import anthropic
-
-    #     # TODO: need to set ANTHROPIC_API_KEY env var
-    #     llm = ChatAnthropic(
-    #         model=model,
-    #         **common_model_args,
-    #     )
-    #     ai_response = await llm.ainvoke(messages)
-    #     # client = anthropic.Anthropic(
-    #     # defaults to os.environ.get("ANTHROPIC_API_KEY")
-    #     # api_key=os.environ['ANTHROPI'],
-    #     # )
-
-    #     input_tokens, output_tokens, total_cost = get_llm_metrics_for_custom_model(
-    #         llm, model, messages, ai_response
-    #     )
-
-    # else:
     openai_model_kwargs = {
         "top_p": 1,
         "frequency_penalty": 0,
@@ -235,12 +188,7 @@ async def call_openai_chat_model(
         "store": True,
     }
     llm = ChatOpenAI(model=model, **common_model_args, **openai_model_kwargs)
-    # if not kwargs.get("skip_token_limit_check"):
-    #     messages = correct_token_limit_in_messages(
-    #         messages, llm, max_tokens, labels
-    #     )
 
-    # TODO: support token counting for fine-tuned models
     with get_openai_callback() as llm_callback:
         ai_response = await llm.ainvoke(messages)
         input_tokens = llm_callback.prompt_tokens
@@ -249,36 +197,9 @@ async def call_openai_chat_model(
 
     ai_response = ai_response.content
 
-    # observability_logger = ObservabilityLogger()
-    # observability_logger.log_event_to_queue(
-    #     {
-    #         "operation": "llm",
-    #         "input_tokens": input_tokens,
-    #         "output_tokens": output_tokens,
-    #         "total_cost": total_cost,
-    #         "labels": labels,
-    #     }
-    # )
-
-    # log number of input and output tokens for pricing
-    # llm_pricing_calculator.add(
-    #     LLMInvocation(
-    #         model=model,
-    #         input_tokens=input_tokens,
-    #         output_tokens=output_tokens,
-    #         labels=labels,
-    #         cost=total_cost,
-    #     )
-    # )
-
-    # import ipdb
-
-    # ipdb.set_trace()
-
     if verbose:
-        logger.info(
-            f"model: {model} prompt: {messages} response: {ai_response} input tokens: {input_tokens} output tokens: {output_tokens}"
-        )
+        message = f"model: {model} prompt: {messages} response: {ai_response} input tokens: {input_tokens} output tokens: {output_tokens}"
+        logger.info(message)
 
     return ai_response
 
@@ -289,7 +210,7 @@ async def call_llm_and_parse_output(
     output_parser,
     max_tokens,
     # labels,
-    verbose: bool = False,
+    verbose: bool = True,
     **kwargs,
 ):
     llm_output = await call_openai_chat_model(

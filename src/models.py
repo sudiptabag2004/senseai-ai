@@ -27,12 +27,17 @@ class ChatMessage(BaseModel):
     timestamp: str
 
 
+class Tag(BaseModel):
+    id: int
+    name: str
+
+
 class Task(BaseModel):
     id: int
     name: str
     description: str
     answer: Optional[str]
-    tags: List[str]
+    tags: List[Tag]
     generation_model: Optional[str]
     verified: bool
     timestamp: str
