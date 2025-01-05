@@ -239,10 +239,14 @@ def reset_task_form():
     st.session_state.task_courses = []
     st.session_state.task_answer = ""
     st.session_state.coding_languages = None
-    st.session_state.ai_answers = None
     reset_ai_running()
     reset_tests()
     reset_scoring_criteria()
+
+
+def set_task_type_vars(task_type: str):
+    st.session_state.is_task_type_reading = task_type == "reading_material"
+    st.session_state.is_task_type_question = task_type == "question"
 
 
 show_toast()
@@ -395,7 +399,7 @@ def update_test_in_session_state(test_index):
 
 
 def get_task_context():
-    if not st.session_state.is_task_type_reading and st.session_state.task_has_context:
+    if st.session_state.is_task_type_question and st.session_state.task_has_context:
         return st.session_state.task_context
 
     return None
@@ -403,7 +407,7 @@ def get_task_context():
 
 def get_task_tests():
     if (
-        not st.session_state.is_task_type_reading
+        st.session_state.is_task_type_question
         and st.session_state.task_input_type == "coding"
         and st.session_state.task_has_tests
     ):
@@ -418,7 +422,7 @@ def get_model_version():
 
 def get_task_scoring_criteria():
     if (
-        not st.session_state.is_task_type_reading
+        st.session_state.is_task_type_question
         and st.session_state.task_ai_response_type == "report"
     ):
         return st.session_state.scoring_criteria
@@ -453,7 +457,7 @@ def check_task_form_errors():
     if not st.session_state.task_description:
         return "Please enter a task description"
 
-    if not st.session_state.is_task_type_reading:
+    if st.session_state.is_task_type_question:
         if (
             st.session_state.task_ai_response_type in ["chat", "exam"]
             and not st.session_state.task_answer
@@ -703,21 +707,7 @@ def add_tests_to_task(
                 ),
             )
 
-    with st.form("add_test"):
-        st.text("Inputs")
-        for i in range(num_test_inputs):
-            st.text_area(
-                f"Input {i + 1}",
-                key=f"new_test_input_{i}",
-                label_visibility="collapsed",
-            )
-
-        st.text("Output")
-        st.text_area("Output", key="test_output", label_visibility="collapsed")
-        st.text("Description (optional)")
-        st.text_area(
-            "Description", key="test_description", label_visibility="collapsed"
-        )
+    with st.form("add_test", clear_on_submit=True):
 
         def add_test():
             st.session_state.tests.append(
@@ -733,16 +723,24 @@ def add_tests_to_task(
             for i in range(num_test_inputs):
                 st.session_state[f"new_test_input_{i}"] = ""
 
-            st.session_state.test_output = ""
-            st.session_state.test_description = ""
             set_toast("Added test!")
 
-        # st.info(
-        #     "Tip: Click outside the boxes above after you are done typing the last input before clicking the button below"
-        # )
-        st.form_submit_button("Add Test", on_click=add_test)
+        st.text("Inputs")
+        for i in range(num_test_inputs):
+            st.text_area(
+                f"Input {i + 1}",
+                key=f"new_test_input_{i}",
+                label_visibility="collapsed",
+            )
 
-    # st.session_state.tests
+        st.text("Output")
+        st.text_area("Output", key="test_output", label_visibility="collapsed")
+        st.text("Description (optional)")
+        st.text_area(
+            "Description", key="test_description", label_visibility="collapsed"
+        )
+
+        st.form_submit_button("Add Test", on_click=add_test)
 
 
 def context_addition_form():
@@ -988,9 +986,8 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
     if not st.session_state.task_type:
         return
 
-    st.session_state.is_task_type_reading = (
-        st.session_state["task_type"]["value"] == "reading_material"
-    )
+    set_task_type_vars(st.session_state.task_type["value"])
+
     st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales")
     st.text_area(
         "Description",
@@ -999,7 +996,7 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
     )
 
     task_answer = None
-    if not st.session_state.is_task_type_reading:
+    if st.session_state.is_task_type_question:
         context_addition_form()
         cols = st.columns(2)
 
@@ -1153,9 +1150,7 @@ async def generate_answers_for_tasks(tasks_df):
     return answers
 
 
-def bulk_upload_tasks_to_db(
-    tasks_df: pd.DataFrame, display_container, button_container
-):
+def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
     error_text = validate_task_metadata_params()
     if error_text:
         st.error(error_text)
@@ -1192,7 +1187,7 @@ def bulk_upload_tasks_to_db(
             ]
 
         if (
-            not st.session_state.is_task_type_reading
+            st.session_state.is_task_type_question
             and st.session_state.task_ai_response_type == "chat"
         ):
             answer = row["Answer"]
@@ -1320,13 +1315,10 @@ def show_bulk_upload_tasks_form():
     if not st.session_state.task_type:
         return
 
-    st.session_state.is_task_type_reading = (
-        st.session_state["task_type"]["value"] == "reading_material"
-    )
-
+    set_task_type_vars(st.session_state.task_type["value"])
     context_addition_form()
 
-    if not st.session_state.is_task_type_reading:
+    if st.session_state.is_task_type_question:
         cols = st.columns(2)
         with cols[0]:
             ai_response_type = ai_response_type_selector()
@@ -1353,7 +1345,7 @@ def show_bulk_upload_tasks_form():
 
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
     if (
-        not st.session_state.is_task_type_reading
+        st.session_state.is_task_type_question
         and st.session_state.task_ai_response_type == "chat"
     ):
         file_uploader_label += ", `Answer` (optional)"
@@ -1366,7 +1358,6 @@ def show_bulk_upload_tasks_form():
 
     if uploaded_file:
         display_container = st.empty()
-        button_container = st.empty()
         tasks_df = pd.read_csv(uploaded_file)
 
         column_config = {
@@ -1396,25 +1387,20 @@ def show_bulk_upload_tasks_form():
             return
 
         if (
-            not st.session_state.is_task_type_reading
+            st.session_state.is_task_type_question
             and st.session_state.task_ai_response_type == "chat"
             and "Answer" not in tasks_df.columns
         ):
-            if "ai_answers" in st.session_state and st.session_state.ai_answers:
-                tasks_df["Answer"] = st.session_state.ai_answers
-            else:
-                st.session_state.ai_answers = asyncio.run(
-                    generate_answers_for_tasks(tasks_df)
-                )
-                st.toast("Added AI generated answers")
-                tasks_df["Answer"] = st.session_state.ai_answers
+
+            tasks_df["Answer"] = asyncio.run(generate_answers_for_tasks(tasks_df))
+            st.toast("Added AI generated answers")
 
             # verified = False
             display_container.dataframe(
                 tasks_df, hide_index=True, column_config=column_config
             )
 
-        if button_container.button(
+        if st.button(
             "Add tasks",
             use_container_width=True,
             type="primary",
@@ -1536,7 +1522,7 @@ def set_task_form_with_task_details(task_details: dict):
 
 
 def set_bulk_task_form_with_task_details(all_tasks: List[dict]):
-    st.session_state.is_task_type_reading = all_tasks[0]["type"] == "reading_material"
+    set_task_type_vars(all_tasks[0]["type"])
 
     # all_task_contexts = [task["context"] for task in all_tasks]
     # all_task_contexts = list(set(all_task_contexts))
@@ -2784,7 +2770,6 @@ def show_milestones_tab():
             "new_milestone_init_color" not in st.session_state
             or st.session_state["new_milestone_init_color"] == "#000000"
         ):
-            print("here")
             st.session_state.new_milestone_init_color = generate_random_color()
 
         cols[1].container(height=10, border=False)
