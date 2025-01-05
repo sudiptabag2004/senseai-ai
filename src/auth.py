@@ -70,9 +70,7 @@ def login():
     if google_button:
         st.experimental_user.login(provider="google")
 
-    sub_cols[-1].link_button(
-        "See Documentation", "https://hypervergeacademy.mintlify.app/"
-    )
+    sub_cols[-1].link_button("See Documentation", "docs.sensai.hyperverge.org/")
 
 
 def get_org_details_from_org_id(org_id: int):

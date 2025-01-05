@@ -8,7 +8,7 @@ If you are using SensAI and have any feedback for us or want any help with using
 
 If you want to contribute to SensAI, please look at the `Contributing` section below.
 
-To get started with using SensAI, please refer to our [Documentation](https://hypervergeacademy.mintlify.app/overview) which explains all the key features of SensAI along with demo videos and a step-by-step guide for common use cases.
+To get started with using SensAI, please refer to our [Documentation](https://docs.sensai.hyperverge.org) which explains all the key features of SensAI along with demo videos and a step-by-step guide for common use cases.
 
 Our public roadmap is live [here](https://hyperverge.notion.site/fa1dd0cef7194fa9bf95c28820dca57f?v=ec52c6a716e94df180dcc8ced3d87610). Go check it out and let us know what you think we should build next!
 

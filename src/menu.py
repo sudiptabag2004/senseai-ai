@@ -80,6 +80,12 @@ def menu_footer(selected_cohort: Dict, role: str):
 
         st.sidebar.divider()
 
+    st.sidebar.page_link(
+        "https://docs.sensai.hyperverge.org/",
+        label="Product Guide",
+        icon="📚",
+    )
+
     st.sidebar.text("Built with ❤️ by HyperVerge Academy")
 
     if st.session_state.email:
