@@ -1,7 +1,7 @@
 import os
 from os.path import exists
 from lib.utils import save_json
-from models import LeaderboardViewType
+from models import LeaderboardViewType, TaskInputType, TaskAIResponseType, TaskType
 
 if exists("/appdata"):
     data_root_dir = "/appdata"
@@ -56,20 +56,37 @@ leaderboard_view_types = [
     str(LeaderboardViewType.WEEKLY),
     str(LeaderboardViewType.MONTHLY),
 ]
-all_input_types = ["coding", "text", "audio"]
-all_ai_response_types = ["chat", "report", "exam"]
-all_task_types = ["reading_material", "question"]
+all_input_types = [
+    str(TaskInputType.CODING),
+    str(TaskInputType.TEXT),
+    str(TaskInputType.AUDIO),
+]
+all_ai_response_types = [
+    str(TaskAIResponseType.CHAT),
+    str(TaskAIResponseType.REPORT),
+    str(TaskAIResponseType.EXAM),
+]
+all_task_types = [str(TaskType.QUESTION), str(TaskType.READING_MATERIAL)]
+
 response_type_help_text = """`chat`: AI provides feedback on the student's response and asks questions to nudge them towards the solution\n\n`report`: AI generates a report on the student's response based on a scoring criteria set by you\n\n`exam`: AI checks if the the student's response matches the reference solution without providing any further guidance"""
 
-allowed_input_types = {
-    "chat": ["coding", "text"],
-    "report": ["text", "audio"],
-    "exam": ["coding", "text"],
+allowed_ai_response_types = {
+    str(TaskInputType.CODING): [
+        str(TaskAIResponseType.CHAT),
+        str(TaskAIResponseType.REPORT),
+        str(TaskAIResponseType.EXAM),
+    ],
+    str(TaskInputType.TEXT): [
+        str(TaskAIResponseType.CHAT),
+        str(TaskAIResponseType.REPORT),
+        str(TaskAIResponseType.EXAM),
+    ],
+    str(TaskInputType.AUDIO): [str(TaskAIResponseType.REPORT)],
 }
 
 task_type_mapping = [
-    {"label": "Question", "value": "question"},
-    {"label": "Reading Material", "value": "reading_material"},
+    {"label": "Question", "value": str(TaskType.QUESTION)},
+    {"label": "Reading Material", "value": str(TaskType.READING_MATERIAL)},
 ]
 task_type_to_label = {
     task_type["value"]: task_type["label"] for task_type in task_type_mapping

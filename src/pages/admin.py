@@ -32,7 +32,7 @@ from lib.config import (
     all_input_types,
     all_task_types,
     task_type_mapping,
-    allowed_input_types,
+    allowed_ai_response_types,
     response_type_help_text,
     task_type_to_label,
 )
@@ -794,22 +794,12 @@ def course_selector(key_prefix: str, default=None):
 
 
 def task_input_type_selector():
-    if not st.session_state.task_ai_response_type:
-        return
-
-    task_input_types = allowed_input_types[st.session_state.task_ai_response_type]
-    default_index = None
-    if len(task_input_types) == 1:
-        default_index = 0
-
-    disabled = len(task_input_types) == 1
-
     return st.selectbox(
         "Select input type",
-        task_input_types,
+        all_input_types,
         key="task_input_type",
-        index=default_index,
-        disabled=disabled,
+        index=None,
+        on_change=clear_task_ai_response_type,
     )
 
 
@@ -818,14 +808,28 @@ def clear_task_input_type():
         st.session_state.task_input_type = None
 
 
+def clear_task_ai_response_type():
+    if "task_ai_response_type" in st.session_state:
+        st.session_state.task_ai_response_type = None
+
+
 def ai_response_type_selector():
+    if not st.session_state.task_input_type:
+        return
+
+    options = allowed_ai_response_types[st.session_state.task_input_type]
+
+    disabled = False
+    if len(options) == 1:
+        disabled = True
+        st.session_state.task_ai_response_type = options[0]
+
     return st.selectbox(
         "Select AI response type",
-        all_ai_response_types,
+        options,
         key="task_ai_response_type",
         help=response_type_help_text,
-        on_change=clear_task_input_type,
-        index=None,
+        disabled=disabled,
     )
 
 
@@ -1004,13 +1008,16 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
         cols = st.columns(2)
 
         with cols[0]:
+            input_type = task_input_type_selector()
+
+        if not input_type:
+            return
+
+        with cols[1]:
             ai_response_type = ai_response_type_selector()
 
         if not ai_response_type:
             return
-
-        with cols[1]:
-            input_type = task_input_type_selector()
 
         if input_type == "coding":
             coding_language_selector()
@@ -1191,7 +1198,7 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
 
         if (
             st.session_state.is_task_type_question
-            and st.session_state.task_ai_response_type == "chat"
+            and st.session_state.task_ai_response_type in ["chat", "exam"]
         ):
             answer = row["Answer"]
         else:
@@ -1323,14 +1330,18 @@ def show_bulk_upload_tasks_form():
 
     if st.session_state.is_task_type_question:
         cols = st.columns(2)
+
         with cols[0]:
+            input_type = task_input_type_selector()
+
+        if not input_type:
+            return
+
+        with cols[1]:
             ai_response_type = ai_response_type_selector()
 
         if not ai_response_type:
             return
-
-        with cols[1]:
-            input_type = task_input_type_selector()
 
         if input_type == "coding":
             coding_language_selector()
@@ -1349,7 +1360,7 @@ def show_bulk_upload_tasks_form():
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
     if (
         st.session_state.is_task_type_question
-        and st.session_state.task_ai_response_type == "chat"
+        and st.session_state.task_ai_response_type in ["chat", "exam"]
     ):
         file_uploader_label += ", `Answer` (optional)"
 
@@ -1391,7 +1402,7 @@ def show_bulk_upload_tasks_form():
 
         if (
             st.session_state.is_task_type_question
-            and st.session_state.task_ai_response_type == "chat"
+            and st.session_state.task_ai_response_type in ["chat", "exam"]
             and "Answer" not in tasks_df.columns
         ):
             if st.session_state.ai_answers is None:

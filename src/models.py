@@ -63,3 +63,53 @@ class LeaderboardViewType(Enum):
             return self.value == other.value
 
         raise NotImplementedError()
+
+
+class TaskInputType(Enum):
+    CODING = "coding"
+    TEXT = "text"
+    AUDIO = "audio"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskInputType):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class TaskAIResponseType(Enum):
+    CHAT = "chat"
+    REPORT = "report"
+    EXAM = "exam"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskAIResponseType):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class TaskType(Enum):
+    QUESTION = "question"
+    READING_MATERIAL = "reading_material"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskType):
+            return self.value == other.value
+
+        raise NotImplementedError()
