@@ -40,6 +40,7 @@ from lib.init import init_app
 from lib.cache import (
     clear_course_cache_for_cohorts,
     clear_cohort_cache_for_courses,
+    clear_cache_for_mentor_groups,
 )
 from lib.db import (
     get_all_tasks_for_org_or_course,
@@ -94,6 +95,7 @@ from lib.db import (
     get_hva_org_id,
     add_tags_to_task,
     remove_tags_from_task,
+    get_cohort_group_ids_for_users,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -1941,6 +1943,7 @@ def group_create_edit_form(
             for member in cohort_info["members"]
             if member["role"] == group_role_mentor
         ]
+        all_mentor_ids = [mentor["id"] for mentor in mentors]
         default_mentors = [mentor["id"] for mentor in mentors]
         default_mentors_selected = [
             mentor for mentor in mentor_options if mentor["id"] in default_mentors
@@ -1979,6 +1982,9 @@ def group_create_edit_form(
                     cohort_id,
                     [member["id"] for member in selected_learners + selected_mentors],
                 )
+                for mentor in selected_mentors:
+                    clear_cache_for_mentor_groups(mentor["id"], cohort_id)
+
                 set_toast(f"Cohort group created successfully!")
             else:
                 if new_group_name != group_name:
@@ -1988,6 +1994,7 @@ def group_create_edit_form(
                     existing_member_ids = [learner["id"] for learner in learners] + [
                         mentor["id"] for mentor in mentors
                     ]
+
                     new_member_ids = [
                         learner["id"] for learner in selected_learners
                     ] + [mentor["id"] for mentor in selected_mentors]
@@ -2005,6 +2012,12 @@ def group_create_edit_form(
                         if member_id not in new_member_ids
                     ]
                     remove_members_from_cohort_group(group_id, member_ids_to_remove)
+
+                    for mentor_id in member_ids_to_add + member_ids_to_remove:
+                        if mentor_id not in all_mentor_ids:
+                            continue
+
+                        clear_cache_for_mentor_groups(mentor_id, cohort_id)
 
                 set_toast(f"Cohort group updated successfully!")
 
@@ -2042,7 +2055,7 @@ def show_edit_cohort_group_dialog(
 
 
 @st.dialog("Delete Cohort Group Confirmation")
-def show_delete_cohort_group_confirmation_dialog(group):
+def show_delete_cohort_group_confirmation_dialog(group, cohort_id):
     st.markdown(f"Are you sure you want to delete the group: `{group['name']}`?")
     (
         confirm_col,
@@ -2051,6 +2064,11 @@ def show_delete_cohort_group_confirmation_dialog(group):
 
     if confirm_col.button("Confirm", type="primary"):
         delete_cohort_group_from_db(group["id"])
+
+        mentor_ids = [mentor["id"] for mentor in group["members"]]
+        for mentor_id in mentor_ids:
+            clear_cache_for_mentor_groups(mentor_id, cohort_id)
+
         refresh_cohorts()
         set_toast("Cohort group deleted successfully!")
         st.rerun()
@@ -2196,6 +2214,7 @@ def show_cohort_overview(selected_cohort: Dict):
         selection_action_container = st.container(
             key=f"selected_cohort_members_actions_{key}"
         )
+        action_error_container = st.container()
 
         event = st.dataframe(
             pd.DataFrame(users, columns=["email"]),
@@ -2209,9 +2228,20 @@ def show_cohort_overview(selected_cohort: Dict):
             if selection_action_container.button(
                 "Remove members", key=f"remove_cohort_members_{key}"
             ):
+                members_to_remove = [users[i] for i in event.selection["rows"]]
+                user_ids = [member["id"] for member in members_to_remove]
+                group_ids_for_members = get_cohort_group_ids_for_users(
+                    user_ids, selected_cohort["id"]
+                )
+                if group_ids_for_members:
+                    action_error_container.error(
+                        "One or more selected members are part of a group. Please remove them from the group (s) first."
+                    )
+                    return
+
                 show_cohort_members_delete_confirmation_dialog(
                     selected_cohort["id"],
-                    [users[i] for i in event.selection["rows"]],
+                    members_to_remove,
                 )
 
     def show_learners_tab():
@@ -2290,7 +2320,7 @@ def show_cohort_overview(selected_cohort: Dict):
             "Delete Group",
             type="primary",
             on_click=show_delete_cohort_group_confirmation_dialog,
-            args=(selected_group,),
+            args=(selected_group, selected_cohort["id"]),
         )
 
         cols = st.columns([2, 0.2, 1])

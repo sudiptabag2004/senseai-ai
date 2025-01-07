@@ -7,7 +7,7 @@ from lib.db import (
     get_all_milestone_progress,
     get_user_cohorts,
     get_cohorts_for_org,
-    get_user_cohort_groups,
+    get_mentor_cohort_groups,
     get_courses_for_cohort,
 )
 
@@ -33,11 +33,6 @@ def learner_view(selected_cohort: Dict):
         show_leaderboard(selected_cohort["id"])
 
 
-@st.cache_data
-def get_mentor_groups(user_id: int, cohort_id: int):
-    return get_user_cohort_groups(user_id, cohort_id)
-
-
 def mentor_view(selected_cohort: Dict):
     selected_group = None
     selected_learner = None
@@ -45,7 +40,7 @@ def mentor_view(selected_cohort: Dict):
     if not selected_cohort:
         return
 
-    mentor_groups = get_mentor_groups(
+    mentor_groups = get_mentor_cohort_groups(
         st.session_state.user["id"], selected_cohort["id"]
     )
 
@@ -59,6 +54,10 @@ def mentor_view(selected_cohort: Dict):
             cohort_courses,
             format_func=lambda x: x["name"],
         )
+
+    if not mentor_groups:
+        st.info("You are not added to any group in this cohort")
+        return
 
     with cols[1]:
         selected_group = st.selectbox(

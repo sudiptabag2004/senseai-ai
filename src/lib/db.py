@@ -1495,14 +1495,15 @@ def format_user_cohort_group(group: Tuple):
     }
 
 
-def get_user_cohort_groups(user_id: int, cohort_id: int):
+@st.cache_data
+def get_mentor_cohort_groups(user_id: int, cohort_id: int):
     groups = execute_db_operation(
         f"""
         WITH mentor_groups AS (
             SELECT g.id as group_id, g.name as group_name, g.cohort_id as cohort_id
             FROM {user_groups_table_name} ug
             JOIN {groups_table_name} g ON ug.group_id = g.id
-            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = mg.cohort_id
+            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = g.cohort_id
             WHERE ug.user_id = ? AND uc.role = '{group_role_mentor}' AND g.cohort_id = ?
         ),
         learners AS (
@@ -1522,6 +1523,22 @@ def get_user_cohort_groups(user_id: int, cohort_id: int):
     )
 
     return [format_user_cohort_group(group) for group in groups]
+
+
+def get_cohort_group_ids_for_users(user_ids: List[int], cohort_id: int):
+    groups = execute_db_operation(
+        f"""
+        SELECT g.id
+        FROM {groups_table_name} g
+        JOIN {user_groups_table_name} ug ON ug.group_id = g.id
+        JOIN {users_table_name} u ON u.id = ug.user_id
+        WHERE g.cohort_id = ? AND ug.user_id IN ({','.join(['?' for _ in user_ids])})
+        GROUP BY g.id, g.name
+        """,
+        params=(cohort_id, *user_ids),
+        fetch_all=True,
+    )
+    return [group[0] for group in groups]
 
 
 def convert_milestone_db_to_dict(milestone: Tuple) -> Dict:
