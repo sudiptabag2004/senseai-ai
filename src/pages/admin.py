@@ -1406,7 +1406,7 @@ def show_bulk_upload_tasks_form():
             type="primary",
             disabled=st.session_state.is_ai_running,
         ):
-            bulk_upload_tasks_to_db(tasks_df, display_container, button_container)
+            bulk_upload_tasks_to_db(tasks_df)
 
 
 def delete_tasks_from_list(task_ids):
@@ -2153,6 +2153,7 @@ def show_cohort_courses(selected_cohort: Dict):
                 selected_cohort["courses"],
                 format_func=lambda x: x["name"],
                 disabled=True,
+                key="cohort_courses",
             )
             cols[1].container(height=5, border=False)
 
@@ -2615,6 +2616,7 @@ def show_course_cohorts(selected_course):
                 selected_course["cohorts"],
                 format_func=lambda x: x["name"],
                 disabled=True,
+                key="course_cohorts",
             )
             cols[1].container(height=5, border=False)
 
