@@ -65,7 +65,6 @@ def mentor_view(selected_cohort: Dict):
             "Select a group",
             mentor_groups,
             format_func=lambda x: x["name"],
-            index=0,
         )
 
     with cols[2]:

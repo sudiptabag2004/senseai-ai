@@ -16,8 +16,8 @@ app = FastAPI()
     "/chat_history",
     response_model=List[ChatMessage],
 )
-async def get_chat_history() -> List[ChatMessage]:
-    return get_all_chat_history()
+async def get_chat_history(org_id: int) -> List[ChatMessage]:
+    return get_all_chat_history(org_id=org_id)
 
 
 @app.get(

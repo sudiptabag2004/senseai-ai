@@ -813,16 +813,17 @@ def store_message(
     }
 
 
-def get_all_chat_history():
+def get_all_chat_history(org_id: int):
     chat_history = execute_db_operation(
         f"""
         SELECT message.id, message.timestamp, user.id AS user_id, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
         FROM {chat_history_table_name} message
         INNER JOIN {tasks_table_name} task ON message.task_id = task.id
         INNER JOIN {users_table_name} user ON message.user_id = user.id 
-        WHERE task.deleted_at IS NULL
+        WHERE task.deleted_at IS NULL AND task.org_id = ?
         ORDER BY message.timestamp ASC
         """,
+        (org_id,),
         fetch_all=True,
     )
 
@@ -1501,7 +1502,7 @@ def get_user_cohort_groups(user_id: int, cohort_id: int):
             SELECT g.id as group_id, g.name as group_name, g.cohort_id as cohort_id
             FROM {user_groups_table_name} ug
             JOIN {groups_table_name} g ON ug.group_id = g.id
-            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = g.cohort_id
+            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = mg.cohort_id
             WHERE ug.user_id = ? AND uc.role = '{group_role_mentor}' AND g.cohort_id = ?
         ),
         learners AS (
