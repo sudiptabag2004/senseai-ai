@@ -164,7 +164,7 @@ def give_feedback_on_audio_input():
     with container:
         display_waiting_indicator()
 
-    model = "gpt-4o-audio-preview-2024-10-01"
+    model = "gpt-4o-audio-preview-2024-12-17"
 
     class Feedback(BaseModel):
         topic: str = Field(description="topic of the feedback")

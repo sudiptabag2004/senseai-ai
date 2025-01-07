@@ -41,7 +41,7 @@ def get_ai_report_response(
         display_waiting_indicator()
 
     if task_type == "audio":
-        model = "gpt-4o-audio-preview-2024-10-01"
+        model = "gpt-4o-audio-preview-2024-12-17"
     else:
         model = "gpt-4o-2024-08-06"
 
