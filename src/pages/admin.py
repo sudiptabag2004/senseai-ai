@@ -239,6 +239,7 @@ def reset_task_form():
     st.session_state.task_courses = []
     st.session_state.task_answer = ""
     st.session_state.coding_languages = None
+    st.session_state.ai_answers = None
     reset_ai_running()
     reset_tests()
     reset_scoring_criteria()
@@ -1391,9 +1392,14 @@ def show_bulk_upload_tasks_form():
             and st.session_state.task_ai_response_type == "chat"
             and "Answer" not in tasks_df.columns
         ):
-
-            tasks_df["Answer"] = asyncio.run(generate_answers_for_tasks(tasks_df))
-            st.toast("Added AI generated answers")
+            if st.session_state.ai_answers is None:
+                st.session_state.ai_answers = asyncio.run(
+                    generate_answers_for_tasks(tasks_df)
+                )
+                tasks_df["Answer"] = st.session_state.ai_answers
+                st.toast("Added AI generated answers")
+            else:
+                tasks_df["Answer"] = st.session_state.ai_answers
 
             # verified = False
             display_container.dataframe(
