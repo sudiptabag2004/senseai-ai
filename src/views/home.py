@@ -4,7 +4,7 @@ from typing import Dict, List
 import pandas as pd
 
 from lib.db import (
-    get_all_milestone_progress,
+    get_user_metrics_for_all_milestones,
     get_user_cohorts,
     get_cohorts_for_org,
     get_mentor_cohort_groups,
@@ -73,7 +73,7 @@ def mentor_view(selected_cohort: Dict):
             format_func=lambda val: val["email"],
         )
 
-    all_milestone_data = get_all_milestone_progress(
+    all_milestone_data = get_user_metrics_for_all_milestones(
         selected_learner["id"], selected_course["id"]
     )
     rows = []
@@ -141,20 +141,42 @@ def show_home():
     if "selected_org" not in st.session_state:
         st.session_state["selected_org"] = st.session_state.user_orgs[0]
 
-    org_cohorts = get_cohorts_for_org(st.session_state["selected_org"]["id"])
+    displayed_cohorts = get_cohorts_for_org(st.session_state["selected_org"]["id"])
 
-    user_cohorts += org_cohorts
+    for cohort in displayed_cohorts:
+        cohort["role"] = "admin"
+
+    cohorts_added = set(cohort["id"] for cohort in displayed_cohorts)
+
+    for cohort in user_cohorts:
+        # to avoid showing the same cohort multiple times if the
+        # admin is also added as a learner/mentor to the cohort
+        if cohort["id"] in cohorts_added:
+            continue
+
+        displayed_cohorts.append(cohort)
+        cohorts_added.add(cohort["id"])
+
+    # to keep non-admin cohorts at the top
+    displayed_cohorts = displayed_cohorts[::-1]
 
     is_mentor = False
     role = None
 
-    if user_cohorts:
+    if displayed_cohorts:
+
+        def get_cohort_display_name(cohort):
+            if "role" in cohort and cohort["role"] == "admin":
+                return f"{cohort['name']} (by you)"
+            else:
+                return f"{cohort['name']} (by {cohort['org_name']})"
+
         cols = st.columns(2)
         with cols[0]:
             selected_cohort = st.selectbox(
                 "Select a cohort",
-                user_cohorts,
-                format_func=lambda x: f"{x['name']} ({x['org_name']})",
+                displayed_cohorts,
+                format_func=get_cohort_display_name,
                 index=0,
             )
 

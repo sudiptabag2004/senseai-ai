@@ -1570,20 +1570,11 @@ def insert_milestone(name: str, color: str, org_id: int):
     )
 
 
-def update_milestone_color(milestone_id: int, color: str):
+def update_milestone(milestone_id: int, name: str, color: str):
     execute_db_operation(
-        f"UPDATE {milestones_table_name} SET color = ? WHERE id = ?",
-        (color, milestone_id),
+        f"UPDATE {milestones_table_name} SET name = ?, color = ? WHERE id = ?",
+        (name, color, milestone_id),
     )
-
-
-def set_colors_for_existing_milestones():
-    all_milestones = get_all_milestones()
-
-    for milestone in all_milestones:
-        milestone_id = milestone["id"]
-        color = generate_random_color()
-        update_milestone_color(milestone_id, color)
 
 
 def delete_milestone(milestone_id: int):
@@ -1593,7 +1584,7 @@ def delete_milestone(milestone_id: int):
     )
 
 
-def get_all_milestone_progress(user_id: int, course_id: int):
+def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
     # Get milestones with tasks
     base_results = execute_db_operation(
         f"""
@@ -1687,6 +1678,77 @@ def get_all_milestone_progress(user_id: int, course_id: int):
         }
         for row in results
     ]
+
+
+def get_cohort_metrics_for_milestone(milestone_task_ids: List[int], cohort_id: int):
+    results = execute_db_operation(
+        f"""
+        WITH cohort_learners AS (
+            SELECT u.id, u.email
+            FROM {users_table_name} u
+            JOIN {user_cohorts_table_name} uc ON u.id = uc.user_id 
+            WHERE uc.cohort_id = ? AND uc.role = 'learner'
+        ),
+        task_completion AS (
+            SELECT 
+                cl.id as user_id,
+                cl.email,
+                ch.task_id,
+                MAX(COALESCE(ch.is_solved, 0)) as is_solved
+            FROM cohort_learners cl
+            LEFT JOIN {chat_history_table_name} ch 
+                ON cl.id = ch.user_id 
+                AND ch.task_id IN ({','.join('?' * len(milestone_task_ids))})
+            LEFT JOIN {tasks_table_name} t
+                ON ch.task_id = t.id
+            GROUP BY cl.id, cl.email, ch.task_id, t.name
+        )
+        SELECT 
+            user_id,
+            email,
+            GROUP_CONCAT(task_id) as task_ids,
+            GROUP_CONCAT(is_solved) as task_completion
+        FROM task_completion
+        GROUP BY user_id, email
+        """,
+        (cohort_id, *milestone_task_ids),
+        fetch_all=True,
+    )
+
+    user_metrics = []
+    task_metrics = defaultdict(list)
+    for row in results:
+        task_completions = [
+            int(x) if x else 0 for x in (row[3].split(",") if row[3] else [])
+        ]
+        task_ids = list(map(int, row[2].split(","))) if row[2] else []
+
+        for task_id, task_completion in zip(task_ids, task_completions):
+            task_metrics[task_id].append(task_completion)
+
+        for task_id in milestone_task_ids:
+            if task_id in task_ids:
+                continue
+
+            task_metrics[task_id].append(0)
+
+        num_completed = sum(task_completions)
+
+        user_metrics.append(
+            {
+                "user_id": row[0],
+                "email": row[1],
+                "num_completed": num_completed,
+            }
+        )
+
+    task_metrics = {task_id: task_metrics[task_id] for task_id in milestone_task_ids}
+
+    for index, row in enumerate(user_metrics):
+        for task_id in milestone_task_ids:
+            row[f"task_{task_id}"] = task_metrics[task_id][index]
+
+    return user_metrics
 
 
 def update_user(
@@ -1967,6 +2029,13 @@ def create_organization(name: str, color: str = None, conn=None, cursor=None):
             conn.close()
 
 
+def update_org(org_id: int, org_name: str):
+    execute_db_operation(
+        f"UPDATE {organizations_table_name} SET name = ? WHERE id = ?",
+        (org_name, org_id),
+    )
+
+
 def add_user_to_org_by_user_id(
     user_id: int,
     org_id: int,
@@ -2019,6 +2088,7 @@ def convert_org_db_to_dict(org: Tuple):
     }
 
 
+@st.cache_data
 def get_org_by_id(org_id: int):
     org_details = execute_db_operation(
         f"SELECT * FROM {organizations_table_name} WHERE id = ?",
@@ -2504,7 +2574,7 @@ def drop_courses_table():
 
 
 def get_tasks_for_course(course_id: int, milestone_id: int = None):
-    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id, t.milestone_id
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
         LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
@@ -2532,6 +2602,7 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
             "coding_language": deserialise_list_from_str(task[6]),
             "ordering": task[7],
             "course_task_id": task[8],
+            "milestone_id": task[9],
         }
         for task in tasks
     ]

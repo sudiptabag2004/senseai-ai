@@ -2,7 +2,7 @@ from typing import Dict
 import streamlit as st
 import pandas as pd
 from lib.db import (
-    get_all_milestone_progress,
+    get_user_metrics_for_all_milestones,
     get_all_verified_tasks_for_course,
     get_solved_tasks_for_user,
     get_courses_for_cohort,
@@ -95,7 +95,9 @@ def get_tasks_with_completion_status(
 
 
 def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: Dict):
-    all_milestone_data = get_all_milestone_progress(user_id, course_id=course["id"])
+    all_milestone_data = get_user_metrics_for_all_milestones(
+        user_id, course_id=course["id"]
+    )
 
     if not all_milestone_data:
         return show_empty_error_message()

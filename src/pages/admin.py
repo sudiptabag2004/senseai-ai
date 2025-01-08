@@ -41,6 +41,7 @@ from lib.cache import (
     clear_course_cache_for_cohorts,
     clear_cohort_cache_for_courses,
     clear_cache_for_mentor_groups,
+    clear_cache_for_org_details,
 )
 from lib.db import (
     get_all_tasks_for_org_or_course,
@@ -59,7 +60,7 @@ from lib.db import (
     delete_tag as delete_tag_from_db,
     insert_milestone as insert_milestone_to_db,
     delete_milestone as delete_milestone_from_db,
-    update_milestone_color as update_milestone_color_in_db,
+    update_milestone as update_milestone_in_db,
     get_all_cv_review_usage,
     get_org_users,
     add_user_to_org_by_email,
@@ -96,6 +97,9 @@ from lib.db import (
     add_tags_to_task,
     remove_tags_from_task,
     get_cohort_group_ids_for_users,
+    update_org,
+    get_org_by_id,
+    get_cohort_metrics_for_milestone,
 )
 from lib.utils import find_intersection, generate_random_color
 from lib.config import coding_languages_supported
@@ -104,7 +108,6 @@ from lib.toast import set_toast, show_toast
 from auth import (
     redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
-    get_org_details_from_org_id,
     login_or_signup_user,
 )
 from components.buttons import back_to_home_button
@@ -120,7 +123,7 @@ if "org_id" not in st.query_params:
     unauthorized_redirect_to_home("`org_id` not given. Redirecting to home page...")
 
 st.session_state.org_id = int(st.query_params["org_id"])
-st.session_state.org = get_org_details_from_org_id(st.session_state.org_id)
+st.session_state.org = get_org_by_id(st.session_state.org_id)
 
 
 def reset_ai_running():
@@ -1461,380 +1464,1790 @@ def update_tasks_with_new_value(
     st.rerun()
 
 
-tab_names = ["Cohorts", "Courses", "Tasks", "Milestones", "Tags"]
+layout_cols = st.columns([1, 0.2, 6])
 
-is_hva_org = get_hva_org_id() == st.session_state.org_id
-if is_hva_org:
-    tab_names.append("Analytics")
-
-tab_names.append("Settings")
-
-tabs = st.tabs(tab_names)
+if "selected_section_index" not in st.session_state:
+    st.session_state.selected_section_index = 0
 
 
-def set_task_form_with_task_details(task_details: dict):
-    st.session_state.task_name = task_details["name"]
-    st.session_state.task_description = task_details["description"]
+def change_selected_section(section_index: int):
+    st.session_state.selected_section_index = section_index
 
-    _all_task_types = [task_type["value"] for task_type in task_type_mapping]
-    st.session_state["task_type"] = task_type_mapping[
-        _all_task_types.index(task_details["type"])
-    ]
 
-    st.session_state.task_has_context = bool(task_details["context"])
-    st.session_state.task_context = task_details["context"]
+with layout_cols[0]:
+    sections = ["Dashboard", "Analytics", "Settings"]
+    st.markdown(
+        "<hr style='margin: 0px; margin-bottom: 10px; margin-top: 20px;'>",
+        unsafe_allow_html=True,
+    )
 
-    if task_details["milestone_id"]:
-        all_milestone_ids = [
-            milestone["id"] for milestone in st.session_state.milestones
-        ]
-        selected_milestone_index = all_milestone_ids.index(task_details["milestone_id"])
-        st.session_state["task_milestone"] = st.session_state.milestones[
-            selected_milestone_index
-        ]
-
-    all_tag_ids = [tag["id"] for tag in st.session_state.tags]
-    task_tag_ids = [tag["id"] for tag in task_details["tags"]]
-    selected_tag_indices = [
-        index for index, tag_id in enumerate(all_tag_ids) if tag_id in task_tag_ids
-    ]
-    st.session_state["task_tags"] = [
-        st.session_state.tags[index] for index in selected_tag_indices
-    ]
-
-    all_course_ids = [course["id"] for course in st.session_state.courses]
-    task_course_ids = [course["id"] for course in task_details["courses"]]
-    selected_course_indices = [
-        index
-        for index, course_id in enumerate(all_course_ids)
-        if course_id in task_course_ids
-    ]
-    st.session_state["selected_task_courses"] = [
-        st.session_state.courses[index] for index in selected_course_indices
-    ]
-
-    if task_details["type"] == "reading_material":
-        return
-
-    st.session_state["task_ai_response_type"] = task_details["response_type"]
-    st.session_state["task_input_type"] = task_details["input_type"]
-
-    if task_details["response_type"] in ["exam", "chat"]:
-        st.session_state.final_answer = task_details["answer"]
-    elif task_details["response_type"] == "report":
-        # response_type = report
-        task_details["scoring_criteria"] = get_scoring_criteria_for_task(
-            task_details["id"]
+    for section_index, section in enumerate(sections):
+        st.button(
+            section,
+            key=f"section_{section_index}",
+            type="tertiary",
+            disabled=st.session_state.selected_section_index == section_index,
+            on_click=change_selected_section,
+            args=(section_index,),
         )
-        st.session_state.scoring_criteria = deepcopy(task_details["scoring_criteria"])
-        for scoring_criterion in st.session_state.scoring_criteria:
-            scoring_criterion.pop("id")
-    else:
-        raise NotImplementedError()
+        st.markdown("<hr style='margin: 0px;'>", unsafe_allow_html=True)
 
-    if task_details["input_type"] == "coding":
-        st.session_state.coding_languages = task_details["coding_language"]
+    # Add custom CSS to style the disabled button
+    st.markdown(
+        """
+        <style>
+            .stButton button:disabled {
+                color: #FC4A4A;
+                background-color: transparent !important;
+                border-color: transparent !important;
+            }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
-    if task_details["tests"]:
-        st.session_state.task_has_tests = True
-        st.session_state.tests = task_details["tests"]
+with layout_cols[1]:
+    st.html(
+        """
+                <div class="divider-vertical-line"></div>
+                <style>
+                    .divider-vertical-line {
+                        border-left: 2px solid rgba(60, 64, 68, 0.8);
+                        height: 320px;
+                        margin: auto;
+                        margin-top: 20px;
+                    }
+                </style>
+            """
+    )
 
+if st.session_state.selected_section_index == 0:
+    tab_names = ["Cohorts", "Courses", "Tasks", "Milestones", "Tags"]
 
-def set_bulk_task_form_with_task_details(all_tasks: List[dict]):
-    set_task_type_vars(all_tasks[0]["type"])
+    with layout_cols[-1]:
+        tabs = st.tabs(tab_names)
 
-    # all_task_contexts = [task["context"] for task in all_tasks]
-    # all_task_contexts = list(set(all_task_contexts))
-    # if len(all_task_contexts) == 1 and all_task_contexts[0]:
-    #     st.session_state.task_has_context = True
-    #     st.session_state.task_context = all_task_contexts[0]
+    def set_task_form_with_task_details(task_details: dict):
+        st.session_state.task_name = task_details["name"]
+        st.session_state.task_description = task_details["description"]
 
-    all_task_ai_response_types = [task["response_type"] for task in all_tasks]
-    all_task_ai_response_types = list(set(all_task_ai_response_types))
-    if len(all_task_ai_response_types) == 1:
-        default_task_ai_response_type = all_task_ai_response_types[0]
-        # st.session_state["task_ai_response_type"] = default_task_ai_response_type
-
-        if default_task_ai_response_type == "report":
-            scoring_criteria_all_tasks = get_scoring_criteria_for_tasks(
-                [task["id"] for task in all_tasks]
-            )
-            for task, task_scoring_criteria in zip(
-                all_tasks, scoring_criteria_all_tasks
-            ):
-                task["scoring_criteria"] = task_scoring_criteria
-
-            combined_scoring_criteria = list(
-                itertools.chain.from_iterable(scoring_criteria_all_tasks)
-            )
-
-            if len(combined_scoring_criteria):
-                sc_df = pd.DataFrame(combined_scoring_criteria)
-
-                sc_df = sc_df.drop(columns=["id"])
-                sc_df["range"] = sc_df["range"].apply(lambda x: f"{x[0]}-{x[1]}")
-
-                sc_df = sc_df.drop_duplicates()
-
-                if len(sc_df) == len(scoring_criteria_all_tasks[0]):
-                    st.session_state.scoring_criteria = deepcopy(
-                        scoring_criteria_all_tasks[0]
-                    )
-                    for scoring_criterion in st.session_state.scoring_criteria:
-                        scoring_criterion.pop("id")
-
-    # all_task_input_types = [task["input_type"] for task in all_tasks]
-    # all_task_input_types = list(set(all_task_input_types))
-    # if len(all_task_input_types) == 1:
-    #     default_task_input_type = all_task_input_types[0]
-    #     st.session_state["task_input_type"] = default_task_input_type
-
-    #     if default_task_input_type == "coding":
-    #         all_task_coding_languages = [task["coding_language"] for task in all_tasks]
-    #         all_task_coding_languages = list(set(all_task_coding_languages))
-    #         if len(all_task_coding_languages) == 1:
-    #             st.session_state.coding_languages = all_task_coding_languages[0]
-
-    all_task_milestone_ids = [task["milestone_id"] for task in all_tasks]
-    all_task_milestone_ids = list(set(all_task_milestone_ids))
-    if len(all_task_milestone_ids) == 1 and all_task_milestone_ids[0]:
-        all_milestone_ids = [
-            milestone["id"] for milestone in st.session_state.milestones
-        ]
-        selected_milestone_index = all_milestone_ids.index(all_task_milestone_ids[0])
-        st.session_state.task_milestone = st.session_state.milestones[
-            selected_milestone_index
+        _all_task_types = [task_type["value"] for task_type in task_type_mapping]
+        st.session_state["task_type"] = task_type_mapping[
+            _all_task_types.index(task_details["type"])
         ]
 
-    all_task_course_ids = [
-        [course["id"] for course in task["courses"]] for task in all_tasks
-    ]
+        st.session_state.task_has_context = bool(task_details["context"])
+        st.session_state.task_context = task_details["context"]
 
-    has_same_courses = False
-    try:
-        all_task_course_ids = np.unique(all_task_course_ids, axis=0)
-        if len(all_task_course_ids) == 1:
-            has_same_courses = True
-    except:
-        # list of lists is not convertible to numpy array
-        # as all the sublists don't have the same length
-        pass
+        if task_details["milestone_id"]:
+            all_milestone_ids = [
+                milestone["id"] for milestone in st.session_state.milestones
+            ]
+            selected_milestone_index = all_milestone_ids.index(
+                task_details["milestone_id"]
+            )
+            st.session_state["task_milestone"] = st.session_state.milestones[
+                selected_milestone_index
+            ]
 
-    if has_same_courses:
-        default_course_ids = all_task_course_ids[0]
+        all_tag_ids = [tag["id"] for tag in st.session_state.tags]
+        task_tag_ids = [tag["id"] for tag in task_details["tags"]]
+        selected_tag_indices = [
+            index for index, tag_id in enumerate(all_tag_ids) if tag_id in task_tag_ids
+        ]
+        st.session_state["task_tags"] = [
+            st.session_state.tags[index] for index in selected_tag_indices
+        ]
+
         all_course_ids = [course["id"] for course in st.session_state.courses]
+        task_course_ids = [course["id"] for course in task_details["courses"]]
         selected_course_indices = [
             index
             for index, course_id in enumerate(all_course_ids)
-            if course_id in default_course_ids
+            if course_id in task_course_ids
         ]
         st.session_state["selected_task_courses"] = [
             st.session_state.courses[index] for index in selected_course_indices
         ]
 
+        if task_details["type"] == "reading_material":
+            return
 
-def show_tasks_tab():
-    cols = st.columns([1, 8])
+        st.session_state["task_ai_response_type"] = task_details["response_type"]
+        st.session_state["task_input_type"] = task_details["input_type"]
 
-    add_task = cols[0].button("Add a new task", type="primary")
-
-    bulk_upload_tasks = cols[1].button("Bulk upload tasks")
-
-    if add_task:
-        reset_task_form()
-        show_task_addition_form()
-
-    if bulk_upload_tasks:
-        reset_task_form()
-        update_task_uploader_key()
-        show_bulk_upload_tasks_form()
-
-    refresh_tasks()
-
-    if not st.session_state.tasks:
-        st.error("No tasks added yet")
-        return
-
-    df = pd.DataFrame(st.session_state.tasks)
-    df = df.replace({np.nan: None})
-
-    df["coding_language"] = df["coding_language"].apply(
-        lambda x: x.split(",") if isinstance(x, str) else x
-    )
-    df["num_tests"] = df["tests"].apply(lambda x: len(x) if isinstance(x, list) else 0)
-
-    cols = st.columns([1, 1, 1, 1, 1.5])
-
-    filtered_response_types = cols[0].pills(
-        "Filter by response type",
-        all_ai_response_types,
-    )
-
-    if filtered_response_types:
-        df = df[
-            df["response_type"].apply(
-                lambda x: x in filtered_response_types if x is not None else False
+        if task_details["response_type"] in ["exam", "chat"]:
+            st.session_state.final_answer = task_details["answer"]
+        elif task_details["response_type"] == "report":
+            # response_type = report
+            task_details["scoring_criteria"] = get_scoring_criteria_for_task(
+                task_details["id"]
             )
-        ]
-
-    filtered_input_types = cols[1].pills(
-        "Filter by input type",
-        all_input_types,
-    )
-
-    if filtered_input_types:
-        df = df[
-            df["input_type"].apply(
-                lambda x: x in filtered_input_types if x is not None else False
+            st.session_state.scoring_criteria = deepcopy(
+                task_details["scoring_criteria"]
             )
-        ]
-
-    filtered_types = cols[2].pills(
-        "Filter by type",
-        task_type_mapping,
-        format_func=lambda x: x["label"],
-        selection_mode="multi",
-    )
-
-    if filtered_types:
-        filtered_type_values = [x["value"] for x in filtered_types]
-        df = df[df["type"].apply(lambda x: x in filtered_type_values)]
-
-    filtered_milestones = cols[3].multiselect(
-        "Filter by milestone",
-        st.session_state.milestones,
-        format_func=lambda x: x["name"],
-    )
-
-    if filtered_milestones:
-        filtered_milestone_ids = [milestone["id"] for milestone in filtered_milestones]
-        df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
-
-    if not len(df):
-        st.error("No tasks matching the filters")
-        return
-
-    column_config = {
-        # 'id': None
-        # "verified": st.column_config.CheckboxColumn(label="Is task verified?"),
-        "name": st.column_config.TextColumn(label="Name"),
-        "description": st.column_config.TextColumn(width="medium", label="Description"),
-        "answer": st.column_config.TextColumn(width="medium", label="Answer"),
-        "milestone_name": st.column_config.TextColumn(label="Milestone"),
-        "response_type": st.column_config.TextColumn(label="AI response type"),
-        "input_type": st.column_config.TextColumn(label="User input type"),
-    }
-
-    task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
-    df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
-
-    df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
-    df["Tags"] = df["tags"].apply(lambda x: [tag["name"] for tag in x])
-    df["Task Type"] = df["type"].apply(lambda x: task_type_to_label[x])
-
-    column_order = [
-        "id",
-        # "verified",
-        # "num_tests",
-        "Task Type",
-        "name",
-        "description",
-        # "answer",
-        "Tags",
-        "milestone_name",
-        "Courses",
-        "input_type",
-        "response_type",
-        # "coding_language",
-        # "generation_model",
-        # "timestamp",
-    ]
-
-    delete_col, edit_task_col = st.columns([1, 8])
-
-    error_container = st.container()
-
-    event = st.dataframe(
-        df,
-        on_select="rerun",
-        selection_mode="multi-row",
-        hide_index=True,
-        use_container_width=True,
-        column_config=column_config,
-        column_order=column_order,
-    )
-
-    if len(event.selection["rows"]):
-        task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
-
-        if delete_col.button("Delete task", icon="🗑️"):
-            # import ipdb; ipdb.set_trace()
-            show_tasks_delete_confirmation(
-                task_ids,
-            )
-
-        all_tasks = [
-            row.to_dict() for _, row in df.iloc[event.selection["rows"]].iterrows()
-        ]
-
-        if len(task_ids) == 1:
-            task_details = all_tasks[0]
-            if edit_task_col.button("Edit task", icon="🖊️"):
-                reset_task_form()
-                set_task_form_with_task_details(task_details)
-                show_task_edit_form(task_details=task_details)
+            for scoring_criterion in st.session_state.scoring_criteria:
+                scoring_criterion.pop("id")
         else:
-            if edit_task_col.button("Bulk edit tasks", icon="🖊️"):
-                task_types = set([task["type"] for task in all_tasks])
-                if len(task_types) > 1:
-                    error_container.error(
-                        """All tasks must be of the same type (i.e. either all tasks are `"Reading Material"` or all tasks are `"Question"`) for bulk editing"""
-                    )
+            raise NotImplementedError()
+
+        if task_details["input_type"] == "coding":
+            st.session_state.coding_languages = task_details["coding_language"]
+
+        if task_details["tests"]:
+            st.session_state.task_has_tests = True
+            st.session_state.tests = task_details["tests"]
+
+    def set_bulk_task_form_with_task_details(all_tasks: List[dict]):
+        set_task_type_vars(all_tasks[0]["type"])
+
+        # all_task_contexts = [task["context"] for task in all_tasks]
+        # all_task_contexts = list(set(all_task_contexts))
+        # if len(all_task_contexts) == 1 and all_task_contexts[0]:
+        #     st.session_state.task_has_context = True
+        #     st.session_state.task_context = all_task_contexts[0]
+
+        all_task_ai_response_types = [task["response_type"] for task in all_tasks]
+        all_task_ai_response_types = list(set(all_task_ai_response_types))
+        if len(all_task_ai_response_types) == 1:
+            default_task_ai_response_type = all_task_ai_response_types[0]
+            # st.session_state["task_ai_response_type"] = default_task_ai_response_type
+
+            if default_task_ai_response_type == "report":
+                scoring_criteria_all_tasks = get_scoring_criteria_for_tasks(
+                    [task["id"] for task in all_tasks]
+                )
+                for task, task_scoring_criteria in zip(
+                    all_tasks, scoring_criteria_all_tasks
+                ):
+                    task["scoring_criteria"] = task_scoring_criteria
+
+                combined_scoring_criteria = list(
+                    itertools.chain.from_iterable(scoring_criteria_all_tasks)
+                )
+
+                if len(combined_scoring_criteria):
+                    sc_df = pd.DataFrame(combined_scoring_criteria)
+
+                    sc_df = sc_df.drop(columns=["id"])
+                    sc_df["range"] = sc_df["range"].apply(lambda x: f"{x[0]}-{x[1]}")
+
+                    sc_df = sc_df.drop_duplicates()
+
+                    if len(sc_df) == len(scoring_criteria_all_tasks[0]):
+                        st.session_state.scoring_criteria = deepcopy(
+                            scoring_criteria_all_tasks[0]
+                        )
+                        for scoring_criterion in st.session_state.scoring_criteria:
+                            scoring_criterion.pop("id")
+
+        # all_task_input_types = [task["input_type"] for task in all_tasks]
+        # all_task_input_types = list(set(all_task_input_types))
+        # if len(all_task_input_types) == 1:
+        #     default_task_input_type = all_task_input_types[0]
+        #     st.session_state["task_input_type"] = default_task_input_type
+
+        #     if default_task_input_type == "coding":
+        #         all_task_coding_languages = [task["coding_language"] for task in all_tasks]
+        #         all_task_coding_languages = list(set(all_task_coding_languages))
+        #         if len(all_task_coding_languages) == 1:
+        #             st.session_state.coding_languages = all_task_coding_languages[0]
+
+        all_task_milestone_ids = [task["milestone_id"] for task in all_tasks]
+        all_task_milestone_ids = list(set(all_task_milestone_ids))
+        if len(all_task_milestone_ids) == 1 and all_task_milestone_ids[0]:
+            all_milestone_ids = [
+                milestone["id"] for milestone in st.session_state.milestones
+            ]
+            selected_milestone_index = all_milestone_ids.index(
+                all_task_milestone_ids[0]
+            )
+            st.session_state.task_milestone = st.session_state.milestones[
+                selected_milestone_index
+            ]
+
+        all_task_course_ids = [
+            [course["id"] for course in task["courses"]] for task in all_tasks
+        ]
+
+        has_same_courses = False
+        try:
+            all_task_course_ids = np.unique(all_task_course_ids, axis=0)
+            if len(all_task_course_ids) == 1:
+                has_same_courses = True
+        except:
+            # list of lists is not convertible to numpy array
+            # as all the sublists don't have the same length
+            pass
+
+        if has_same_courses:
+            default_course_ids = all_task_course_ids[0]
+            all_course_ids = [course["id"] for course in st.session_state.courses]
+            selected_course_indices = [
+                index
+                for index, course_id in enumerate(all_course_ids)
+                if course_id in default_course_ids
+            ]
+            st.session_state["selected_task_courses"] = [
+                st.session_state.courses[index] for index in selected_course_indices
+            ]
+
+    def show_tasks_tab():
+        cols = st.columns([1, 6])
+
+        add_task = cols[0].button("Add a new task", type="primary")
+
+        bulk_upload_tasks = cols[1].button("Bulk upload tasks")
+
+        if add_task:
+            reset_task_form()
+            show_task_addition_form()
+
+        if bulk_upload_tasks:
+            reset_task_form()
+            update_task_uploader_key()
+            show_bulk_upload_tasks_form()
+
+        refresh_tasks()
+
+        if not st.session_state.tasks:
+            st.error("No tasks added yet")
+            return
+
+        df = pd.DataFrame(st.session_state.tasks)
+        df = df.replace({np.nan: None})
+
+        df["coding_language"] = df["coding_language"].apply(
+            lambda x: x.split(",") if isinstance(x, str) else x
+        )
+        df["num_tests"] = df["tests"].apply(
+            lambda x: len(x) if isinstance(x, list) else 0
+        )
+
+        cols = st.columns([1, 1, 1, 1])
+
+        filtered_response_types = cols[0].pills(
+            "Filter by response type",
+            all_ai_response_types,
+        )
+
+        if filtered_response_types:
+            df = df[
+                df["response_type"].apply(
+                    lambda x: x in filtered_response_types if x is not None else False
+                )
+            ]
+
+        filtered_input_types = cols[1].pills(
+            "Filter by input type",
+            all_input_types,
+        )
+
+        if filtered_input_types:
+            df = df[
+                df["input_type"].apply(
+                    lambda x: x in filtered_input_types if x is not None else False
+                )
+            ]
+
+        filtered_types = cols[2].pills(
+            "Filter by type",
+            task_type_mapping,
+            format_func=lambda x: x["label"],
+            selection_mode="multi",
+        )
+
+        if filtered_types:
+            filtered_type_values = [x["value"] for x in filtered_types]
+            df = df[df["type"].apply(lambda x: x in filtered_type_values)]
+
+        filtered_milestones = cols[3].multiselect(
+            "Filter by milestone",
+            st.session_state.milestones,
+            format_func=lambda x: x["name"],
+        )
+
+        if filtered_milestones:
+            filtered_milestone_ids = [
+                milestone["id"] for milestone in filtered_milestones
+            ]
+            df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
+
+        if not len(df):
+            st.error("No tasks matching the filters")
+            return
+
+        column_config = {
+            # 'id': None
+            # "verified": st.column_config.CheckboxColumn(label="Is task verified?"),
+            "name": st.column_config.TextColumn(label="Name"),
+            "description": st.column_config.TextColumn(
+                width="medium", label="Description"
+            ),
+            "answer": st.column_config.TextColumn(width="medium", label="Answer"),
+            "milestone_name": st.column_config.TextColumn(label="Milestone"),
+            "response_type": st.column_config.TextColumn(label="AI response type"),
+            "input_type": st.column_config.TextColumn(label="User input type"),
+        }
+
+        task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
+        df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
+
+        df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
+        df["Tags"] = df["tags"].apply(lambda x: [tag["name"] for tag in x])
+        df["Task Type"] = df["type"].apply(lambda x: task_type_to_label[x])
+
+        column_order = [
+            "id",
+            # "verified",
+            # "num_tests",
+            "Task Type",
+            "name",
+            "description",
+            # "answer",
+            "Tags",
+            "milestone_name",
+            "Courses",
+            "input_type",
+            "response_type",
+            # "coding_language",
+            # "generation_model",
+            # "timestamp",
+        ]
+
+        delete_col, edit_task_col = st.columns([1, 6])
+
+        error_container = st.container()
+
+        event = st.dataframe(
+            df,
+            on_select="rerun",
+            selection_mode="multi-row",
+            hide_index=True,
+            use_container_width=True,
+            column_config=column_config,
+            column_order=column_order,
+        )
+
+        if len(event.selection["rows"]):
+            task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
+
+            if delete_col.button("Delete task", icon="🗑️"):
+                # import ipdb; ipdb.set_trace()
+                show_tasks_delete_confirmation(
+                    task_ids,
+                )
+
+            all_tasks = [
+                row.to_dict() for _, row in df.iloc[event.selection["rows"]].iterrows()
+            ]
+
+            if len(task_ids) == 1:
+                task_details = all_tasks[0]
+                if edit_task_col.button("Edit task", icon="🖊️"):
+                    reset_task_form()
+                    set_task_form_with_task_details(task_details)
+                    show_task_edit_form(task_details=task_details)
+            else:
+                if edit_task_col.button("Bulk edit tasks", icon="🖊️"):
+                    task_types = set([task["type"] for task in all_tasks])
+                    if len(task_types) > 1:
+                        error_container.error(
+                            """All tasks must be of the same type (i.e. either all tasks are `"Reading Material"` or all tasks are `"Question"`) for bulk editing"""
+                        )
+                        return
+
+                    reset_task_form()
+                    set_bulk_task_form_with_task_details(all_tasks)
+                    show_bulk_edit_tasks_form(all_tasks)
+
+    with tabs[2]:
+        show_tasks_tab()
+
+    @st.dialog("Create Cohort")
+    def show_create_cohort_dialog():
+        with st.form("create_cohort_form", border=False):
+            cohort_name = st.text_input("Enter cohort name")
+
+            if st.form_submit_button(
+                "Create",
+                type="primary",
+                use_container_width=True,
+            ):
+                if not cohort_name:
+                    st.error("Enter a cohort name")
                     return
 
-                reset_task_form()
-                set_bulk_task_form_with_task_details(all_tasks)
-                show_bulk_edit_tasks_form(all_tasks)
+                create_cohort(cohort_name, st.session_state.org_id)
+                refresh_cohorts()
+                if "tasks" in st.session_state and st.session_state.tasks:
+                    refresh_tasks()
 
+                st.session_state.current_cohort_index = (
+                    len(st.session_state.cohorts) - 1
+                )
+                set_toast(f"Cohort `{cohort_name}` created successfully!")
+                st.rerun()
 
-with tabs[2]:
-    show_tasks_tab()
+    @st.dialog("Add Members to Cohort")
+    def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
+        existing_members = set([member["email"] for member in cohort_info["members"]])
 
+        tabs = st.tabs(["Add Members", "Bulk Upload Members"])
 
-@st.dialog("Create Cohort")
-def show_create_cohort_dialog():
-    with st.form("create_cohort_form", border=False):
-        cohort_name = st.text_input("Enter cohort name")
+        with tabs[0]:
+            with st.form("add_cohort_member_form", border=False):
+                member_email = st.text_input("Enter email", key="cohort_member_email")
+                role = st.selectbox(
+                    "Select role", [group_role_learner, group_role_mentor]
+                )
 
-        if st.form_submit_button(
-            "Create",
-            type="primary",
-            use_container_width=True,
-        ):
-            if not cohort_name:
-                st.error("Enter a cohort name")
+                submit_button = st.form_submit_button(
+                    "Add Member",
+                    use_container_width=True,
+                    type="primary",
+                )
+                if submit_button:
+                    try:
+                        # Check that the email address is valid
+                        member_email = validate_email(member_email)
+
+                        if member_email.normalized in existing_members:
+                            st.error(
+                                f"Member {member_email.normalized} already exists in cohort"
+                            )
+                            return
+
+                        add_members_to_cohort(
+                            cohort_id, [member_email.normalized], [role]
+                        )
+                        refresh_cohorts()
+                        set_toast("Member added successfully")
+                        st.rerun()
+                    except EmailNotValidError as e:
+                        # The exception message is human-readable explanation of why it's
+                        # not a valid (or deliverable) email address.
+                        st.error("Invalid email")
+
+        with tabs[1]:
+            columns = [
+                "Email",
+                "Role",
+            ]
+            uploaded_file = st.file_uploader(
+                f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])} (can be either `{group_role_learner}` or `{group_role_mentor}`)",
+                type="csv",
+                key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
+            )
+
+            if not uploaded_file:
                 return
 
-            create_cohort(cohort_name, st.session_state.org_id)
-            refresh_cohorts()
-            if "tasks" in st.session_state and st.session_state.tasks:
-                refresh_tasks()
+            cohort_df = pd.read_csv(uploaded_file)
+            if cohort_df.columns.tolist() != columns:
+                st.error("The uploaded file does not have the correct columns.")
+                return
 
-            st.session_state.current_cohort_index = len(st.session_state.cohorts) - 1
-            set_toast(f"Cohort `{cohort_name}` created successfully!")
+            if (
+                not cohort_df["Role"]
+                .isin([group_role_learner, group_role_mentor])
+                .all()
+            ):
+                st.error(
+                    f"The uploaded file contains invalid roles. Please ensure that the `Role` column only contains `{group_role_learner}` or `{group_role_mentor}`."
+                )
+                return
+
+            for email in cohort_df["Email"].tolist():
+                try:
+                    validate_email(email)
+                except EmailNotValidError as e:
+                    st.error(f"Invalid email: {email}")
+                    return
+
+                if email in existing_members:
+                    st.error(f"Member {email} already exists in cohort")
+                    return
+
+            st.dataframe(cohort_df, hide_index=True, use_container_width=True)
+
+            if st.button(
+                "Add Members",
+                use_container_width=True,
+                key="bulk_upload_cohort_members",
+                type="primary",
+            ):
+                add_members_to_cohort(
+                    cohort_id,
+                    cohort_df["Email"].tolist(),
+                    cohort_df["Role"].tolist(),
+                )
+                refresh_cohorts()
+                set_toast(f"Members added to cohort successfully!")
+                update_cohort_uploader_key()
+                st.rerun()
+
+    def group_create_edit_form(
+        key: str,
+        cohort_id: int,
+        cohort_info: dict,
+        mode: Literal["create", "edit"] = "create",
+        group_id: int = None,
+        group_name: str = "",
+        learners: List[Dict] = [],
+        mentors: List[Dict] = [],
+    ):
+        with st.form(key, border=False):
+            new_group_name = st.text_input(
+                "Enter group name", key="cohort_group_name", value=group_name
+            )
+
+            learner_options = [
+                member
+                for member in cohort_info["members"]
+                if member["role"] == group_role_learner
+            ]
+            default_learners = [learner["id"] for learner in learners]
+            default_learners_selected = [
+                learner
+                for learner in learner_options
+                if learner["id"] in default_learners
+            ]
+
+            selected_learners = st.multiselect(
+                "Select learners",
+                learner_options,
+                key="cohort_group_learners",
+                format_func=lambda x: x["email"],
+                default=default_learners_selected,
+            )
+
+            mentor_options = [
+                member
+                for member in cohort_info["members"]
+                if member["role"] == group_role_mentor
+            ]
+            all_mentor_ids = [mentor["id"] for mentor in mentors]
+            default_mentors = [mentor["id"] for mentor in mentors]
+            default_mentors_selected = [
+                mentor for mentor in mentor_options if mentor["id"] in default_mentors
+            ]
+
+            selected_mentors = st.multiselect(
+                "Select mentors",
+                mentor_options,
+                key="cohort_group_mentors",
+                format_func=lambda x: x["email"],
+                default=default_mentors_selected,
+            )
+
+            form_submit_button_text = (
+                "Create Group" if mode == "create" else "Save Changes"
+            )
+
+            if st.form_submit_button(
+                form_submit_button_text,
+                use_container_width=True,
+                type="primary",
+            ):
+                if not new_group_name:
+                    st.error("Enter a group name")
+                    return
+
+                if not selected_learners:
+                    st.error("Select at least one learner")
+                    return
+
+                if not selected_mentors:
+                    st.error("Select at least one mentor")
+                    return
+
+                if mode == "create":
+                    create_cohort_group(
+                        new_group_name,
+                        cohort_id,
+                        [
+                            member["id"]
+                            for member in selected_learners + selected_mentors
+                        ],
+                    )
+                    for mentor in selected_mentors:
+                        clear_cache_for_mentor_groups(mentor["id"], cohort_id)
+
+                    set_toast(f"Cohort group created successfully!")
+                else:
+                    if new_group_name != group_name:
+                        update_cohort_group_name(group_id, new_group_name)
+
+                    if selected_learners != learners or selected_mentors != mentors:
+                        existing_member_ids = [
+                            learner["id"] for learner in learners
+                        ] + [mentor["id"] for mentor in mentors]
+
+                        new_member_ids = [
+                            learner["id"] for learner in selected_learners
+                        ] + [mentor["id"] for mentor in selected_mentors]
+
+                        member_ids_to_add = [
+                            member_id
+                            for member_id in new_member_ids
+                            if member_id not in existing_member_ids
+                        ]
+                        add_members_to_cohort_group(group_id, member_ids_to_add)
+
+                        member_ids_to_remove = [
+                            member_id
+                            for member_id in existing_member_ids
+                            if member_id not in new_member_ids
+                        ]
+                        remove_members_from_cohort_group(group_id, member_ids_to_remove)
+
+                        for mentor_id in member_ids_to_add + member_ids_to_remove:
+                            if mentor_id not in all_mentor_ids:
+                                continue
+
+                            clear_cache_for_mentor_groups(mentor_id, cohort_id)
+
+                    set_toast(f"Cohort group updated successfully!")
+
+                refresh_cohorts()
+                st.rerun()
+
+    @st.dialog("Create Cohort Group")
+    def show_create_group_dialog(cohort_id: int, cohort_info: dict):
+        group_create_edit_form(
+            "create_group_form",
+            cohort_id,
+            cohort_info,
+        )
+
+    @st.dialog("Edit Cohort Group")
+    def show_edit_cohort_group_dialog(
+        cohort_id: int,
+        cohort_info: dict,
+        group: Dict,
+        learners: List[Dict],
+        mentors: List[Dict],
+    ):
+        group_create_edit_form(
+            "edit_groups_form",
+            cohort_id,
+            cohort_info,
+            mode="edit",
+            group_id=group["id"],
+            group_name=group["name"],
+            learners=learners,
+            mentors=mentors,
+        )
+
+    @st.dialog("Delete Cohort Group Confirmation")
+    def show_delete_cohort_group_confirmation_dialog(group, cohort_id):
+        st.markdown(f"Are you sure you want to delete the group: `{group['name']}`?")
+        (
+            confirm_col,
+            cancel_col,
+        ) = st.columns([1.5, 6])
+
+        if confirm_col.button("Confirm", type="primary"):
+            delete_cohort_group_from_db(group["id"])
+
+            mentor_ids = [mentor["id"] for mentor in group["members"]]
+            for mentor_id in mentor_ids:
+                clear_cache_for_mentor_groups(mentor_id, cohort_id)
+
+            refresh_cohorts()
+            set_toast("Cohort group deleted successfully!")
             st.rerun()
 
+        if cancel_col.button("Cancel"):
+            st.rerun()
 
-@st.dialog("Add Members to Cohort")
-def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
-    existing_members = set([member["email"] for member in cohort_info["members"]])
+    @st.dialog("Remove Members from Cohort Confirmation")
+    def show_cohort_members_delete_confirmation_dialog(
+        cohort_id: int, members: List[Dict]
+    ):
+        st.markdown(
+            f"Are you sure you want to delete the following members from cohort: {', '.join([member['email'] for member in members])}?"
+        )
+        (
+            confirm_col,
+            cancel_col,
+        ) = st.columns([1.5, 6])
 
-    tabs = st.tabs(["Add Members", "Bulk Upload Members"])
+        if confirm_col.button("Confirm", type="primary"):
+            remove_members_from_cohort(cohort_id, [member["id"] for member in members])
+            refresh_cohorts()
+            set_toast("Members removed from cohort successfully!")
+            st.rerun()
+
+        if cancel_col.button("Cancel"):
+            st.rerun()
+
+    @st.dialog("Delete Cohort Confirmation")
+    def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
+        st.markdown(
+            f"Are you sure you want to delete the cohort: `{cohort_info['name']}`?"
+        )
+        (
+            confirm_col,
+            cancel_col,
+        ) = st.columns([1.5, 6])
+
+        if confirm_col.button("Confirm", type="primary"):
+            delete_cohort(cohort_id)
+            refresh_cohorts()
+
+            # invalidate cache
+            clear_cohort_cache_for_courses(cohort_info["courses"])
+
+            del st.session_state.current_cohort_index
+
+            set_toast("Cohort deleted successfully!")
+            st.rerun()
+
+        if cancel_col.button("Cancel"):
+            st.rerun()
+
+    @st.dialog("Update Cohort Courses")
+    def show_update_cohort_courses_dialog(cohort_id: int, cohort_courses: List[Dict]):
+        with st.form("update_cohort_courses_form", border=False):
+            selected_courses = course_selector("cohort", default=cohort_courses)
+
+            st.container(height=10, border=False)
+
+            has_changes = selected_courses != cohort_courses
+
+            if st.form_submit_button(
+                "Update",
+                type="primary",
+                use_container_width=True,
+            ):
+                if not has_changes:
+                    st.error("No changes made")
+                    return
+
+                courses_to_delete = [
+                    course
+                    for course in cohort_courses
+                    if course not in selected_courses
+                ]
+                courses_to_add = [
+                    course
+                    for course in selected_courses
+                    if course not in cohort_courses
+                ]
+                if courses_to_add:
+                    add_courses_to_cohort(
+                        cohort_id, [course["id"] for course in courses_to_add]
+                    )
+                if courses_to_delete:
+                    remove_courses_from_cohort(
+                        cohort_id, [course["id"] for course in courses_to_delete]
+                    )
+
+                refresh_cohorts()
+
+                # invalidate cache
+                clear_course_cache_for_cohorts([cohort_id])
+                clear_cohort_cache_for_courses(courses_to_add + courses_to_delete)
+
+                set_toast("Cohort updated successfully!")
+                st.rerun()
+
+    def show_cohort_overview(selected_cohort: Dict):
+        cohort_info = get_cohort_by_id(selected_cohort["id"])
+
+        cols = st.columns([1, 1, 1.05, 0.7, 4])
+        if cols[0].button("Add Members"):
+            show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+        if cols[1].button("Create Group"):
+            show_create_group_dialog(selected_cohort["id"], cohort_info)
+        if cols[2].button("Assign Courses"):
+            show_update_cohort_courses_dialog(
+                selected_cohort["id"], selected_cohort["courses"]
+            )
+        if cols[3].button("Edit", icon="🖊️", key="edit_cohort"):
+            show_edit_cohort_form(selected_cohort)
+        if cols[4].button("Delete", icon="🗑️", key="delete_cohort"):
+            show_delete_cohort_confirmation_dialog(
+                selected_cohort["id"], selected_cohort
+            )
+
+        learners = []
+        mentors = []
+
+        # Iterate through all groups in the cohort
+        for member in cohort_info["members"]:
+            if member["role"] == group_role_learner:
+                learners.append(member)
+            elif member["role"] == group_role_mentor:
+                mentors.append(member)
+
+        tab_names = ["Learners", "Mentors", "Groups", "Courses Assigned"]
+
+        tabs = st.tabs(tab_names)
+
+        def _show_courses_tab():
+            if not selected_cohort["courses"]:
+                st.info("No courses in this cohort")
+                return
+
+            st.pills(
+                "Courses",
+                selected_cohort["courses"],
+                format_func=lambda x: x["name"],
+                disabled=True,
+                key="cohort_courses",
+            )
+
+        def _show_users_tab(users: List[Dict], key: str):
+            selection_action_container = st.container(
+                key=f"selected_cohort_members_actions_{key}"
+            )
+            action_error_container = st.container()
+
+            event = st.dataframe(
+                pd.DataFrame(users, columns=["email"]),
+                on_select="rerun",
+                selection_mode="multi-row",
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            if len(event.selection["rows"]):
+                if selection_action_container.button(
+                    "Remove members", key=f"remove_cohort_members_{key}"
+                ):
+                    members_to_remove = [users[i] for i in event.selection["rows"]]
+                    user_ids = [member["id"] for member in members_to_remove]
+                    group_ids_for_members = get_cohort_group_ids_for_users(
+                        user_ids, selected_cohort["id"]
+                    )
+                    if group_ids_for_members:
+                        action_error_container.error(
+                            "One or more selected members are part of a group. Please remove them from the group (s) first."
+                        )
+                        return
+
+                    show_cohort_members_delete_confirmation_dialog(
+                        selected_cohort["id"],
+                        members_to_remove,
+                    )
+
+        def show_learners_tab():
+            if not learners:
+                st.info("No learners in this cohort")
+                return
+
+            _show_users_tab(learners, "learners")
+
+        def show_mentors_tab():
+            if not mentors:
+                st.info("No mentors in this cohort")
+                return
+
+            _show_users_tab(mentors, "mentors")
+
+        def show_groups_tab(cohort_info):
+            if not cohort_info["groups"]:
+                st.info("No groups in this cohort")
+                return
+
+            cols = st.columns([1, 0.4, 1.8])
+
+            # NOTE: DO NOT REMOVE THIS FORMATTING FOR THE DROPDOWN
+            # OTHERWISE CHANGES IN THE COHORT LIKE ADDING/REMOVING MEMBERS
+            # FROM THE WHOLE COHORT OR FROM A GROUP WILL NOT REFLECT IN THE DROPDOWN
+            # WITHOUT AN EXPLICIT RERUN
+            # FOR SOME REASON, ALTHOUGH cohort_info['groups'] IS UPDATED,
+            # THE GROUP VIEW DOES NOT UPDATE UNLESS THE MEMBER INFO OF THE GROUP IS
+            # USED IN THE FORMATTING OF THE DROPDOWN OPTIONS
+            def format_group(group):
+                group_mentors = [
+                    member
+                    for member in group["members"]
+                    if member["role"] == group_role_mentor
+                ]
+                group_learners = [
+                    member
+                    for member in group["members"]
+                    if member["role"] == group_role_learner
+                ]
+                return f'{group["name"]} ({show_singular_or_plural(len(group_learners), "learner")}, {show_singular_or_plural(len(group_mentors), "mentor")})'
+
+            selected_group = cols[0].selectbox(
+                "Select a group",
+                cohort_info["groups"],
+                format_func=format_group,
+            )
+
+            learners = [
+                member
+                for member in selected_group["members"]
+                if member["role"] == group_role_learner
+            ]
+
+            mentors = [
+                member
+                for member in selected_group["members"]
+                if member["role"] == group_role_mentor
+            ]
+
+            cols[1].container(height=10, border=False)
+            cols[1].button(
+                "Edit Group",
+                on_click=show_edit_cohort_group_dialog,
+                args=(
+                    selected_cohort["id"],
+                    cohort_info,
+                    selected_group,
+                    learners,
+                    mentors,
+                ),
+            )
+            cols[2].container(height=10, border=False)
+            cols[2].button(
+                "Delete Group",
+                type="primary",
+                on_click=show_delete_cohort_group_confirmation_dialog,
+                args=(selected_group, selected_cohort["id"]),
+            )
+
+            cols = st.columns([2, 0.2, 1])
+
+            with cols[0]:
+                learners_df = pd.DataFrame(learners)
+
+                st.subheader("Learners")
+                st.dataframe(
+                    learners_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_order=["email"],
+                )
+
+            with cols[-1]:
+                st.subheader("Mentors")
+                mentors_df = pd.DataFrame(mentors)
+                st.dataframe(
+                    mentors_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_order=["email"],
+                )
+
+        with tabs[0]:
+            show_learners_tab()
+
+        with tabs[1]:
+            show_mentors_tab()
+
+        with tabs[2]:
+            show_groups_tab(cohort_info)
+
+        with tabs[3]:
+            _show_courses_tab()
+
+    def update_cohort_name(cohort, new_name):
+        update_cohort_name_in_db(cohort["id"], new_name)
+        refresh_cohorts()
+
+        # invalidate cache
+        clear_cohort_cache_for_courses(cohort["courses"])
+
+        set_toast("Cohort name updated successfully!")
+        st.rerun()
+
+    @st.dialog("Edit Cohort")
+    def show_edit_cohort_form(selected_cohort):
+        with st.form("update_cohort_name_form", border=False):
+            cols = st.columns([1, 0.4])
+            updated_cohort_name = cols[0].text_input(
+                "Cohort Name", value=selected_cohort["name"]
+            )
+            cols[1].container(height=10, border=False)
+            if cols[1].form_submit_button("Update"):
+                if not updated_cohort_name:
+                    st.error("Enter a cohort name")
+                    return
+
+                if updated_cohort_name == selected_cohort["name"]:
+                    st.error("No changes made")
+                    return
+
+                update_cohort_name(selected_cohort, updated_cohort_name)
+
+    def show_cohorts_tab():
+        cols = st.columns([1.2, 0.5, 2])
+
+        if (
+            "current_cohort" in st.session_state
+            and st.session_state.current_cohort not in st.session_state.cohorts
+            and "current_cohort_index" in st.session_state
+        ):
+            st.session_state.current_cohort = st.session_state.cohorts[
+                st.session_state.current_cohort_index
+            ]
+
+        selected_cohort = cols[0].selectbox(
+            "Select a cohort",
+            st.session_state.cohorts,
+            format_func=lambda cohort: cohort["name"],
+            key="current_cohort",
+        )
+
+        if selected_cohort:
+            st.session_state.current_cohort_index = st.session_state.cohorts.index(
+                selected_cohort
+            )
+
+        cols[1].container(height=10, border=False)
+        if cols[1].button("Create Cohort", type="primary"):
+            show_create_cohort_dialog()
+
+        if not len(st.session_state.cohorts):
+            st.error("No cohorts added yet")
+            return
+
+        if not selected_cohort:
+            return
+
+        selected_cohort["courses"] = get_courses_for_cohort(selected_cohort["id"])
+        show_cohort_overview(selected_cohort)
 
     with tabs[0]:
-        with st.form("add_cohort_member_form", border=False):
-            member_email = st.text_input("Enter email", key="cohort_member_email")
-            role = st.selectbox("Select role", [group_role_learner, group_role_mentor])
+        show_cohorts_tab()
+
+    @st.dialog("Create Course")
+    def show_create_course_dialog():
+        with st.form("create_course_form", border=False):
+            course_name = st.text_input("Enter course name")
+
+            cohort_selector()
+
+            if st.form_submit_button(
+                "Create",
+                type="primary",
+                use_container_width=True,
+            ):
+                if not course_name:
+                    st.error("Enter a course name")
+                    return
+
+                new_course_id = create_course(course_name, st.session_state.org_id)
+
+                if st.session_state.course_cohorts:
+                    add_course_to_cohorts(
+                        new_course_id,
+                        [cohort["id"] for cohort in st.session_state.course_cohorts],
+                    )
+                    # invalidate cache
+                    clear_course_cache_for_cohorts(st.session_state.course_cohorts)
+
+                refresh_courses()
+                st.session_state.current_course_index = (
+                    len(st.session_state.courses) - 1
+                )
+                set_toast(f"Course `{course_name}` created successfully!")
+                st.rerun()
+
+    @st.dialog("Update Course Cohorts")
+    def show_update_course_cohorts_dialog(course_id: int, course_cohorts: List[Dict]):
+        with st.form("update_course_cohorts_form", border=False):
+            selected_cohorts = cohort_selector(default=course_cohorts)
+
+            st.container(height=10, border=False)
+
+            has_changes = selected_cohorts != course_cohorts
+
+            if st.form_submit_button(
+                "Update",
+                type="primary",
+                use_container_width=True,
+            ):
+                if not has_changes:
+                    st.error("No changes made")
+                    return
+
+                cohorts_to_delete_from = [
+                    cohort
+                    for cohort in course_cohorts
+                    if cohort not in selected_cohorts
+                ]
+                cohorts_to_add_to = [
+                    cohort
+                    for cohort in selected_cohorts
+                    if cohort not in course_cohorts
+                ]
+                if cohorts_to_add_to:
+                    add_course_to_cohorts(
+                        course_id, [cohort["id"] for cohort in cohorts_to_add_to]
+                    )
+                if cohorts_to_delete_from:
+                    remove_course_from_cohorts(
+                        course_id, [cohort["id"] for cohort in cohorts_to_delete_from]
+                    )
+
+                refresh_courses()
+
+                # invalidate cache
+                clear_cohort_cache_for_courses([course_id])
+                clear_course_cache_for_cohorts(
+                    cohorts_to_add_to + cohorts_to_delete_from
+                )
+
+                set_toast("Cohorts updated successfully!")
+                st.rerun()
+
+    @st.dialog("Delete Course Confirmation")
+    def show_delete_course_confirmation_dialog(course):
+        st.markdown(f"Are you sure you want to delete the course: `{course['name']}`?")
+        (
+            confirm_col,
+            cancel_col,
+        ) = st.columns([1.5, 6])
+
+        if confirm_col.button("Confirm", type="primary"):
+            delete_course(course["id"])
+            refresh_courses()
+
+            # invalidate cache
+            clear_course_cache_for_cohorts(course["cohorts"])
+
+            del st.session_state.current_course_index
+
+            set_toast("Course deleted successfully!")
+            st.rerun()
+
+        if cancel_col.button("Cancel"):
+            st.rerun()
+
+    def update_task_order(current_order, updated_order, milestone_tasks):
+        selected_task = milestone_tasks[current_order]
+
+        # task ordering in milestones are likely to not be in a sequence
+        # so, to update the ordering, instead of adding/subtracting 1 from the ordering of all tasks,
+        # for each task between the current and updated order, we assign the ordering values
+        if current_order < updated_order:
+            task_indices_to_update = range(current_order + 1, updated_order + 1)
+            update_value = -1
+        else:
+            task_indices_to_update = range(updated_order, current_order)
+            update_value = 1
+
+        task_orders_to_update = [
+            (
+                milestone_tasks[task_index + update_value]["ordering"],
+                milestone_tasks[task_index]["course_task_id"],
+            )
+            for task_index in task_indices_to_update
+        ]
+        task_orders_to_update.append(
+            (
+                milestone_tasks[updated_order]["ordering"],
+                selected_task["course_task_id"],
+            )
+        )
+        update_task_orders_in_db(task_orders_to_update)
+
+    @st.dialog("Update Task Order")
+    def show_update_task_order_dialog(current_order: int, milestone_tasks: List[Dict]):
+        st.write(f"Current Order: `{current_order + 1}`")
+
+        with st.form("update_task_order_form", border=False):
+            updated_order = st.selectbox(
+                "Enter new order",
+                options=list(range(1, len(milestone_tasks) + 1)),
+                index=current_order,
+            )
+            if st.form_submit_button(
+                "Update", type="primary", use_container_width=True
+            ):
+                if updated_order == current_order + 1:
+                    st.error("No changes made")
+                    return
+
+                update_task_order(current_order, updated_order - 1, milestone_tasks)
+                set_toast("Task order updated successfully!")
+                st.rerun()
+
+    def update_course_name(course, new_name):
+        update_course_name_in_db(course["id"], new_name)
+        refresh_courses()
+
+        # invalidate cache
+        clear_course_cache_for_cohorts(course["cohorts"])
+
+        set_toast("Course name updated successfully!")
+        st.rerun()
+
+    @st.dialog("Edit Course")
+    def show_edit_course_form(selected_course):
+        with st.form("update_course_name_form", border=False):
+            cols = st.columns([1, 0.4])
+            updated_course_name = cols[0].text_input(
+                "Course Name", value=selected_course["name"]
+            )
+            cols[1].container(height=10, border=False)
+            if cols[1].form_submit_button("Update"):
+                if not updated_course_name:
+                    st.error("Enter a course name")
+                    return
+
+                if updated_course_name == selected_course["name"]:
+                    st.error("No changes made")
+                    return
+
+                update_course_name(selected_course, updated_course_name)
+
+    def show_course_overview(selected_course):
+        cols = st.columns([1.6, 1, 8])
+
+        with cols[0]:
+            if st.button("Assign to cohorts", key="update_course_cohorts"):
+                show_update_course_cohorts_dialog(
+                    selected_course["id"], selected_course["cohorts"]
+                )
+
+        with cols[1]:
+            if st.button("Edit", icon="🖊️", key="edit_course"):
+                show_edit_course_form(selected_course)
+
+        with cols[2]:
+            if st.button("Delete", icon="🗑️", key="delete_course"):
+                show_delete_course_confirmation_dialog(selected_course)
+
+        tab_names = ["Tasks", "Cohorts Assigned to"]
+
+        tabs = st.tabs(tab_names)
+
+        def _show_tasks_tab():
+            if not selected_course["tasks"]:
+                st.info("This course has no tasks yet")
+                return
+
+            task_tab_cols = st.columns([1, 2])
+            with task_tab_cols[0]:
+                milestone = st.selectbox(
+                    "Filter by milestone",
+                    set([task["milestone"] for task in selected_course["tasks"]]),
+                    key="course_task_milestone_filter",
+                )
+
+            filtered_tasks = [
+                task
+                for task in selected_course["tasks"]
+                if task["milestone"] == milestone
+            ]
+
+            filtered_df = pd.DataFrame(
+                filtered_tasks,
+                columns=[
+                    "id",
+                    "verified",
+                    "name",
+                    "type",
+                    "response_type",
+                    "coding_language",
+                ],
+            )
+
+            action_container = st.container()
+
+            event = st.dataframe(
+                filtered_df,
+                on_select="rerun",
+                selection_mode="single-row",
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "id": None,
+                    "verified": st.column_config.CheckboxColumn(
+                        default=False,
+                        width="small",
+                    ),
+                    "name": st.column_config.TextColumn(width="large"),
+                },
+            )
+
+            if len(event.selection["rows"]):
+                index = event.selection["rows"][0]
+                action_container.button(
+                    "Update order",
+                    on_click=show_update_task_order_dialog,
+                    args=(index, filtered_tasks),
+                )
+
+        def _show_assigned_cohorts_tab():
+            if not selected_course["cohorts"]:
+                st.info("This course has not been added to any cohort yet")
+                return
+
+            st.pills(
+                "Cohorts",
+                selected_course["cohorts"],
+                format_func=lambda x: x["name"],
+                disabled=True,
+                key="course_cohorts",
+            )
+
+        with tabs[0]:
+            _show_tasks_tab()
+
+        with tabs[1]:
+            _show_assigned_cohorts_tab()
+
+    def show_courses_tab():
+        cols = st.columns([1.2, 0.5, 2])
+
+        if (
+            "current_course" in st.session_state
+            and st.session_state.current_course not in st.session_state.courses
+            and "current_course_index" in st.session_state
+        ):
+            st.session_state.current_course = st.session_state.courses[
+                st.session_state.current_course_index
+            ]
+
+        selected_course = cols[0].selectbox(
+            "Select a course",
+            st.session_state.courses,
+            format_func=lambda course: course["name"],
+            key="current_course",
+        )
+
+        if selected_course:
+            st.session_state.current_course_index = st.session_state.courses.index(
+                selected_course
+            )
+
+        cols[1].container(height=10, border=False)
+        if cols[1].button("Create Course", type="primary"):
+            show_create_course_dialog()
+
+        if not len(st.session_state.courses):
+            st.error("No courses added yet")
+            return
+
+        if not selected_course:
+            return
+
+        selected_course["tasks"] = get_tasks_for_course(selected_course["id"])
+        selected_course["cohorts"] = get_cohorts_for_course(selected_course["id"])
+
+        show_course_overview(selected_course)
+
+    with tabs[1]:
+        show_courses_tab()
+
+    def add_milestone(new_milestone, milestone_color):
+        if not new_milestone:
+            st.toast("Enter a milestone name")
+            return
+
+        if new_milestone in [
+            milestone["name"] for milestone in st.session_state.milestones
+        ]:
+            st.toast("Milestone already exists")
+            return
+
+        insert_milestone_to_db(new_milestone, milestone_color, st.session_state.org_id)
+        st.toast("New milestone added")
+        refresh_milestones()
+        st.rerun()
+
+    def delete_milestone(milestone):
+        delete_milestone_from_db(milestone["id"])
+        set_toast("Milestone deleted")
+        refresh_milestones()
+
+    @st.dialog("Delete Milestone")
+    def show_milestone_delete_confirmation_dialog(milestone):
+        st.markdown(f"Are you sure you want to delete `{milestone['name']}`?")
+        (
+            confirm_col,
+            cancel_col,
+            _,
+        ) = st.columns([1, 2, 4])
+
+        if confirm_col.button("Yes", type="primary"):
+            delete_milestone(milestone)
+            st.rerun()
+
+        if cancel_col.button("Cancel"):
+            st.rerun()
+
+    def update_milestone(milestone_id, milestone_name, milestone_color):
+        update_milestone_in_db(milestone_id, milestone_name, milestone_color)
+        st.toast("Milestone updated")
+        refresh_milestones()
+
+    @st.dialog("Edit Milestone")
+    def show_milestone_edit_form(milestone):
+        with st.form("milestone_edit_form", border=False):
+            cols = st.columns([6, 1])
+            new_milestone_name = cols[0].text_input(
+                "Enter new milestone name", value=milestone["name"]
+            )
+            new_milestone_color = cols[1].color_picker(
+                "Select",
+                value=milestone["color"],
+                key="milestone_edit_color_picker",
+            )
+
+            if st.form_submit_button(
+                "Update", use_container_width=True, type="primary"
+            ):
+                if not new_milestone_name:
+                    st.error("Enter a milestone name")
+                    return
+
+                if (
+                    new_milestone_color == milestone["color"]
+                    and new_milestone_name == milestone["name"]
+                ):
+                    st.error("No changes made")
+                    return
+
+                update_milestone(
+                    milestone["id"], new_milestone_name, new_milestone_color
+                )
+                st.toast("Milestone updated")
+                st.rerun()
+
+    def show_milestones_tab():
+        with st.form(
+            "new_milestone_form",
+            border=False,
+            clear_on_submit=True,
+        ):
+            cols = st.columns([1, 0.15, 1, 1])
+            new_milestone = cols[0].text_input(
+                "Enter milestone",
+                key="new_milestone",
+            )
+
+            if (
+                "new_milestone_init_color" not in st.session_state
+                or st.session_state["new_milestone_init_color"] == "#000000"
+            ):
+                st.session_state.new_milestone_init_color = generate_random_color()
+
+            cols[1].container(height=10, border=False)
+
+            milestone_color = cols[1].color_picker(
+                "Pick A Color",
+                key="new_milestone_color",
+                label_visibility="collapsed",
+                value=st.session_state.new_milestone_init_color,
+            )
+
+            cols[2].container(height=10, border=False)
+            if cols[2].form_submit_button("Add Milestone"):
+                del st.session_state.new_milestone_init_color
+                add_milestone(new_milestone, milestone_color)
+
+        if not st.session_state.milestones:
+            st.info("No milestones added yet")
+            return
+
+        num_layout_cols = 3
+        layout_cols = st.columns(num_layout_cols)
+
+        css = ""
+        for i, milestone in enumerate(st.session_state.milestones):
+            css += f"""
+            div[data-testid="stExpander"]:has(.st-key-edit_milestone_{i}) {{
+                background-color: {milestone['color']}; 
+                border: 1px solid {milestone['color']};
+                border-radius: 4px;
+                padding: 10px;
+                color: black
+            }}
+
+            div[data-testid="stExpander"]:has(.st-key-edit_milestone_{i}) > [class^="st-emotion-cache-"] {{
+                border-color: {milestone['color']} !important;
+            }}
+
+            div[data-testid="stExpander"]:has(.st-key-edit_milestone_{i}) [data-testid="stBaseButton-secondary"] {{
+                background-color: white !important;
+            }}
+            """
+
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+        for i, milestone in enumerate(st.session_state.milestones):
+            with layout_cols[i % num_layout_cols].container(
+                border=False,
+            ):
+                with st.expander(milestone["name"]):
+                    st.button(
+                        "Edit",
+                        on_click=show_milestone_edit_form,
+                        args=(milestone,),
+                        key=f"edit_milestone_{i}",
+                        use_container_width=True,
+                    )
+
+                    st.button(
+                        "Delete",
+                        on_click=show_milestone_delete_confirmation_dialog,
+                        args=(milestone,),
+                        key=f"delete_milestone_{i}",
+                        use_container_width=True,
+                        type="primary",
+                    )
+
+    with tabs[3]:
+        show_milestones_tab()
+
+    def add_tag(new_tag):
+        if not new_tag:
+            st.toast("Enter a tag name")
+            return
+
+        if new_tag in [tag["name"] for tag in st.session_state.tags]:
+            st.toast("Tag already exists")
+            return
+
+        # since we show the tags in reverse order, we need to save them in reverse order
+        create_tag_in_db(new_tag, st.session_state.org_id)
+        st.toast("New tag added")
+        refresh_tags()
+        st.rerun()
+
+    def delete_tag(tag):
+        delete_tag_from_db(tag["id"])
+        set_toast("Tag deleted")
+        refresh_tags()
+
+    @st.dialog("Delete Tag")
+    def show_tag_delete_confirmation_dialog(tag):
+        st.markdown(f"Are you sure you want to delete `{tag['name']}`?")
+        (
+            confirm_col,
+            cancel_col,
+            _,
+        ) = st.columns([1, 2, 4])
+
+        if confirm_col.button("Yes", type="primary"):
+            delete_tag(tag)
+            st.rerun()
+
+        if cancel_col.button("Cancel"):
+            st.rerun()
+
+    def show_tags_tab():
+        with st.form("new_tag_form", clear_on_submit=True, border=False):
+            cols = st.columns(4)
+            new_tag = cols[0].text_input("Enter Tag", key="new_tag")
+
+            cols[1].container(height=10, border=False)
+            if cols[1].form_submit_button("Add"):
+                add_tag(new_tag)
+
+        if not st.session_state.tags:
+            st.info("No tags added yet")
+            return
+
+        num_layout_cols = 3
+        layout_cols = st.columns(num_layout_cols)
+
+        for i, tag in enumerate(st.session_state.tags[::-1]):
+            with layout_cols[i % num_layout_cols].container(
+                border=False,
+            ):
+                with st.expander(tag["name"]):
+                    st.button(
+                        "Delete",
+                        on_click=show_tag_delete_confirmation_dialog,
+                        args=(tag,),
+                        key=f"delete_tag_{i}",
+                        use_container_width=True,
+                    )
+
+    with tabs[4]:
+        show_tags_tab()
+
+
+elif st.session_state.selected_section_index == 1:
+    is_hva_org = get_hva_org_id() == st.session_state.org_id
+
+    with layout_cols[-1]:
+        tab_names = ["Metrics"]
+
+        if is_hva_org:
+            tab_names.append("CV review")
+
+        tabs = st.tabs(tab_names)
+
+    def show_metrics_tab():
+        if not st.session_state.cohorts:
+            st.info(
+                "No cohorts found. Create a cohort and add members to it. You will see their usage metrics here!"
+            )
+            return
+
+        cols = st.columns(3)
+
+        selected_cohort = cols[0].selectbox(
+            "Select a cohort",
+            st.session_state.cohorts,
+            format_func=lambda cohort: cohort["name"],
+            key="selected_cohort",
+        )
+
+        cohort_courses = get_courses_for_cohort(selected_cohort["id"])
+
+        if not cohort_courses:
+            st.error(
+                "No courses found for this. Add courses to this cohort to see the usage metrics here!"
+            )
+            return
+
+        selected_course = cols[1].selectbox(
+            "Select a course",
+            st.session_state.courses,
+            format_func=lambda course: course["name"],
+            key="selected_course",
+        )
+
+        course_tasks = get_tasks_for_course(selected_course["id"])
+
+        if not course_tasks:
+            st.error(
+                "No tasks found. The course must have at least one task added to it!"
+            )
+            return
+
+        milestone = cols[2].selectbox(
+            "Filter by milestone",
+            set([task["milestone"] for task in course_tasks]),
+            key="metrics_course_task_milestone_filter",
+        )
+
+        filtered_tasks = [
+            task for task in course_tasks if task["milestone"] == milestone
+        ]
+
+        metrics = get_cohort_metrics_for_milestone(
+            [task["id"] for task in filtered_tasks], selected_cohort["id"]
+        )
+
+        column_order = ["email", "num_completed"]
+
+        column_config = {
+            "email": st.column_config.TextColumn("Email", width="medium"),
+            "num_completed": st.column_config.NumberColumn(
+                "Tasks Completed", width="small"
+            ),
+        }
+
+        metrics = pd.DataFrame(metrics)
+
+        for task in filtered_tasks:
+            column_order.append(f'task_{task["id"]}')
+            column_config[f'task_{task["id"]}'] = st.column_config.TextColumn(
+                task["name"],
+                width="small",
+            )
+            metrics[f'task_{task["id"]}'] = metrics[f'task_{task["id"]}'].apply(
+                lambda val: "✅" if val else "❌"
+            )
+
+        st.dataframe(
+            metrics,
+            column_order=column_order,
+            column_config=column_config,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tabs[0]:
+        show_metrics_tab()
+
+    def show_cv_review_usage():
+        all_cv_review_usage = get_all_cv_review_usage()
+        df = pd.DataFrame(all_cv_review_usage)
+
+        if not len(df):
+            st.info("No usage data yet!")
+            return
+
+        # Get unique emails for filtering
+        unique_emails = df["user_email"].unique().tolist()
+        selected_email = st.selectbox("Select specific user", unique_emails, index=None)
+
+        # Filter usage counts for selected email if one is chosen
+        if selected_email:
+            user_entries = df[df["user_email"] == selected_email].reset_index(drop=True)
+
+            st.markdown("#### Submissions")
+            # Convert ai_review string to dict and extract timestamp
+            user_entries = user_entries.sort_values("created_at", ascending=False)
+
+            for index, entry in user_entries.iterrows():
+                with st.expander(
+                    f"#{index + 1} - {entry['role']} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
+                ):
+                    df = pd.DataFrame(
+                        json.loads(entry["ai_review"]), columns=["Category", "Feedback"]
+                    )
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.markdown("#### Overview")
+            # Group by user email and get counts
+            # Get submission counts
+            usage_counts = (
+                df.groupby("user_email")
+                .size()
+                .reset_index(name="number of submissions")
+            )
+
+            # Get unique roles per user
+            roles_by_user = (
+                df.groupby("user_email")["role"]
+                .agg(lambda x: ", ".join(sorted(set(x))))
+                .reset_index(name="rolesr")
+            )
+
+            # Merge the two dataframes
+            usage_stats = usage_counts.merge(roles_by_user, on="user_email")
+            st.dataframe(usage_stats, use_container_width=True, hide_index=True)
+
+    if is_hva_org:
+        with tabs[-1]:
+            show_cv_review_usage()
+else:
+    with layout_cols[-1]:
+        tabs = st.tabs(["Account", "Members"])
+
+    def show_account_tab():
+        with st.form("edit_org_details_form", border=False):
+            new_org_name = st.text_input(
+                "Organization Name", value=st.session_state.org["name"]
+            )
+            if st.form_submit_button("Update"):
+                if not new_org_name:
+                    st.error("Empty name not allowed")
+                    return
+
+                if new_org_name == st.session_state.org["name"]:
+                    st.error("No changes made")
+                    return
+
+                update_org(st.session_state.org_id, new_org_name)
+                clear_cache_for_org_details(st.session_state.org_id)
+                st.rerun()
+
+    with tabs[0]:
+        show_account_tab()
+
+    @st.dialog("Add Member")
+    def show_add_member_dialog(org_users):
+        with st.form("add_member_form", border=False):
+            member_email = st.text_input("Enter email")
+            role = st.selectbox("Select role", ["admin"], disabled=True)
 
             submit_button = st.form_submit_button(
                 "Add Member",
@@ -1845,15 +3258,13 @@ def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
                 try:
                     # Check that the email address is valid
                     member_email = validate_email(member_email)
-
-                    if member_email.normalized in existing_members:
-                        st.error(
-                            f"Member {member_email.normalized} already exists in cohort"
-                        )
+                    if member_email.normalized in [user["email"] for user in org_users]:
+                        st.error("Member already exists")
                         return
 
-                    add_members_to_cohort(cohort_id, [member_email.normalized], [role])
-                    refresh_cohorts()
+                    add_user_to_org_by_email(
+                        member_email.normalized, st.session_state.org_id, role
+                    )
                     set_toast("Member added successfully")
                     st.rerun()
                 except EmailNotValidError as e:
@@ -1861,1197 +3272,21 @@ def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
                     # not a valid (or deliverable) email address.
                     st.error("Invalid email")
 
-    with tabs[1]:
-        columns = [
-            "Email",
-            "Role",
-        ]
-        uploaded_file = st.file_uploader(
-            f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])} (can be either `{group_role_learner}` or `{group_role_mentor}`)",
-            type="csv",
-            key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
-        )
+    def show_members_tab():
+        org_users = get_org_users(st.session_state.org_id)
+        st.button("Add Member", on_click=show_add_member_dialog, args=(org_users,))
 
-        if not uploaded_file:
-            return
-
-        cohort_df = pd.read_csv(uploaded_file)
-        if cohort_df.columns.tolist() != columns:
-            st.error("The uploaded file does not have the correct columns.")
-            return
-
-        if not cohort_df["Role"].isin([group_role_learner, group_role_mentor]).all():
-            st.error(
-                f"The uploaded file contains invalid roles. Please ensure that the `Role` column only contains `{group_role_learner}` or `{group_role_mentor}`."
-            )
-            return
-
-        for email in cohort_df["Email"].tolist():
-            try:
-                validate_email(email)
-            except EmailNotValidError as e:
-                st.error(f"Invalid email: {email}")
-                return
-
-            if email in existing_members:
-                st.error(f"Member {email} already exists in cohort")
-                return
-
-        st.dataframe(cohort_df, hide_index=True, use_container_width=True)
-
-        if st.button(
-            "Add Members",
+        df = pd.DataFrame(org_users)
+        st.dataframe(
+            df,
             use_container_width=True,
-            key="bulk_upload_cohort_members",
-            type="primary",
-        ):
-            add_members_to_cohort(
-                cohort_id,
-                cohort_df["Email"].tolist(),
-                cohort_df["Role"].tolist(),
-            )
-            refresh_cohorts()
-            set_toast(f"Members added to cohort successfully!")
-            update_cohort_uploader_key()
-            st.rerun()
-
-
-def group_create_edit_form(
-    key: str,
-    cohort_id: int,
-    cohort_info: dict,
-    mode: Literal["create", "edit"] = "create",
-    group_id: int = None,
-    group_name: str = "",
-    learners: List[Dict] = [],
-    mentors: List[Dict] = [],
-):
-    with st.form(key, border=False):
-        new_group_name = st.text_input(
-            "Enter group name", key="cohort_group_name", value=group_name
-        )
-
-        learner_options = [
-            member
-            for member in cohort_info["members"]
-            if member["role"] == group_role_learner
-        ]
-        default_learners = [learner["id"] for learner in learners]
-        default_learners_selected = [
-            learner for learner in learner_options if learner["id"] in default_learners
-        ]
-
-        selected_learners = st.multiselect(
-            "Select learners",
-            learner_options,
-            key="cohort_group_learners",
-            format_func=lambda x: x["email"],
-            default=default_learners_selected,
-        )
-
-        mentor_options = [
-            member
-            for member in cohort_info["members"]
-            if member["role"] == group_role_mentor
-        ]
-        all_mentor_ids = [mentor["id"] for mentor in mentors]
-        default_mentors = [mentor["id"] for mentor in mentors]
-        default_mentors_selected = [
-            mentor for mentor in mentor_options if mentor["id"] in default_mentors
-        ]
-
-        selected_mentors = st.multiselect(
-            "Select mentors",
-            mentor_options,
-            key="cohort_group_mentors",
-            format_func=lambda x: x["email"],
-            default=default_mentors_selected,
-        )
-
-        form_submit_button_text = "Create Group" if mode == "create" else "Save Changes"
-
-        if st.form_submit_button(
-            form_submit_button_text,
-            use_container_width=True,
-            type="primary",
-        ):
-            if not new_group_name:
-                st.error("Enter a group name")
-                return
-
-            if not selected_learners:
-                st.error("Select at least one learner")
-                return
-
-            if not selected_mentors:
-                st.error("Select at least one mentor")
-                return
-
-            if mode == "create":
-                create_cohort_group(
-                    new_group_name,
-                    cohort_id,
-                    [member["id"] for member in selected_learners + selected_mentors],
-                )
-                for mentor in selected_mentors:
-                    clear_cache_for_mentor_groups(mentor["id"], cohort_id)
-
-                set_toast(f"Cohort group created successfully!")
-            else:
-                if new_group_name != group_name:
-                    update_cohort_group_name(group_id, new_group_name)
-
-                if selected_learners != learners or selected_mentors != mentors:
-                    existing_member_ids = [learner["id"] for learner in learners] + [
-                        mentor["id"] for mentor in mentors
-                    ]
-
-                    new_member_ids = [
-                        learner["id"] for learner in selected_learners
-                    ] + [mentor["id"] for mentor in selected_mentors]
-
-                    member_ids_to_add = [
-                        member_id
-                        for member_id in new_member_ids
-                        if member_id not in existing_member_ids
-                    ]
-                    add_members_to_cohort_group(group_id, member_ids_to_add)
-
-                    member_ids_to_remove = [
-                        member_id
-                        for member_id in existing_member_ids
-                        if member_id not in new_member_ids
-                    ]
-                    remove_members_from_cohort_group(group_id, member_ids_to_remove)
-
-                    for mentor_id in member_ids_to_add + member_ids_to_remove:
-                        if mentor_id not in all_mentor_ids:
-                            continue
-
-                        clear_cache_for_mentor_groups(mentor_id, cohort_id)
-
-                set_toast(f"Cohort group updated successfully!")
-
-            refresh_cohorts()
-            st.rerun()
-
-
-@st.dialog("Create Cohort Group")
-def show_create_group_dialog(cohort_id: int, cohort_info: dict):
-    group_create_edit_form(
-        "create_group_form",
-        cohort_id,
-        cohort_info,
-    )
-
-
-@st.dialog("Edit Cohort Group")
-def show_edit_cohort_group_dialog(
-    cohort_id: int,
-    cohort_info: dict,
-    group: Dict,
-    learners: List[Dict],
-    mentors: List[Dict],
-):
-    group_create_edit_form(
-        "edit_groups_form",
-        cohort_id,
-        cohort_info,
-        mode="edit",
-        group_id=group["id"],
-        group_name=group["name"],
-        learners=learners,
-        mentors=mentors,
-    )
-
-
-@st.dialog("Delete Cohort Group Confirmation")
-def show_delete_cohort_group_confirmation_dialog(group, cohort_id):
-    st.markdown(f"Are you sure you want to delete the group: `{group['name']}`?")
-    (
-        confirm_col,
-        cancel_col,
-    ) = st.columns([1.5, 6])
-
-    if confirm_col.button("Confirm", type="primary"):
-        delete_cohort_group_from_db(group["id"])
-
-        mentor_ids = [mentor["id"] for mentor in group["members"]]
-        for mentor_id in mentor_ids:
-            clear_cache_for_mentor_groups(mentor_id, cohort_id)
-
-        refresh_cohorts()
-        set_toast("Cohort group deleted successfully!")
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-@st.dialog("Remove Members from Cohort Confirmation")
-def show_cohort_members_delete_confirmation_dialog(cohort_id: int, members: List[Dict]):
-    st.markdown(
-        f"Are you sure you want to delete the following members from cohort: {', '.join([member['email'] for member in members])}?"
-    )
-    (
-        confirm_col,
-        cancel_col,
-    ) = st.columns([1.5, 6])
-
-    if confirm_col.button("Confirm", type="primary"):
-        remove_members_from_cohort(cohort_id, [member["id"] for member in members])
-        refresh_cohorts()
-        set_toast("Members removed from cohort successfully!")
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-@st.dialog("Delete Cohort Confirmation")
-def show_delete_cohort_confirmation_dialog(cohort_id: int, cohort_info: Dict):
-    st.markdown(f"Are you sure you want to delete the cohort: `{cohort_info['name']}`?")
-    (
-        confirm_col,
-        cancel_col,
-    ) = st.columns([1.5, 6])
-
-    if confirm_col.button("Confirm", type="primary"):
-        delete_cohort(cohort_id)
-        refresh_cohorts()
-
-        # invalidate cache
-        clear_cohort_cache_for_courses(cohort_info["courses"])
-
-        del st.session_state.current_cohort_index
-
-        set_toast("Cohort deleted successfully!")
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-@st.dialog("Update Cohort Courses")
-def show_update_cohort_courses_dialog(cohort_id: int, cohort_courses: List[Dict]):
-    with st.form("update_cohort_courses_form", border=False):
-        selected_courses = course_selector("cohort", default=cohort_courses)
-
-        st.container(height=10, border=False)
-
-        has_changes = selected_courses != cohort_courses
-
-        if st.form_submit_button(
-            "Update",
-            type="primary",
-            use_container_width=True,
-        ):
-            if not has_changes:
-                st.error("No changes made")
-                return
-
-            courses_to_delete = [
-                course for course in cohort_courses if course not in selected_courses
-            ]
-            courses_to_add = [
-                course for course in selected_courses if course not in cohort_courses
-            ]
-            if courses_to_add:
-                add_courses_to_cohort(
-                    cohort_id, [course["id"] for course in courses_to_add]
-                )
-            if courses_to_delete:
-                remove_courses_from_cohort(
-                    cohort_id, [course["id"] for course in courses_to_delete]
-                )
-
-            refresh_cohorts()
-
-            # invalidate cache
-            clear_course_cache_for_cohorts([cohort_id])
-            clear_cohort_cache_for_courses(courses_to_add + courses_to_delete)
-
-            set_toast("Cohort updated successfully!")
-            st.rerun()
-
-
-def show_cohort_courses(selected_cohort: Dict):
-    cols = st.columns([1, 0.4])
-    with cols[0]:
-        if not selected_cohort["courses"]:
-            st.markdown("#### Courses")
-            st.info("No courses in this cohort")
-            cols[1].container(height=40, border=False)
-        else:
-            st.pills(
-                "Courses",
-                selected_cohort["courses"],
-                format_func=lambda x: x["name"],
-                disabled=True,
-                key="cohort_courses",
-            )
-            cols[1].container(height=5, border=False)
-
-    if cols[1].button("Update", key="update_cohort_courses"):
-        show_update_cohort_courses_dialog(
-            selected_cohort["id"], selected_cohort["courses"]
-        )
-
-
-def show_cohort_overview(selected_cohort: Dict):
-    st.subheader("Overview")
-    cohort_info = get_cohort_by_id(selected_cohort["id"])
-    cols = st.columns([1, 2, 3.5])
-    if cols[0].button("Add Members"):
-        show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
-    if cols[1].button("Create Group"):
-        show_create_group_dialog(selected_cohort["id"], cohort_info)
-
-    learners = []
-    mentors = []
-
-    # Iterate through all groups in the cohort
-    for member in cohort_info["members"]:
-        if member["role"] == group_role_learner:
-            learners.append(member)
-        elif member["role"] == group_role_mentor:
-            mentors.append(member)
-
-    tab_names = ["Learners", "Mentors", "Groups"]
-
-    tabs = st.tabs(tab_names)
-
-    def _show_users_tab(users: List[Dict], key: str):
-        selection_action_container = st.container(
-            key=f"selected_cohort_members_actions_{key}"
-        )
-        action_error_container = st.container()
-
-        event = st.dataframe(
-            pd.DataFrame(users, columns=["email"]),
-            on_select="rerun",
-            selection_mode="multi-row",
             hide_index=True,
-            use_container_width=True,
+            column_order=["email", "role"],
         )
-
-        if len(event.selection["rows"]):
-            if selection_action_container.button(
-                "Remove members", key=f"remove_cohort_members_{key}"
-            ):
-                members_to_remove = [users[i] for i in event.selection["rows"]]
-                user_ids = [member["id"] for member in members_to_remove]
-                group_ids_for_members = get_cohort_group_ids_for_users(
-                    user_ids, selected_cohort["id"]
-                )
-                if group_ids_for_members:
-                    action_error_container.error(
-                        "One or more selected members are part of a group. Please remove them from the group (s) first."
-                    )
-                    return
-
-                show_cohort_members_delete_confirmation_dialog(
-                    selected_cohort["id"],
-                    members_to_remove,
-                )
-
-    def show_learners_tab():
-        if not learners:
-            st.info("No learners in this cohort")
-            return
-
-        _show_users_tab(learners, "learners")
-
-    def show_mentors_tab():
-        if not mentors:
-            st.info("No mentors in this cohort")
-            return
-
-        _show_users_tab(mentors, "mentors")
-
-    def show_groups_tab(cohort_info):
-        if not cohort_info["groups"]:
-            st.info("No groups in this cohort")
-            return
-
-        cols = st.columns([1, 0.4, 1.8])
-
-        # NOTE: DO NOT REMOVE THIS FORMATTING FOR THE DROPDOWN
-        # OTHERWISE CHANGES IN THE COHORT LIKE ADDING/REMOVING MEMBERS
-        # FROM THE WHOLE COHORT OR FROM A GROUP WILL NOT REFLECT IN THE DROPDOWN
-        # WITHOUT AN EXPLICIT RERUN
-        # FOR SOME REASON, ALTHOUGH cohort_info['groups'] IS UPDATED,
-        # THE GROUP VIEW DOES NOT UPDATE UNLESS THE MEMBER INFO OF THE GROUP IS
-        # USED IN THE FORMATTING OF THE DROPDOWN OPTIONS
-        def format_group(group):
-            group_mentors = [
-                member
-                for member in group["members"]
-                if member["role"] == group_role_mentor
-            ]
-            group_learners = [
-                member
-                for member in group["members"]
-                if member["role"] == group_role_learner
-            ]
-            return f'{group["name"]} ({show_singular_or_plural(len(group_learners), "learner")}, {show_singular_or_plural(len(group_mentors), "mentor")})'
-
-        selected_group = cols[0].selectbox(
-            "Select a group",
-            cohort_info["groups"],
-            format_func=format_group,
-        )
-
-        learners = [
-            member
-            for member in selected_group["members"]
-            if member["role"] == group_role_learner
-        ]
-
-        mentors = [
-            member
-            for member in selected_group["members"]
-            if member["role"] == group_role_mentor
-        ]
-
-        cols[1].container(height=10, border=False)
-        cols[1].button(
-            "Edit Group",
-            on_click=show_edit_cohort_group_dialog,
-            args=(
-                selected_cohort["id"],
-                cohort_info,
-                selected_group,
-                learners,
-                mentors,
-            ),
-        )
-        cols[2].container(height=10, border=False)
-        cols[2].button(
-            "Delete Group",
-            type="primary",
-            on_click=show_delete_cohort_group_confirmation_dialog,
-            args=(selected_group, selected_cohort["id"]),
-        )
-
-        cols = st.columns([2, 0.2, 1])
-
-        with cols[0]:
-            learners_df = pd.DataFrame(learners)
-
-            st.subheader("Learners")
-            st.dataframe(
-                learners_df,
-                hide_index=True,
-                use_container_width=True,
-                column_order=["email"],
-            )
-
-        with cols[-1]:
-            st.subheader("Mentors")
-            mentors_df = pd.DataFrame(mentors)
-            st.dataframe(
-                mentors_df,
-                hide_index=True,
-                use_container_width=True,
-                column_order=["email"],
-            )
-
-    with tabs[0]:
-        show_learners_tab()
 
     with tabs[1]:
-        show_mentors_tab()
+        show_members_tab()
 
-    with tabs[2]:
-        show_groups_tab(cohort_info)
 
-
-def update_cohort_name(cohort, new_name):
-    if new_name == cohort["name"]:
-        st.toast("No changes made")
-        return
-
-    update_cohort_name_in_db(cohort["id"], new_name)
-    refresh_cohorts()
-
-    # invalidate cache
-    clear_cohort_cache_for_courses(cohort["courses"])
-
-    set_toast("Cohort name updated successfully!")
-    st.rerun()
-
-
-def show_cohort_name_update_form(selected_cohort):
-    with st.form("update_cohort_name_form", border=False):
-        cols = st.columns([1, 0.4])
-        updated_cohort_name = cols[0].text_input(
-            "Cohort Name", value=selected_cohort["name"]
-        )
-        cols[1].container(height=10, border=False)
-        if cols[1].form_submit_button("Update"):
-            update_cohort_name(selected_cohort, updated_cohort_name)
-
-
-def show_cohorts_tab():
-    cols = st.columns([1.2, 0.5, 3])
-
-    if (
-        "current_cohort" in st.session_state
-        and st.session_state.current_cohort not in st.session_state.cohorts
-        and "current_cohort_index" in st.session_state
-    ):
-        st.session_state.current_cohort = st.session_state.cohorts[
-            st.session_state.current_cohort_index
-        ]
-
-    selected_cohort = cols[0].selectbox(
-        "Select a cohort",
-        st.session_state.cohorts,
-        format_func=lambda cohort: cohort["name"],
-        key="current_cohort",
-    )
-
-    if selected_cohort:
-        st.session_state.current_cohort_index = st.session_state.cohorts.index(
-            selected_cohort
-        )
-
-    cols[1].container(height=10, border=False)
-    if cols[1].button("Create Cohort", type="primary"):
-        show_create_cohort_dialog()
-
-    if not len(st.session_state.cohorts):
-        st.error("No cohorts added yet")
-        return
-
-    if not selected_cohort:
-        return
-
-    selected_cohort["courses"] = get_courses_for_cohort(selected_cohort["id"])
-
-    st.divider()
-
-    main_tab_cols = st.columns([0.4, 0.05, 1])
-
-    with main_tab_cols[0]:
-        show_cohort_name_update_form(selected_cohort)
-        show_cohort_courses(selected_cohort)
-        st.container(height=10, border=False)
-        if st.button("Delete Cohort", icon="🗑️"):
-            show_delete_cohort_confirmation_dialog(
-                selected_cohort["id"], selected_cohort
-            )
-
-    with main_tab_cols[-1]:
-        show_cohort_overview(selected_cohort)
-
-
-with tabs[0]:
-    show_cohorts_tab()
-
-
-@st.dialog("Create Course")
-def show_create_course_dialog():
-    with st.form("create_course_form", border=False):
-        course_name = st.text_input("Enter course name")
-
-        cohort_selector()
-
-        if st.form_submit_button(
-            "Create",
-            type="primary",
-            use_container_width=True,
-        ):
-            if not course_name:
-                st.error("Enter a course name")
-                return
-
-            new_course_id = create_course(course_name, st.session_state.org_id)
-
-            if st.session_state.course_cohorts:
-                add_course_to_cohorts(
-                    new_course_id,
-                    [cohort["id"] for cohort in st.session_state.course_cohorts],
-                )
-                # invalidate cache
-                clear_course_cache_for_cohorts(st.session_state.course_cohorts)
-
-            refresh_courses()
-            st.session_state.current_course_index = len(st.session_state.courses) - 1
-            set_toast(f"Course `{course_name}` created successfully!")
-            st.rerun()
-
-
-@st.dialog("Update Course Cohorts")
-def show_update_course_cohorts_dialog(course_id: int, course_cohorts: List[Dict]):
-    with st.form("update_course_cohorts_form", border=False):
-        selected_cohorts = cohort_selector(default=course_cohorts)
-
-        st.container(height=10, border=False)
-
-        has_changes = selected_cohorts != course_cohorts
-
-        if st.form_submit_button(
-            "Update",
-            type="primary",
-            use_container_width=True,
-        ):
-            if not has_changes:
-                st.error("No changes made")
-                return
-
-            cohorts_to_delete_from = [
-                cohort for cohort in course_cohorts if cohort not in selected_cohorts
-            ]
-            cohorts_to_add_to = [
-                cohort for cohort in selected_cohorts if cohort not in course_cohorts
-            ]
-            if cohorts_to_add_to:
-                add_course_to_cohorts(
-                    course_id, [cohort["id"] for cohort in cohorts_to_add_to]
-                )
-            if cohorts_to_delete_from:
-                remove_course_from_cohorts(
-                    course_id, [cohort["id"] for cohort in cohorts_to_delete_from]
-                )
-
-            refresh_courses()
-
-            # invalidate cache
-            clear_cohort_cache_for_courses([course_id])
-            clear_course_cache_for_cohorts(cohorts_to_add_to + cohorts_to_delete_from)
-
-            set_toast("Cohorts updated successfully!")
-            st.rerun()
-
-
-@st.dialog("Delete Course Confirmation")
-def show_delete_course_confirmation_dialog(course):
-    st.markdown(f"Are you sure you want to delete the course: `{course['name']}`?")
-    (
-        confirm_col,
-        cancel_col,
-    ) = st.columns([1.5, 6])
-
-    if confirm_col.button("Confirm", type="primary"):
-        delete_course(course["id"])
-        refresh_courses()
-
-        # invalidate cache
-        clear_course_cache_for_cohorts(course["cohorts"])
-
-        del st.session_state.current_course_index
-
-        set_toast("Course deleted successfully!")
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-def update_task_order(current_order, updated_order, milestone_tasks):
-    selected_task = milestone_tasks[current_order]
-
-    # task ordering in milestones are likely to not be in a sequence
-    # so, to update the ordering, instead of adding/subtracting 1 from the ordering of all tasks,
-    # for each task between the current and updated order, we assign the ordering values
-    if current_order < updated_order:
-        task_indices_to_update = range(current_order + 1, updated_order + 1)
-        update_value = -1
-    else:
-        task_indices_to_update = range(updated_order, current_order)
-        update_value = 1
-
-    task_orders_to_update = [
-        (
-            milestone_tasks[task_index + update_value]["ordering"],
-            milestone_tasks[task_index]["course_task_id"],
-        )
-        for task_index in task_indices_to_update
-    ]
-    task_orders_to_update.append(
-        (
-            milestone_tasks[updated_order]["ordering"],
-            selected_task["course_task_id"],
-        )
-    )
-    update_task_orders_in_db(task_orders_to_update)
-
-
-@st.dialog("Update Task Order")
-def show_update_task_order_dialog(current_order: int, milestone_tasks: List[Dict]):
-    st.write(f"Current Order: `{current_order + 1}`")
-
-    with st.form("update_task_order_form", border=False):
-        updated_order = st.selectbox(
-            "Enter new order",
-            options=list(range(1, len(milestone_tasks) + 1)),
-            index=current_order,
-        )
-        if st.form_submit_button("Update", type="primary", use_container_width=True):
-            if updated_order == current_order + 1:
-                st.error("No changes made")
-                return
-
-            update_task_order(current_order, updated_order - 1, milestone_tasks)
-            set_toast("Task order updated successfully!")
-            st.rerun()
-
-
-def show_course_tasks_tab(selected_course):
-    st.subheader("Tasks")
-    if not selected_course["tasks"]:
-        st.info("This course has no tasks yet")
-        return
-
-    cols = st.columns([1, 2])
-    with cols[0]:
-        milestone = st.selectbox(
-            "Filter by milestone",
-            set([task["milestone"] for task in selected_course["tasks"]]),
-            key="course_task_milestone_filter",
-        )
-
-    filtered_tasks = [
-        task for task in selected_course["tasks"] if task["milestone"] == milestone
-    ]
-
-    filtered_df = pd.DataFrame(
-        filtered_tasks,
-        columns=["id", "verified", "name", "type", "response_type", "coding_language"],
-    )
-
-    action_container = st.container()
-
-    event = st.dataframe(
-        filtered_df,
-        on_select="rerun",
-        selection_mode="single-row",
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "id": None,
-            "verified": st.column_config.CheckboxColumn(
-                default=False,
-                width="small",
-            ),
-            "name": st.column_config.TextColumn(width="large"),
-        },
-    )
-
-    if len(event.selection["rows"]):
-        index = event.selection["rows"][0]
-        action_container.button(
-            "Update order",
-            on_click=show_update_task_order_dialog,
-            args=(index, filtered_tasks),
-        )
-
-
-def show_course_cohorts(selected_course):
-    cols = st.columns([1, 0.4])
-    with cols[0]:
-        if not selected_course["cohorts"]:
-            st.markdown("#### Cohorts")
-            st.info("This course has not been added to any cohort yet")
-            cols[1].container(height=40, border=False)
-        else:
-            # st.write(selected_course["cohorts"])
-            st.pills(
-                "Cohorts",
-                selected_course["cohorts"],
-                format_func=lambda x: x["name"],
-                disabled=True,
-                key="course_cohorts",
-            )
-            cols[1].container(height=5, border=False)
-
-    if cols[1].button("Update", key="update_course_cohorts"):
-        show_update_course_cohorts_dialog(
-            selected_course["id"], selected_course["cohorts"]
-        )
-
-
-def update_course_name(course, new_name):
-    if new_name == course["name"]:
-        st.toast("No changes made")
-        return
-
-    update_course_name_in_db(course["id"], new_name)
-    refresh_courses()
-
-    # invalidate cache
-    clear_course_cache_for_cohorts(course["cohorts"])
-
-    set_toast("Course name updated successfully!")
-    st.rerun()
-
-
-def show_course_name_update_form(selected_course):
-    with st.form("update_course_name_form", border=False):
-        cols = st.columns([1, 0.4])
-        updated_course_name = cols[0].text_input(
-            "Course Name", value=selected_course["name"]
-        )
-        cols[1].container(height=10, border=False)
-        if cols[1].form_submit_button("Update"):
-            update_course_name(selected_course, updated_course_name)
-
-
-def show_courses_tab():
-    cols = st.columns([1.2, 0.5, 0.55, 2.5])
-
-    if (
-        "current_course" in st.session_state
-        and st.session_state.current_course not in st.session_state.courses
-        and "current_course_index" in st.session_state
-    ):
-        st.session_state.current_course = st.session_state.courses[
-            st.session_state.current_course_index
-        ]
-
-    selected_course = cols[0].selectbox(
-        "Select a course",
-        st.session_state.courses,
-        format_func=lambda course: course["name"],
-        key="current_course",
-    )
-
-    if selected_course:
-        st.session_state.current_course_index = st.session_state.courses.index(
-            selected_course
-        )
-
-    cols[1].container(height=10, border=False)
-    if cols[1].button("Create Course", type="primary"):
-        show_create_course_dialog()
-
-    if not len(st.session_state.courses):
-        st.error("No courses added yet")
-        return
-
-    if not selected_course:
-        return
-
-    selected_course["tasks"] = get_tasks_for_course(selected_course["id"])
-    selected_course["cohorts"] = get_cohorts_for_course(selected_course["id"])
-
-    st.divider()
-
-    main_tab_cols = st.columns([0.4, 0.05, 1])
-
-    with main_tab_cols[0]:
-        show_course_name_update_form(selected_course)
-        show_course_cohorts(selected_course)
-
-        st.container(height=10, border=False)
-        if st.button("Delete Course", icon="🗑️"):
-            show_delete_course_confirmation_dialog(selected_course)
-
-    with main_tab_cols[-1]:
-        show_course_tasks_tab(selected_course)
-
-
-with tabs[1]:
-    show_courses_tab()
-
-
-def add_milestone(new_milestone, milestone_color):
-    if not new_milestone:
-        st.toast("Enter a milestone name")
-        return
-
-    if new_milestone in [
-        milestone["name"] for milestone in st.session_state.milestones
-    ]:
-        st.toast("Milestone already exists")
-        return
-
-    insert_milestone_to_db(new_milestone, milestone_color, st.session_state.org_id)
-    st.toast("New milestone added")
-    refresh_milestones()
-    st.rerun()
-
-
-def delete_milestone(milestone):
-    delete_milestone_from_db(milestone["id"])
-    set_toast("Milestone deleted")
-    refresh_milestones()
-
-
-@st.dialog("Delete Milestone")
-def show_milestone_delete_confirmation_dialog(milestone):
-    st.markdown(f"Are you sure you want to delete `{milestone['name']}`?")
-    (
-        confirm_col,
-        cancel_col,
-        _,
-    ) = st.columns([1, 2, 4])
-
-    if confirm_col.button("Yes", type="primary"):
-        delete_milestone(milestone)
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-def update_milestone_color(milestone_id, milestone_color):
-    update_milestone_color_in_db(milestone_id, milestone_color)
-    st.toast("Milestone color updated")
-    refresh_milestones()
-
-
-def show_milestones_tab():
-    with st.form(
-        "new_milestone_form",
-        border=False,
-        clear_on_submit=True,
-    ):
-        cols = st.columns([1, 0.15, 1, 1])
-        new_milestone = cols[0].text_input(
-            "Enter milestone",
-            key="new_milestone",
-        )
-
-        if (
-            "new_milestone_init_color" not in st.session_state
-            or st.session_state["new_milestone_init_color"] == "#000000"
-        ):
-            st.session_state.new_milestone_init_color = generate_random_color()
-
-        cols[1].container(height=10, border=False)
-
-        milestone_color = cols[1].color_picker(
-            "Pick A Color",
-            key="new_milestone_color",
-            label_visibility="collapsed",
-            value=st.session_state.new_milestone_init_color,
-        )
-
-        cols[2].container(height=10, border=False)
-        if cols[2].form_submit_button("Add Milestone"):
-            del st.session_state.new_milestone_init_color
-            add_milestone(new_milestone, milestone_color)
-
-    if not st.session_state.milestones:
-        st.info("No milestones added yet")
-        return
-
-    num_layout_cols = 3
-    layout_cols = st.columns(num_layout_cols)
-    for i, milestone in enumerate(st.session_state.milestones):
-        with layout_cols[i % num_layout_cols].container(
-            border=True,
-        ):
-            cols = st.columns([1, 2.5, 1.5, 1.5])
-            milestone_name = f'<div style="margin-top: 0px;">{milestone["name"]}</div>'
-            milestone_color = cols[0].color_picker(
-                "Pick A Color",
-                milestone["color"],
-                key=f'color_picker_{milestone["id"]}',
-                label_visibility="collapsed",
-                # disabled=True,
-            )
-            cols[1].markdown(milestone_name, unsafe_allow_html=True)
-
-            if milestone_color != milestone["color"]:
-                cols[2].button(
-                    "Update",
-                    on_click=update_milestone_color,
-                    args=(milestone["id"], milestone_color),
-                    key=f"update_milestone_color_{i}",
-                    type="primary",
-                )
-
-            cols[-1].button(
-                "Delete",
-                on_click=show_milestone_delete_confirmation_dialog,
-                args=(milestone,),
-                key=f"delete_milestone_{i}",
-            )
-
-
-with tabs[3]:
-    show_milestones_tab()
-
-
-def add_tag(new_tag):
-    if not new_tag:
-        st.toast("Enter a tag name")
-        return
-
-    if new_tag in [tag["name"] for tag in st.session_state.tags]:
-        st.toast("Tag already exists")
-        return
-
-    # since we show the tags in reverse order, we need to save them in reverse order
-    create_tag_in_db(new_tag, st.session_state.org_id)
-    st.toast("New tag added")
-    refresh_tags()
-    st.rerun()
-
-
-def delete_tag(tag):
-    delete_tag_from_db(tag["id"])
-    set_toast("Tag deleted")
-    refresh_tags()
-
-
-@st.dialog("Delete Tag")
-def show_tag_delete_confirmation_dialog(tag):
-    st.markdown(f"Are you sure you want to delete `{tag['name']}`?")
-    (
-        confirm_col,
-        cancel_col,
-        _,
-    ) = st.columns([1, 2, 4])
-
-    if confirm_col.button("Yes", type="primary"):
-        delete_tag(tag)
-        st.rerun()
-
-    if cancel_col.button("Cancel"):
-        st.rerun()
-
-
-def show_tags_tab():
-    with st.form("new_tag_form", clear_on_submit=True, border=False):
-        cols = st.columns(4)
-        new_tag = cols[0].text_input("Enter Tag", key="new_tag")
-
-        cols[1].container(height=10, border=False)
-        if cols[1].form_submit_button("Add"):
-            add_tag(new_tag)
-
-    if not st.session_state.tags:
-        st.info("No tags added yet")
-        return
-
-    num_layout_cols = 3
-    layout_cols = st.columns(num_layout_cols)
-    for i, tag in enumerate(st.session_state.tags[::-1]):
-        with layout_cols[i % num_layout_cols].container(
-            border=True,
-        ):
-            cols = st.columns([3, 1])
-            cols[0].write(tag["name"])
-            cols[-1].button(
-                "Delete",
-                on_click=show_tag_delete_confirmation_dialog,
-                args=(tag,),
-                key=f"delete_tag_{i}",
-            )
-
-
-with tabs[4]:
-    show_tags_tab()
-
-
-def show_analytics_tab():
-    cols = st.columns(4)
-    selected_module = cols[0].selectbox("Select a module", ["CV Review"])
-
-    if selected_module != "CV Review":
-        st.error("Analytics for this module not implemented yet")
-        return
-
-    all_cv_review_usage = get_all_cv_review_usage()
-    df = pd.DataFrame(all_cv_review_usage)
-
-    if not len(df):
-        st.info("No usage data yet!")
-        return
-
-    # Get unique emails for filtering
-    unique_emails = df["user_email"].unique().tolist()
-    selected_email = cols[1].selectbox(
-        "Select specific user", unique_emails, index=None
-    )
-
-    # Filter usage counts for selected email if one is chosen
-    if selected_email:
-        user_entries = df[df["user_email"] == selected_email].reset_index(drop=True)
-
-        st.markdown("#### Submissions")
-        # Convert ai_review string to dict and extract timestamp
-        user_entries = user_entries.sort_values("created_at", ascending=False)
-
-        for index, entry in user_entries.iterrows():
-            with st.expander(
-                f"#{index + 1} - {entry['role']} ({datetime.fromisoformat(entry['created_at']).strftime('%B %d, %Y - %I:%M %p')})"
-            ):
-                df = pd.DataFrame(
-                    json.loads(entry["ai_review"]), columns=["Category", "Feedback"]
-                )
-                st.dataframe(df, use_container_width=True, hide_index=True)
-    else:
-        st.markdown("#### Overview")
-        # Group by user email and get counts
-        # Get submission counts
-        usage_counts = (
-            df.groupby("user_email").size().reset_index(name="number of submissions")
-        )
-
-        # Get unique roles per user
-        roles_by_user = (
-            df.groupby("user_email")["role"]
-            .agg(lambda x: ", ".join(sorted(set(x))))
-            .reset_index(name="rolesr")
-        )
-
-        # Merge the two dataframes
-        usage_stats = usage_counts.merge(roles_by_user, on="user_email")
-        st.dataframe(usage_stats, use_container_width=True, hide_index=True)
-
-
-if is_hva_org:
-    with tabs[5]:
-        show_analytics_tab()
-
-
-@st.dialog("Add Member")
-def show_add_member_dialog(org_users):
-    with st.form("add_member_form", border=False):
-        member_email = st.text_input("Enter email")
-        role = st.selectbox("Select role", ["admin"], disabled=True)
-
-        submit_button = st.form_submit_button(
-            "Add Member",
-            use_container_width=True,
-            type="primary",
-        )
-        if submit_button:
-            try:
-                # Check that the email address is valid
-                member_email = validate_email(member_email)
-                if member_email.normalized in [user["email"] for user in org_users]:
-                    st.error("Member already exists")
-                    return
-
-                add_user_to_org_by_email(
-                    member_email.normalized, st.session_state.org_id, role
-                )
-                set_toast("Member added successfully")
-                st.rerun()
-            except EmailNotValidError as e:
-                # The exception message is human-readable explanation of why it's
-                # not a valid (or deliverable) email address.
-                st.error("Invalid email")
-
-
-def show_settings_tab():
-    st.markdown("#### Members")
-
-    org_users = get_org_users(st.session_state.org_id)
-    st.button("Add Member", on_click=show_add_member_dialog, args=(org_users,))
-
-    df = pd.DataFrame(org_users)
-    st.dataframe(
-        df, use_container_width=True, hide_index=True, column_order=["email", "role"]
-    )
-
-
-with tabs[-1]:
-    show_settings_tab()
+# with tabs[-1]:
+#     show_settings_tab()
