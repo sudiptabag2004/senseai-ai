@@ -110,9 +110,15 @@ def remove_ending_commas_in_list(response: str) -> str:
     return cleaned_response
 
 
+def remove_string_mistakes(response):
+    return response.replace("\\n", "\n")
+
+
 def clean_llm_output(response: str):
     return remove_ending_commas_in_list(
-        remove_comments(remove_output_schema_from_response(response))
+        remove_comments(
+            remove_output_schema_from_response(remove_string_mistakes(response))
+        )
     )
 
 
