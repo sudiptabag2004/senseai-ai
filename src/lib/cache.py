@@ -3,6 +3,7 @@ from lib.db import (
     get_cohorts_for_course,
     get_courses_for_cohort,
     get_mentor_cohort_groups,
+    get_org_by_id,
 )
 
 
@@ -28,3 +29,7 @@ def clear_cohort_cache_for_courses(courses: Union[List[int], List[Dict]]):
 
 def clear_cache_for_mentor_groups(user_id: int, cohort_id: int):
     get_mentor_cohort_groups.clear(user_id, cohort_id)
+
+
+def clear_cache_for_org_details(org_id: int):
+    get_org_by_id.clear(org_id)

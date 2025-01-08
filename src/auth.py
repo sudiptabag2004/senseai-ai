@@ -4,7 +4,6 @@ from typing import Dict
 from lib.db import (
     insert_or_return_user,
     get_user_organizations,
-    get_org_by_id,
 )
 
 
@@ -12,20 +11,14 @@ def update_user_orgs(user: Dict):
     st.session_state.user_orgs = get_user_organizations(user["id"])
 
 
-def set_logged_in_user_orgs(user: Dict):
-    if "user_orgs" in st.session_state:
-        return
-
-    update_user_orgs(user)
-
-
 def login_or_signup_user(email: str, given_name: str = None, family_name: str = None):
-    if "user" in st.session_state:
-        return st.session_state.user
+    if "user" not in st.session_state:
+        st.session_state.email = email
+        st.session_state.user = insert_or_return_user(email, given_name, family_name)
 
-    st.session_state.email = email
-    st.session_state.user = insert_or_return_user(email, given_name, family_name)
-    set_logged_in_user_orgs(st.session_state.user)
+    update_user_orgs(st.session_state.user)
+
+    return st.session_state.user
 
 
 def unauthorized_redirect_to_home(
@@ -71,15 +64,3 @@ def login():
         st.experimental_user.login(provider="google")
 
     sub_cols[-1].link_button("See Documentation", "docs.sensai.hyperverge.org/")
-
-
-def get_org_details_from_org_id(org_id: int):
-    if "org_details" not in st.session_state:
-        st.session_state.org_details = {}
-
-    if org_id in st.session_state.org_details:
-        return st.session_state.org_details[org_id]
-
-    org_details = get_org_by_id(org_id)
-    st.session_state.org_details[org_id] = org_details
-    return org_details
