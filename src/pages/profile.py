@@ -18,10 +18,9 @@ from components.badge import (
     show_download_badge_button,
 )
 from components.buttons import back_to_home_button
-from auth import redirect_if_not_logged_in, login_or_signup_user
+from auth import login_or_signup_user
 
-redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user.email)
+login_or_signup_user()
 
 back_to_home_button()
 

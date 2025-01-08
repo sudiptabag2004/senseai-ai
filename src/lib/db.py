@@ -1469,6 +1469,26 @@ def get_cohort_by_id(cohort_id: int):
         return None
 
 
+def is_user_in_cohort(user_id: int, cohort_id: int):
+    return execute_db_operation(
+        f"""
+        SELECT COUNT(*) > 0 FROM (
+            SELECT 1
+            FROM {user_cohorts_table_name} uc
+            WHERE uc.user_id = ? AND uc.cohort_id = ?
+            UNION
+            SELECT 1 
+            FROM {cohorts_table_name} c
+            JOIN {organizations_table_name} o ON o.id = c.org_id
+            JOIN {user_organizations_table_name} ou ON ou.org_id = o.id
+            WHERE c.id = ? AND ou.user_id = ? AND ou.role IN ('admin', 'owner')
+        )
+        """,
+        (user_id, cohort_id, cohort_id, user_id),
+        fetch_one=True,
+    )[0]
+
+
 def delete_user_from_cohort(user_id: int, cohort_id: int):
     commands = [
         (

@@ -16,7 +16,7 @@ init_app()
 
 from lib.llm import logger, get_formatted_history
 from components.buttons import back_to_home_button
-from auth import login_or_signup_user
+from auth import login_or_signup_user, unauthorized_redirect_to_home
 from lib.config import uncategorized_milestone_name
 from lib.db import (
     get_task_by_id,
@@ -25,6 +25,7 @@ from lib.db import (
     get_user_streak,
     get_scoring_criteria_for_task,
     get_cohort_by_id,
+    is_user_in_cohort,
 )
 from lib.output_formats.report import (
     get_ai_report_response,
@@ -102,7 +103,10 @@ if "course" not in st.query_params:
 cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
 
-login_or_signup_user(st.experimental_user.email)
+login_or_signup_user()
+
+if not is_user_in_cohort(st.session_state.user["id"], cohort_id):
+    unauthorized_redirect_to_home()
 
 task_id = st.query_params.get("id")
 

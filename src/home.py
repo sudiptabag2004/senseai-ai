@@ -12,11 +12,7 @@ from views.home import show_home
 if not st.experimental_user.is_authenticated:
     login()
 else:
-    login_or_signup_user(
-        st.experimental_user.email,
-        st.experimental_user.given_name,
-        st.experimental_user.get("family_name"),
-    )
+    login_or_signup_user()
     show_home()
 
 if not st.query_params:

@@ -107,7 +107,6 @@ from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
 from lib.toast import set_toast, show_toast
 from auth import (
-    redirect_if_not_logged_in,
     unauthorized_redirect_to_home,
     login_or_signup_user,
 )
@@ -115,13 +114,12 @@ from components.buttons import back_to_home_button
 
 init_app()
 
-redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user.email)
+login_or_signup_user()
 
 back_to_home_button()
 
 if "org_id" not in st.query_params:
-    unauthorized_redirect_to_home("`org_id` not given. Redirecting to home page...")
+    unauthorized_redirect_to_home("`org_id` not present in the URL. Redirecting to home page...")
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)

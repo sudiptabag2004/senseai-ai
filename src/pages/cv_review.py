@@ -27,10 +27,9 @@ from lib.image import get_base64_images
 from lib.llm import get_formatted_history, logger
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
-from auth import redirect_if_not_logged_in, login_or_signup_user
+from auth import login_or_signup_user
 
-redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user.email)
+login_or_signup_user()
 
 back_to_home_button()
 

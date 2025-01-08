@@ -11,10 +11,17 @@ def update_user_orgs(user: Dict):
     st.session_state.user_orgs = get_user_organizations(user["id"])
 
 
-def login_or_signup_user(email: str, given_name: str = None, family_name: str = None):
+def login_or_signup_user():
+    redirect_if_not_logged_in()
+
     if "user" not in st.session_state:
-        st.session_state.email = email
-        st.session_state.user = insert_or_return_user(email, given_name, family_name)
+        st.session_state.email = st.experimental_user.email
+
+        st.session_state.user = insert_or_return_user(
+            st.experimental_user.email,
+            st.experimental_user.given_name,
+            st.experimental_user.get("family_name"),
+        )
 
     update_user_orgs(st.session_state.user)
 

@@ -23,9 +23,7 @@ from lib.audio import validate_audio_input, prepare_audio_input_for_ai
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
 
-
-redirect_if_not_logged_in()
-login_or_signup_user(st.experimental_user.email)
+login_or_signup_user()
 
 questions = [
     "Tell me about yourself",
