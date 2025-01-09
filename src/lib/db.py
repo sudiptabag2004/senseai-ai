@@ -965,7 +965,7 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     return current_streak
 
 
-def get_user_activity_last_n_days(user_id: int, n: int, cohort_id: int):
+def get_user_active_in_last_n_days(user_id: int, n: int, cohort_id: int):
     activity_per_day = execute_db_operation(
         f"""
     SELECT DATE(datetime(timestamp, '+5 hours', '+30 minutes')), COUNT(*)
@@ -985,6 +985,34 @@ def get_user_activity_last_n_days(user_id: int, n: int, cohort_id: int):
             active_days.append(datetime.strptime(date, "%Y-%m-%d"))
 
     return active_days
+
+
+def get_user_activity_for_year(user_id: int, year: int):
+    # Get all chat messages for the user in the given year, grouped by day
+    activity_per_day = execute_db_operation(
+        f"""
+        SELECT 
+            strftime('%j', datetime(timestamp, '+5 hours', '+30 minutes')) as day_of_year,
+            COUNT(*) as message_count
+        FROM {chat_history_table_name}
+        WHERE user_id = ? 
+        AND strftime('%Y', datetime(timestamp, '+5 hours', '+30 minutes')) = ?
+        AND role = 'user'
+        GROUP BY day_of_year
+        ORDER BY day_of_year
+        """,
+        (user_id, str(year)),
+        fetch_all=True,
+    )
+
+    # Convert to dictionary mapping day of year to message count
+    activity_map = {int(day) - 1: count for day, count in activity_per_day}
+
+    num_days = 366 if not year % 4 else 365
+
+    data = [activity_map.get(index, 0) for index in range(num_days)]
+
+    return data
 
 
 def get_user_streak(user_id: int, cohort_id: int):
@@ -2153,6 +2181,13 @@ def add_user_to_org_by_email(
         except Exception as e:
             conn.rollback()
             raise e
+
+
+def remove_members_from_org(org_id: int, user_ids: List[int]):
+    execute_db_operation(
+        f"DELETE FROM {user_organizations_table_name} WHERE org_id = ? AND user_id IN ({', '.join(map(str, user_ids))})",
+        (org_id,),
+    )
 
 
 def convert_user_organization_db_to_dict(user_organization: Tuple):

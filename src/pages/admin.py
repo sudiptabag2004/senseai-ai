@@ -65,6 +65,7 @@ from lib.db import (
     get_all_cv_review_usage,
     get_org_users,
     add_user_to_org_by_email,
+    remove_members_from_org,
     add_members_to_cohort,
     create_cohort_group,
     delete_cohort_group_from_db,
@@ -119,7 +120,9 @@ login_or_signup_user()
 back_to_home_button()
 
 if "org_id" not in st.query_params:
-    unauthorized_redirect_to_home("`org_id` not present in the URL. Redirecting to home page...")
+    unauthorized_redirect_to_home(
+        "`org_id` not present in the URL. Redirecting to home page..."
+    )
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
@@ -1794,7 +1797,7 @@ if st.session_state.selected_section_index == 0:
         if len(event.selection["rows"]):
             task_ids = df.iloc[event.selection["rows"]]["id"].tolist()
 
-            if delete_col.button("Delete task", icon="🗑️"):
+            if delete_col.button("Delete tasks", icon="🗑️"):
                 # import ipdb; ipdb.set_trace()
                 show_tasks_delete_confirmation(
                     task_ids,
@@ -3234,17 +3237,59 @@ else:
                     # not a valid (or deliverable) email address.
                     st.error("Invalid email")
 
+    @st.dialog("Remove members")
+    def show_remove_members_confirmation_dialog(
+        user_ids,
+    ):
+        st.write("Are you sure you want to remove the selected members?")
+
+        confirm_col, cancel_col, _, _ = st.columns([1, 1, 2, 2])
+        if confirm_col.button("Yes", use_container_width=True):
+            remove_members_from_org(
+                st.session_state.org_id,
+                user_ids,
+            )
+            st.rerun()
+
+        if cancel_col.button("No", use_container_width=True, type="primary"):
+            st.rerun()
+
     def show_members_tab():
         org_users = get_org_users(st.session_state.org_id)
-        st.button("Add Member", on_click=show_add_member_dialog, args=(org_users,))
 
         df = pd.DataFrame(org_users)
-        st.dataframe(
+
+        action_container = st.container()
+        add_member_col, remove_members_col = action_container.columns([1, 7])
+
+        add_member_col.button(
+            "Add Member", on_click=show_add_member_dialog, args=(org_users,)
+        )
+
+        error_container = st.container()
+
+        event = st.dataframe(
             df,
+            on_select="rerun",
+            selection_mode="multi-row",
             use_container_width=True,
             hide_index=True,
             column_order=["email", "role"],
         )
+
+        if len(event.selection["rows"]):
+            user_ids = df.iloc[event.selection["rows"]]["id"].tolist()
+            user_roles = set(df.iloc[event.selection["rows"]]["role"].tolist())
+
+            if remove_members_col.button("Remove members", icon="🗑️"):
+                if "owner" in user_roles:
+                    error_container.error("Cannot remove the owner")
+                    return
+
+                # import ipdb; ipdb.set_trace()
+                show_remove_members_confirmation_dialog(
+                    user_ids,
+                )
 
     with tabs[1]:
         show_members_tab()

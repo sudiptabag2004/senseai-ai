@@ -17,6 +17,7 @@ from components.badge import (
     show_share_badge_prompt,
     show_download_badge_button,
 )
+from components.profile_activity import show_github_style_activity
 from components.buttons import back_to_home_button
 from auth import login_or_signup_user
 
@@ -72,8 +73,57 @@ profile_header(st.session_state.user)
 
 st.container(height=20, border=False)
 
-tab_names = ["Account", "Badges"]
+tab_names = [
+    "Activity",
+    "Badges",
+    "Account",
+]
 tabs = st.tabs(tab_names)
+
+
+with tabs[0]:
+    show_github_style_activity()
+
+
+def show_badges_tab():
+    if not st.session_state.badges:
+        st.info(
+            "🚀 You haven't earned any badges yet. Solve tasks regularly to build streaks and complete milestones to earn badges."
+        )
+        return
+
+    show_share_badge_prompt()
+
+    num_cols = 4
+    grid = st.columns(num_cols)
+    for index, badge in enumerate(st.session_state.badges):
+        with grid[index % num_cols]:
+            badge_params = {
+                "image_path": badge["image_path"],
+                "bg_color": badge["bg_color"],
+            }
+            show_badge(
+                badge["value"],
+                badge["type"],
+                "learner",
+                badge_params,
+                badge["cohort_name"],
+                badge["org_name"],
+                width=300,
+                height=300,
+            )
+            show_download_badge_button(
+                badge["value"],
+                badge["type"],
+                badge_params,
+                badge["cohort_name"],
+                badge["org_name"],
+                key=badge["id"],
+            )
+
+
+with tabs[1]:
+    show_badges_tab()
 
 
 def update_account_details(
@@ -98,7 +148,7 @@ def update_account_details(
     st.rerun()
 
 
-with tabs[0]:
+def show_account_tab():
     with st.form("account_details", border=False):
         cols = st.columns(3)
         with cols[0]:
@@ -143,42 +193,5 @@ with tabs[0]:
             update_account_details(first_name, middle_name, last_name, profile_color)
 
 
-def show_badges_tab():
-    if not st.session_state.badges:
-        st.info(
-            "🚀 You haven't earned any badges yet. Solve tasks regularly to build streaks and complete milestones to earn badges."
-        )
-        return
-
-    show_share_badge_prompt()
-
-    num_cols = 4
-    grid = st.columns(num_cols)
-    for index, badge in enumerate(st.session_state.badges):
-        with grid[index % num_cols]:
-            badge_params = {
-                "image_path": badge["image_path"],
-                "bg_color": badge["bg_color"],
-            }
-            show_badge(
-                badge["value"],
-                badge["type"],
-                "learner",
-                badge_params,
-                badge["cohort_name"],
-                badge["org_name"],
-                width=300,
-                height=300,
-            )
-            show_download_badge_button(
-                badge["value"],
-                badge["type"],
-                badge_params,
-                badge["cohort_name"],
-                badge["org_name"],
-                key=badge["id"],
-            )
-
-
-with tabs[1]:
-    show_badges_tab()
+with tabs[2]:
+    show_account_tab()

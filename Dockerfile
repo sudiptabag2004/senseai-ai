@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install Node.js and npm
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-RUN apt-get install -y nodejs
+RUN apt-get install -y nodejs git
 
 # Install libssl1.1
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
