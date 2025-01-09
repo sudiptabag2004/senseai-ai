@@ -74,7 +74,7 @@ profile_header(st.session_state.user)
 st.container(height=20, border=False)
 
 tab_names = [
-    "Activity",
+    "Dashboard",
     "Badges",
     "Account",
 ]
