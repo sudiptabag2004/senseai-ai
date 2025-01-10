@@ -2264,7 +2264,7 @@ if st.session_state.selected_section_index == 0:
                     key="cohort_courses",
                     label_visibility="collapsed",
                 )
-            
+
             if st.button("Add/Remove Courses"):
                 show_update_cohort_courses_dialog(
                     selected_cohort["id"], selected_cohort["courses"]
@@ -3059,6 +3059,22 @@ elif st.session_state.selected_section_index == 1:
 
         tabs = st.tabs(tab_names)
 
+    @st.dialog("Select task")
+    def show_task_picker_dialog_for_task_history_inspection(
+        user_id: int, task_list: List[Dict], cohort_id: int, course_id: int
+    ):
+        selected_task = st.selectbox(
+            "Select the task you want to inspect the history for",
+            task_list,
+            format_func=lambda val: val["name"],
+        )
+
+        task_review_url = f"/task?id={selected_task['id']}&course={course_id}&cohort={cohort_id}&learner={user_id}&mode=review"
+
+        st.link_button(
+            "Open", task_review_url, type="primary", use_container_width=True
+        )
+
     def show_metrics_tab():
         if not st.session_state.cohorts:
             st.info(
@@ -3133,13 +3149,23 @@ elif st.session_state.selected_section_index == 1:
                 lambda val: "✅" if val else "❌"
             )
 
-        st.dataframe(
+        action_container = st.container()
+
+        event = st.dataframe(
             metrics,
             column_order=column_order,
             column_config=column_config,
             use_container_width=True,
             hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
         )
+        if len(event.selection["rows"]):
+            user_id = metrics.iloc[event.selection["rows"]]["user_id"].tolist()[0]
+            if action_container.button("Inspect task history"):
+                show_task_picker_dialog_for_task_history_inspection(
+                    user_id, filtered_tasks, selected_cohort['id'], selected_course['id']
+                )
 
     with tabs[0]:
         show_metrics_tab()

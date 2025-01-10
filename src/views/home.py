@@ -125,10 +125,9 @@ def mentor_view(selected_cohort: Dict):
     if not len(event.selection["rows"]):
         return
 
-    df_actions.write("Do you want to dig deeper into this milestone?")
     milestone_id = df.iloc[event.selection["rows"][0]]["milestone_id"]
     df_actions.link_button(
-        "Yes",
+        "Inspect task history",
         f"/roadmap?milestone_id={milestone_id}&learner={selected_learner['id']}&cohort={selected_cohort['id']}&course={selected_course['id']}&mode=review",
     )
     # print()
