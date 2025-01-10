@@ -738,11 +738,11 @@ def milestone_selector():
     )
 
 
-def cohort_selector(default=None):
+def cohort_selector(key_suffix: str, default=None):
     return st.multiselect(
         "Cohorts",
         st.session_state.cohorts,
-        key="course_cohorts",
+        key=f"course_cohorts_{key_suffix}",
         default=default,
         format_func=lambda row: row["name"],
         help="If you don't see the cohort you want, you can create a new one from the `Cohorts` tab",
@@ -1471,20 +1471,25 @@ with layout_cols[0]:
         unsafe_allow_html=True,
     )
 
-with layout_cols[1]:
+
+def show_vertical_divider(height: int = 320):
     st.html(
-        """
-                <div class="divider-vertical-line"></div>
+        f"""
+                <div class="divider-vertical-line" style="height: {height}px;"></div>
                 <style>
-                    .divider-vertical-line {
+                    .divider-vertical-line {{
                         border-left: 2px solid rgba(60, 64, 68, 0.8);
-                        height: 320px;
+                        height: {height}px;
                         margin: auto;
                         margin-top: 20px;
-                    }
+                    }}
                 </style>
             """
     )
+
+
+with layout_cols[1]:
+    show_vertical_divider()
 
 if st.session_state.selected_section_index == 0:
     tab_names = ["Cohorts", "Courses", "Tasks", "Milestones", "Tags"]
@@ -2222,18 +2227,11 @@ if st.session_state.selected_section_index == 0:
     def show_cohort_overview(selected_cohort: Dict):
         cohort_info = get_cohort_by_id(selected_cohort["id"])
 
-        cols = st.columns([1, 1, 1.05, 0.7, 4])
-        if cols[0].button("Add Members"):
-            show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
-        if cols[1].button("Create Group"):
-            show_create_group_dialog(selected_cohort["id"], cohort_info)
-        if cols[2].button("Assign Courses"):
-            show_update_cohort_courses_dialog(
-                selected_cohort["id"], selected_cohort["courses"]
-            )
-        if cols[3].button("Edit", icon="🖊️", key="edit_cohort"):
+        cols = st.columns([1, 10])
+
+        if cols[0].button("Edit", icon="🖊️", key="edit_cohort"):
             show_edit_cohort_form(selected_cohort)
-        if cols[4].button("Delete", icon="🗑️", key="delete_cohort"):
+        if cols[1].button("Delete", icon="🗑️", key="delete_cohort"):
             show_delete_cohort_confirmation_dialog(
                 selected_cohort["id"], selected_cohort
             )
@@ -2250,22 +2248,32 @@ if st.session_state.selected_section_index == 0:
 
         tab_names = ["Learners", "Mentors", "Groups", "Courses Assigned"]
 
-        tabs = st.tabs(tab_names)
+        selected_tab = st.segmented_control(
+            "Cohort Tabs", tab_names, label_visibility="hidden", default=tab_names[0]
+        )
 
         def _show_courses_tab():
             if not selected_cohort["courses"]:
                 st.info("No courses in this cohort")
-                return
-
-            st.pills(
-                "Courses",
-                selected_cohort["courses"],
-                format_func=lambda x: x["name"],
-                disabled=True,
-                key="cohort_courses",
-            )
+            else:
+                st.pills(
+                    "Courses",
+                    selected_cohort["courses"],
+                    format_func=lambda x: x["name"],
+                    disabled=True,
+                    key="cohort_courses",
+                    label_visibility="collapsed",
+                )
+            
+            if st.button("Add/Remove Courses"):
+                show_update_cohort_courses_dialog(
+                    selected_cohort["id"], selected_cohort["courses"]
+                )
 
         def _show_users_tab(users: List[Dict], key: str):
+            if st.button("Add Members", key=f"add_member_{key}"):
+                show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+
             selection_action_container = st.container(
                 key=f"selected_cohort_members_actions_{key}"
             )
@@ -2314,6 +2322,9 @@ if st.session_state.selected_section_index == 0:
             _show_users_tab(mentors, "mentors")
 
         def show_groups_tab(cohort_info):
+            if st.button("Create Group"):
+                show_create_group_dialog(selected_cohort["id"], cohort_info)
+
             if not cohort_info["groups"]:
                 st.info("No groups in this cohort")
                 return
@@ -2401,16 +2412,16 @@ if st.session_state.selected_section_index == 0:
                     column_order=["email"],
                 )
 
-        with tabs[0]:
+        if selected_tab == tab_names[0]:
             show_learners_tab()
 
-        with tabs[1]:
+        if selected_tab == tab_names[1]:
             show_mentors_tab()
 
-        with tabs[2]:
+        if selected_tab == tab_names[2]:
             show_groups_tab(cohort_info)
 
-        with tabs[3]:
+        if selected_tab == tab_names[3]:
             _show_courses_tab()
 
     def update_cohort_name(cohort, new_name):
@@ -2488,7 +2499,7 @@ if st.session_state.selected_section_index == 0:
         with st.form("create_course_form", border=False):
             course_name = st.text_input("Enter course name")
 
-            cohort_selector()
+            cohort_selector("create_course")
 
             if st.form_submit_button(
                 "Create",
@@ -2519,7 +2530,7 @@ if st.session_state.selected_section_index == 0:
     @st.dialog("Update Course Cohorts")
     def show_update_course_cohorts_dialog(course_id: int, course_cohorts: List[Dict]):
         with st.form("update_course_cohorts_form", border=False):
-            selected_cohorts = cohort_selector(default=course_cohorts)
+            selected_cohorts = cohort_selector("update_course", default=course_cohorts)
 
             st.container(height=10, border=False)
 
@@ -2666,25 +2677,21 @@ if st.session_state.selected_section_index == 0:
                 update_course_name(selected_course, updated_course_name)
 
     def show_course_overview(selected_course):
-        cols = st.columns([1.6, 1, 8])
+        cols = st.columns([1, 10])
 
         with cols[0]:
-            if st.button("Assign to cohorts", key="update_course_cohorts"):
-                show_update_course_cohorts_dialog(
-                    selected_course["id"], selected_course["cohorts"]
-                )
-
-        with cols[1]:
             if st.button("Edit", icon="🖊️", key="edit_course"):
                 show_edit_course_form(selected_course)
 
-        with cols[2]:
+        with cols[1]:
             if st.button("Delete", icon="🗑️", key="delete_course"):
                 show_delete_course_confirmation_dialog(selected_course)
 
         tab_names = ["Tasks", "Cohorts Assigned to"]
 
-        tabs = st.tabs(tab_names)
+        selected_tab = st.segmented_control(
+            "Course Tabs", tab_names, label_visibility="hidden", default=tab_names[0]
+        )
 
         def _show_tasks_tab():
             if not selected_course["tasks"]:
@@ -2744,22 +2751,28 @@ if st.session_state.selected_section_index == 0:
                 )
 
         def _show_assigned_cohorts_tab():
+
             if not selected_course["cohorts"]:
                 st.info("This course has not been added to any cohort yet")
-                return
+            else:
+                st.pills(
+                    "Cohorts",
+                    selected_course["cohorts"],
+                    format_func=lambda x: x["name"],
+                    disabled=True,
+                    key="course_cohorts",
+                    label_visibility="collapsed",
+                )
 
-            st.pills(
-                "Cohorts",
-                selected_course["cohorts"],
-                format_func=lambda x: x["name"],
-                disabled=True,
-                key="course_cohorts",
-            )
+            if st.button("Add/Remove Cohorts", key="update_course_cohorts"):
+                show_update_course_cohorts_dialog(
+                    selected_course["id"], selected_course["cohorts"]
+                )
 
-        with tabs[0]:
+        if selected_tab == tab_names[0]:
             _show_tasks_tab()
 
-        with tabs[1]:
+        if selected_tab == tab_names[1]:
             _show_assigned_cohorts_tab()
 
     def show_courses_tab():
