@@ -3128,6 +3128,10 @@ elif st.session_state.selected_section_index == 1:
             [task["id"] for task in filtered_tasks], selected_cohort["id"]
         )
 
+        if not metrics:
+            st.error("No usage data yet!")
+            return
+
         column_order = ["email", "num_completed"]
 
         column_config = {
