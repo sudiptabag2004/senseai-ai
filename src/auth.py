@@ -77,4 +77,4 @@ def login():
     if google_button:
         st.experimental_user.login(provider="google")
 
-    sub_cols[-1].link_button("See Documentation", "docs.sensai.hyperverge.org/")
+    sub_cols[-1].link_button("See Documentation", "https://docs.sensai.hyperverge.org/")
