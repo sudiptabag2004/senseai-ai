@@ -9,7 +9,7 @@ from lib.ui import display_waiting_indicator
 from lib.llm import logger
 
 
-def show_ai_report(ai_response_rows, column_names, container):
+def show_ai_report(ai_response_rows, column_names):
     display_rows = []
 
     for row in ai_response_rows:
@@ -22,23 +22,21 @@ def show_ai_report(ai_response_rows, column_names, container):
 
     df = pd.DataFrame(display_rows, columns=column_names)
 
-    with container:
-        st.markdown(
-            df.to_html(escape=False, index=False),
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        df.to_html(escape=False, index=False),
+        unsafe_allow_html=True,
+    )
 
 
 def get_ai_report_response(
     ai_chat_history: List[Dict],
     scoring_criteria: List[Dict],
     task_context: str,
-    container,
     task_type: Literal["audio", "text"],
+    api_key: str,
     max_completion_tokens: int = 2048,
 ):
-    with container:
-        display_waiting_indicator()
+    display_waiting_indicator()
 
     if task_type == "audio":
         model = "gpt-4o-audio-preview-2024-12-17"
@@ -99,7 +97,7 @@ def get_ai_report_response(
 
     system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach for a learner.\n\nYou will be given a task description and the conversation history between you and the student.\n\nYou need to provide concise, actionable feedback to the learner along each of the categories mentioned in the scoring criteria below.\n\n{scoring_criteria_as_prompt}{context_instructions}\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the student's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- No matter how frustrated the student gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\n{format_instructions}"""
 
-    client = instructor.from_openai(OpenAI())
+    client = instructor.from_openai(OpenAI(api_key=api_key))
 
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
@@ -150,7 +148,7 @@ def get_ai_report_response(
                     ]
                 )
 
-        show_ai_report(rows, ["Category", "Feedback", "Score"], container)
+        show_ai_report(rows, ["Category", "Feedback", "Score"])
 
     for row in rows:
         row[1] = row[1].model_dump()
@@ -215,19 +213,26 @@ def show_attempt_picker(container):
         )
 
 
-def get_containers():
+def get_containers(is_review_mode: bool):
     input_description_col, _, report_col = st.columns([1, 0.1, 1.5])
     description_container = input_description_col.container(height=450, border=True)
 
     navigation_container = report_col.container().empty()
-    user_input_display_container = report_col.container(
-        height=100, border=False
-    ).empty()
+
+    user_input_kwargs = {}
+    if not is_review_mode:
+        user_input_kwargs = {"height": 100, "border": False}
+
+    user_input_display_container = report_col.container(**user_input_kwargs)
 
     # for spacing
     report_col.container(height=1, border=False)
 
-    report_height = 300 if st.session_state.current_num_attempts > 1 else 250
+    if not is_review_mode:
+        report_height = 300 if st.session_state.current_num_attempts > 1 else 250
+    else:
+        report_height = 500
+
     ai_report_container = report_col.container(
         border=False, height=report_height
     ).empty()
@@ -240,12 +245,24 @@ def get_containers():
     )
 
 
-def display_user_text_input_report(user_input_display_container, user_response: str):
+def display_user_text_input_report(
+    user_input_display_container, user_response: str, is_review_mode: bool = False
+):
+    user_input_display_container.empty()
+
+    description = "**Your response**" if not is_review_mode else "**Response**"
+
     with user_input_display_container:
-        st.markdown(f"**Your response**<br>{user_response}", unsafe_allow_html=True)
+        st.markdown(f"{description}<br>{user_response}", unsafe_allow_html=True)
 
 
-def display_user_audio_input_report(user_input_display_container, audio_data: bytes):
+def display_user_audio_input_report(
+    user_input_display_container, audio_data: bytes, is_review_mode: bool = False
+):
+    user_input_display_container.empty()
+
+    description = "**Your response**" if not is_review_mode else "**Response**"
+
     with user_input_display_container:
-        st.markdown("**Your response**", unsafe_allow_html=True)
+        st.markdown(f"{description}", unsafe_allow_html=True)
         st.audio(audio_data)

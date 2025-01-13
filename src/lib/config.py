@@ -57,9 +57,9 @@ leaderboard_view_types = [
     str(LeaderboardViewType.MONTHLY),
 ]
 all_input_types = [
-    str(TaskInputType.CODING),
     str(TaskInputType.TEXT),
     str(TaskInputType.AUDIO),
+    str(TaskInputType.CODING),
 ]
 all_ai_response_types = [
     str(TaskAIResponseType.CHAT),

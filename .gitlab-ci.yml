@@ -11,7 +11,10 @@ build:
   script:
     - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export OPENAI_API_KEY=$DEV_OPENAI_API_KEY; else export OPENAI_API_KEY=$PROD_OPENAI_API_KEY; fi
     - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export APP_URL=$DEV_APP_URL; else export APP_URL=$PROD_APP_URL; fi
-    - docker build --build-arg OPENAI_API_KEY=$OPENAI_API_KEY --build-arg OPENAI_ORG_ID=$OPENAI_ORG_ID --build-arg APP_URL=$APP_URL --platform linux/amd64 -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
+    - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export ENV=$DEV_ENV; else export ENV=$PROD_ENV; fi
+    - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export S3_BUCKET_NAME=$DEV_S3_BUCKET_NAME; else export S3_BUCKET_NAME=$PROD_S3_BUCKET_NAME; fi
+    - if [ "$CI_COMMIT_REF_NAME" == "v2-dev" ]; then export S3_FOLDER_NAME=$DEV_S3_FOLDER_NAME; else export S3_FOLDER_NAME=$PROD_S3_FOLDER_NAME; fi
+    - docker build --build-arg OPENAI_API_KEY=$OPENAI_API_KEY --build-arg OPENAI_ORG_ID=$OPENAI_ORG_ID --build-arg APP_URL=$APP_URL --build-arg S3_BUCKET_NAME=$S3_BUCKET_NAME --build-arg S3_FOLDER_NAME=$S3_FOLDER_NAME --build-arg ENV=$ENV --platform linux/amd64 -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
   rules:

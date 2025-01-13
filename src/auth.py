@@ -1,10 +1,26 @@
 import streamlit as st
 import time
+import os
 from typing import Dict
 from lib.db import (
     insert_or_return_user,
     get_user_organizations,
+    get_hva_org_id,
 )
+from lib.utils.encryption import decrypt_openai_api_key
+
+
+# TEMP
+def is_empty_openai_api_key() -> bool:
+    if not st.session_state.org["openai_api_key"]:
+        return True
+
+    if os.environ.get("OPENAI_API_KEY") != decrypt_openai_api_key(
+        st.session_state.org["openai_api_key"]
+    ):
+        return False
+
+    return st.session_state.org["id"] != get_hva_org_id()
 
 
 def update_user_orgs(user: Dict):

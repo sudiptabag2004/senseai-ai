@@ -26,6 +26,7 @@ from lib.db import (
     get_scoring_criteria_for_task,
     get_cohort_by_id,
     is_user_in_cohort,
+    get_org_by_id,
 )
 from lib.output_formats.report import (
     get_ai_report_response,
@@ -52,6 +53,7 @@ from lib.output_formats.reading import (
 from lib.ui import (
     cleanup_ai_response,
 )
+from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
 from lib.s3 import (
     upload_audio_data_to_s3,
     generate_s3_uuid,
@@ -102,6 +104,13 @@ if "course" not in st.query_params:
 
 cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
+st.session_state.org = get_org_by_id(cohort["org_id"])
+
+# TEMP
+if not st.session_state.org["openai_api_key"]:
+    st.session_state.org["openai_api_key"] = encrypt_openai_api_key(
+        os.environ.get("OPENAI_API_KEY")
+    )
 
 login_or_signup_user()
 
@@ -278,7 +287,7 @@ if task["type"] == "question":
             description_container,
             user_input_display_container,
             ai_report_container,
-        ) = get_report_containers()
+        ) = get_report_containers(st.session_state.is_review_mode)
 
 else:
     user_input_display_container = None
@@ -371,22 +380,38 @@ if task["type"] == "question":
                     st.session_state.chat_history[displayed_user_message_index][
                         "content"
                     ],
+                    st.session_state.is_review_mode,
                 )
             else:
+                if (
+                    "data"
+                    not in st.session_state.chat_history[displayed_user_message_index]
+                ):
+                    st.session_state.chat_history[displayed_user_message_index][
+                        "data"
+                    ] = download_file_from_s3_as_bytes(
+                        get_audio_upload_s3_key(
+                            st.session_state.chat_history[displayed_user_message_index][
+                                "content"
+                            ]
+                        )
+                    )
+
                 display_user_audio_input_report(
                     user_input_display_container,
                     st.session_state.chat_history[displayed_user_message_index]["data"],
+                    st.session_state.is_review_mode,
                 )
 
-            show_ai_report(
-                json.loads(
-                    st.session_state.chat_history[displayed_user_message_index + 1][
-                        "content"
-                    ]
-                ),
-                ["Category", "Feedback", "Score"],
-                ai_report_container,
-            )
+            with ai_report_container:
+                show_ai_report(
+                    json.loads(
+                        st.session_state.chat_history[displayed_user_message_index + 1][
+                            "content"
+                        ]
+                    ),
+                    ["Category", "Feedback", "Score"],
+                )
 
 
 def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]):
@@ -403,13 +428,17 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
         transform_user_message_for_ai_history(user_message)
     )
 
+    with chat_container.chat_message("assistant"):
+        ai_response_container = st.empty()
+
     # ipdb.set_trace()
-    ai_response, result_dict = get_ai_chat_response(
-        st.session_state.ai_chat_history.messages,
-        task["response_type"],
-        task["context"],
-        chat_container,
-    )
+    with ai_response_container:
+        ai_response, result_dict = get_ai_chat_response(
+            st.session_state.ai_chat_history.messages,
+            task["response_type"],
+            task["context"],
+            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+        )
 
     is_solved = (
         result_dict["is_correct"] if result_dict["is_correct"] is not None else False
@@ -478,13 +507,14 @@ def get_ai_feedback_report_text_input(user_response: str):
         transform_user_message_for_ai_history(user_message)
     )
 
-    rows = get_ai_report_response(
-        st.session_state.ai_chat_history.messages,
-        st.session_state.scoring_criteria,
-        task["context"],
-        ai_report_container,
-        task["input_type"],
-    )
+    with ai_report_container:
+        rows = get_ai_report_response(
+            st.session_state.ai_chat_history.messages,
+            st.session_state.scoring_criteria,
+            task["context"],
+            task["input_type"],
+            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+        )
 
     is_solved = all(
         row[2] == st.session_state.scoring_criteria[index]["range"][1]
@@ -559,13 +589,14 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
 
     st.session_state.ai_chat_history.add_messages([user_message])
 
-    rows = get_ai_report_response(
-        st.session_state.ai_chat_history.messages,
-        st.session_state.scoring_criteria,
-        task["context"],
-        ai_report_container,
-        task["input_type"],
-    )
+    with ai_report_container:
+        rows = get_ai_report_response(
+            st.session_state.ai_chat_history.messages,
+            st.session_state.scoring_criteria,
+            task["context"],
+            task["input_type"],
+            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+        )
 
     is_solved = all(
         row[2] == st.session_state.scoring_criteria[index]["range"][1]
