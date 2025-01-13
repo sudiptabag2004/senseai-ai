@@ -2149,7 +2149,6 @@ def convert_org_db_to_dict(org: Tuple):
     }
 
 
-@st.cache_data
 def get_org_by_id(org_id: int):
     org_details = execute_db_operation(
         f"SELECT * FROM {organizations_table_name} WHERE id = ?",

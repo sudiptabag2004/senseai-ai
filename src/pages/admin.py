@@ -40,7 +40,6 @@ from lib.cache import (
     clear_course_cache_for_cohorts,
     clear_cohort_cache_for_courses,
     clear_cache_for_mentor_groups,
-    clear_cache_for_org_details,
 )
 from lib.db import (
     get_all_tasks_for_org_or_course,
@@ -3210,7 +3209,6 @@ else:
                     st.error("No changes made")
                 else:
                     update_org(st.session_state.org_id, new_org_name)
-                    clear_cache_for_org_details(st.session_state.org_id)
                     set_toast("Organization name updated")
                     st.rerun()
 
@@ -3252,7 +3250,6 @@ else:
                     return
 
                 update_org_openai_api_key(st.session_state.org_id, new_openai_api_key)
-                clear_cache_for_org_details(st.session_state.org_id)
                 set_toast("OpenAI API key updated")
                 st.rerun()
 
