@@ -1818,7 +1818,7 @@ if st.session_state.selected_section_index == 0:
                 st.rerun()
 
     @st.dialog("Add Members to Cohort")
-    def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict):
+    def show_add_members_to_cohort_dialog(cohort_id: int, cohort_info: dict, role: str):
         existing_members = set([member["email"] for member in cohort_info["members"]])
 
         tabs = st.tabs(["Add Members", "Bulk Upload Members"])
@@ -1826,9 +1826,6 @@ if st.session_state.selected_section_index == 0:
         with tabs[0]:
             with st.form("add_cohort_member_form", border=False):
                 member_email = st.text_input("Enter email", key="cohort_member_email")
-                role = st.selectbox(
-                    "Select role", [group_role_learner, group_role_mentor]
-                )
 
                 submit_button = st.form_submit_button(
                     "Add Member",
@@ -2231,7 +2228,11 @@ if st.session_state.selected_section_index == 0:
         def _show_users_tab(users: List[Dict], key: str):
             action_cols = st.columns([1, 7])
             if action_cols[0].button("Add Members", key=f"add_member_{key}"):
-                show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+                show_add_members_to_cohort_dialog(
+                    selected_cohort["id"],
+                    cohort_info,
+                    group_role_learner if key == "learners" else group_role_mentor,
+                )
 
             if not users:
                 st.info(f"No {key} in this cohort")
@@ -2473,7 +2474,9 @@ if st.session_state.selected_section_index == 0:
                         ],
                     )
                     # invalidate cache
-                    clear_course_cache_for_cohorts(st.session_state.course_cohorts_create_course)
+                    clear_course_cache_for_cohorts(
+                        st.session_state.course_cohorts_create_course
+                    )
 
                 refresh_courses()
                 st.session_state.current_course_index = (
