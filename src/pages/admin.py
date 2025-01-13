@@ -1111,10 +1111,15 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
     for _, row in tasks_df.iterrows():
         task_tags = []
         if has_tags:
-            task_tag_names = [tag.strip() for tag in row["Tags"].split(",")]
-            task_tags = [
-                tag for tag in st.session_state.tags if tag["name"] in task_tag_names
-            ]
+            task_tag_names = (
+                [tag.strip() for tag in row["Tags"].split(",")]
+                if not isinstance(row["Tags"], float)
+                else []
+            )
+            if task_tag_names:
+                task_tags = [
+                    tag for tag in st.session_state.tags if tag["name"] in task_tag_names
+                ]
 
         if (
             st.session_state.is_task_type_question
