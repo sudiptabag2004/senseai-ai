@@ -106,12 +106,6 @@ cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
 st.session_state.org = get_org_by_id(cohort["org_id"])
 
-# TEMP
-if not st.session_state.org["openai_api_key"]:
-    st.session_state.org["openai_api_key"] = encrypt_openai_api_key(
-        os.environ.get("OPENAI_API_KEY")
-    )
-
 login_or_signup_user()
 
 if not is_user_in_cohort(st.session_state.user["id"], cohort_id):

@@ -57,10 +57,6 @@ EXPOSE 8001
 # Only expose one port where everything is hosted
 EXPOSE 8501
 
-ARG OPENAI_API_KEY
-
-ARG OPENAI_ORG_ID
-
 ARG APP_URL
 
 ARG S3_BUCKET_NAME
@@ -76,7 +72,7 @@ COPY src/.streamlit/secrets.${ENV}.toml /src/.streamlit/secrets.toml
 RUN test -f /src/.streamlit/secrets.dev.toml && rm -f /src/.streamlit/secrets.dev.toml || true
 RUN test -f /src/.streamlit/secrets.prod.toml && rm -f /src/.streamlit/secrets.prod.toml || true
 
-RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nOPENAI_ORG_ID=$OPENAI_ORG_ID\nAPP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/lib/.env
+RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/lib/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*

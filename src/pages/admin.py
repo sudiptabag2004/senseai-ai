@@ -127,12 +127,6 @@ if "org_id" not in st.query_params:
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
 
-# TEMP
-if not st.session_state.org["openai_api_key"]:
-    st.session_state.org["openai_api_key"] = encrypt_openai_api_key(
-        os.environ.get("OPENAI_API_KEY")
-    )
-
 
 def reset_ai_running():
     st.session_state.is_ai_running = False
@@ -167,7 +161,7 @@ def show_profile_header():
 
         if is_empty_openai_api_key():
             st.error(
-                """No OpenAI API key found. Please set an API key in the `"Settings"` section by 14th January, 2025. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
+                """No OpenAI API key found. Please set an API key in the `"Settings"` section. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
             )
 
 
@@ -1097,7 +1091,13 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
                 list(
                     itertools.chain(
                         *tasks_df["Tags"]
-                        .apply(lambda val: [tag.strip() for tag in val.split(",")])
+                        .apply(
+                            lambda val: (
+                                [tag.strip() for tag in val.split(",")]
+                                if not isinstance(val, float)
+                                else []
+                            )
+                        )
                         .tolist()
                     )
                 )
@@ -1617,7 +1617,7 @@ if st.session_state.selected_section_index == 0:
     def show_tasks_tab():
         if is_empty_openai_api_key():
             st.error(
-                """No OpenAI API key found. Please set an API key in the `"Settings"` section by 14th January, 2025."""
+                """No OpenAI API key found. Please set an API key in the `"Settings"` section."""
             )
             return
 

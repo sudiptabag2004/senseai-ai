@@ -10,17 +10,8 @@ from lib.db import (
 from lib.utils.encryption import decrypt_openai_api_key
 
 
-# TEMP
 def is_empty_openai_api_key() -> bool:
-    if not st.session_state.org["openai_api_key"]:
-        return True
-
-    if os.environ.get("OPENAI_API_KEY") != decrypt_openai_api_key(
-        st.session_state.org["openai_api_key"]
-    ):
-        return False
-
-    return st.session_state.org["id"] != get_hva_org_id()
+    return not st.session_state.org["openai_api_key"]
 
 
 def update_user_orgs(user: Dict):
