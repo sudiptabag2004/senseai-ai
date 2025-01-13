@@ -2211,6 +2211,11 @@ if st.session_state.selected_section_index == 0:
         )
 
         def _show_courses_tab():
+            if st.button("Add/Remove Courses"):
+                show_update_cohort_courses_dialog(
+                    selected_cohort["id"], selected_cohort["courses"]
+                )
+
             if not selected_cohort["courses"]:
                 st.info("No courses in this cohort")
             else:
@@ -2223,15 +2228,14 @@ if st.session_state.selected_section_index == 0:
                     label_visibility="collapsed",
                 )
 
-            if st.button("Add/Remove Courses"):
-                show_update_cohort_courses_dialog(
-                    selected_cohort["id"], selected_cohort["courses"]
-                )
-
         def _show_users_tab(users: List[Dict], key: str):
             action_cols = st.columns([1, 7])
             if action_cols[0].button("Add Members", key=f"add_member_{key}"):
                 show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
+
+            if not users:
+                st.info(f"No {key} in this cohort")
+                return
 
             action_error_container = st.container()
 
@@ -2264,17 +2268,9 @@ if st.session_state.selected_section_index == 0:
                     )
 
         def show_learners_tab():
-            if not learners:
-                st.info("No learners in this cohort")
-                return
-
             _show_users_tab(learners, "learners")
 
         def show_mentors_tab():
-            if not mentors:
-                st.info("No mentors in this cohort")
-                return
-
             _show_users_tab(mentors, "mentors")
 
         def show_groups_tab(cohort_info):
@@ -2707,6 +2703,10 @@ if st.session_state.selected_section_index == 0:
                 )
 
         def _show_assigned_cohorts_tab():
+            if st.button("Add/Remove Cohorts", key="update_course_cohorts"):
+                show_update_course_cohorts_dialog(
+                    selected_course["id"], selected_course["cohorts"]
+                )
 
             if not selected_course["cohorts"]:
                 st.info("This course has not been added to any cohort yet")
@@ -2718,11 +2718,6 @@ if st.session_state.selected_section_index == 0:
                     disabled=True,
                     key="course_cohorts",
                     label_visibility="collapsed",
-                )
-
-            if st.button("Add/Remove Cohorts", key="update_course_cohorts"):
-                show_update_course_cohorts_dialog(
-                    selected_course["id"], selected_course["cohorts"]
                 )
 
         if selected_tab == tab_names[0]:

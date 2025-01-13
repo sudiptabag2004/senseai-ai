@@ -2096,6 +2096,13 @@ def update_org_openai_api_key(org_id: int, openai_api_key: str):
     )
 
 
+def clear_org_openai_api_key(org_id: int):
+    execute_db_operation(
+        f"UPDATE {organizations_table_name} SET openai_api_key = NULL WHERE id = ?",
+        (org_id,),
+    )
+
+
 def add_user_to_org_by_user_id(
     user_id: int,
     org_id: int,
