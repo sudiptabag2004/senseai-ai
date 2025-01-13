@@ -1,6 +1,6 @@
 from typing import List, Dict, Literal
 import itertools
-import traceback
+import os
 import math
 from datetime import datetime
 import asyncio
@@ -19,11 +19,9 @@ import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
-from lib.prompts import generate_answer_for_task
+from lib.prompts import generate_answer_for_task, generate_tests_for_task_from_llm
 from lib.llm import (
-    get_llm_input_messages,
-    call_llm_and_parse_output,
-    COMMON_INSTRUCTIONS,
+    validate_openai_api_key,
 )
 from lib.ui import show_singular_or_plural
 from lib.config import (
@@ -100,16 +98,19 @@ from lib.db import (
     remove_tags_from_task,
     get_cohort_group_ids_for_users,
     update_org,
+    update_org_openai_api_key,
     get_org_by_id,
     get_cohort_metrics_for_milestone,
 )
-from lib.utils import find_intersection, generate_random_color
+from lib.utils import generate_random_color
+from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
 from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
 from lib.toast import set_toast, show_toast
 from auth import (
     unauthorized_redirect_to_home,
     login_or_signup_user,
+    is_empty_openai_api_key,
 )
 from components.buttons import back_to_home_button
 
@@ -126,6 +127,12 @@ if "org_id" not in st.query_params:
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
+
+# TEMP
+if not st.session_state.org["openai_api_key"]:
+    st.session_state.org["openai_api_key"] = encrypt_openai_api_key(
+        os.environ.get("OPENAI_API_KEY")
+    )
 
 
 def reset_ai_running():
@@ -151,13 +158,18 @@ def show_logo():
 
 
 def show_profile_header():
-    cols = st.columns([1, 7])
+    cols = st.columns([1, 4, 3])
 
     with cols[0]:
         show_logo()
 
     with cols[1]:
         st.subheader(st.session_state.org["name"])
+
+        if is_empty_openai_api_key():
+            st.error(
+                """No OpenAI API key found. Please set an API key in the `"Settings"` section by 14th January, 2025. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
+            )
 
 
 show_profile_header()
@@ -246,6 +258,8 @@ def reset_task_form():
     st.session_state.task_courses = []
     st.session_state.task_answer = ""
     st.session_state.coding_languages = None
+    st.session_state.final_answer = ""
+    st.session_state.ai_answer = ""
     st.session_state.ai_answers = None
     reset_ai_running()
     reset_tests()
@@ -262,81 +276,24 @@ show_toast()
 model = {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"}
 
 
+def get_task_context():
+    if st.session_state.is_task_type_question and st.session_state.task_has_context:
+        return st.session_state.task_context
+
+    return None
+
+
 @st.spinner("Generating answer...")
 def generate_answer_for_form_task():
     st.session_state.ai_answer = asyncio.run(
         generate_answer_for_task(
             st.session_state.task_name,
             st.session_state.task_description,
+            get_task_context(),
             model["version"],
+            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
         )
     )
-
-
-def convert_tests_to_prompt(tests: List[Dict]) -> str:
-    if not tests:
-        return ""
-
-    return "\n-----------------\n".join(
-        [f"Input:\n{test['input']}\n\nOutput:\n{test['output']}" for test in tests]
-    )
-
-
-async def generate_tests_for_task_from_llm(
-    task_name, task_description, num_test_inputs, tests
-):
-    system_prompt_template = """You are a test case generator for programming tasks.\n\nYou will be given a task name, its description, the number of inputs expected and, optionally, a list of test cases.\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
-
-    user_prompt_template = """Task name: {task_name}\n\nTask description: {task_description}\n\nNumber of inputs: {num_test_inputs}\n\nTest cases:\n\n{tests}"""
-
-    class TestCase(BaseModel):
-        input: List[str] = Field(
-            description="The list of inputs for a single test case. The number of inputs is {num_test_inputs}. Always return a list"
-        )
-        output: str = Field(description="The expected output for the test case")
-        description: str = Field(
-            description="A very brief description of the test case", default=""
-        )
-
-    class Output(BaseModel):
-        test_cases: List[TestCase] = Field(
-            description="A list of test cases for the given task",
-        )
-
-    output_parser = PydanticOutputParser(pydantic_object=Output)
-
-    # import ipdb; ipdb.set_trace()
-
-    llm_input_messages = get_llm_input_messages(
-        system_prompt_template,
-        user_prompt_template,
-        task_name=task_name,
-        task_description=task_description,
-        format_instructions=output_parser.get_format_instructions(),
-        common_instructions=COMMON_INSTRUCTIONS,
-        num_test_inputs=num_test_inputs,
-        tests=convert_tests_to_prompt(tests),
-    )
-
-    try:
-        pred_dict = await call_llm_and_parse_output(
-            llm_input_messages,
-            model=model["version"],
-            output_parser=output_parser,
-            max_tokens=2048,
-            verbose=True,
-        )
-        return [
-            {
-                "input": tc["input"],
-                "output": tc["output"],
-                "description": tc["description"],
-            }
-            for tc in pred_dict["test_cases"]
-        ]
-    except Exception as exception:
-        traceback.print_exc()
-        raise exception
 
 
 async def generate_tests_for_task(
@@ -346,8 +303,11 @@ async def generate_tests_for_task(
         generated_tests = await generate_tests_for_task_from_llm(
             task_name,
             task_description,
+            get_task_context(),
             num_test_inputs,
             tests,
+            model["version"],
+            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
         )
 
     st.session_state.tests.extend(generated_tests)
@@ -366,13 +326,6 @@ def update_test_in_session_state(test_index):
         "output": st.session_state[f"test_output_{test_index}"],
         "description": st.session_state[f"test_description_{test_index}"],
     }
-
-
-def get_task_context():
-    if st.session_state.is_task_type_question and st.session_state.task_has_context:
-        return st.session_state.task_context
-
-    return None
 
 
 def get_task_tests():
@@ -1005,9 +958,7 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
                 not st.session_state.task_description or not st.session_state.task_name
             )
             is_generate_answer_disabled = (
-                is_task_details_missing
-                or st.session_state.final_answer != ""
-                or st.session_state.ai_answer != ""
+                is_task_details_missing or st.session_state.final_answer != ""
             )
             generate_help_text = (
                 "Task name or description is missing"
@@ -1085,7 +1036,9 @@ async def generate_answer_for_bulk_task(task_row_index, task_name, task_descript
     answer = await generate_answer_for_task(
         task_name,
         task_description,
+        get_task_context(),
         model["version"],
+        decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
     )
     return task_row_index, answer
 
@@ -1461,7 +1414,7 @@ with layout_cols[0]:
     st.markdown(
         """
         <style>
-            .stButton button:disabled {
+            div[class*="st-key-section_"] .stButton button:disabled {
                 color: #FC4A4A;
                 background-color: transparent !important;
                 border-color: transparent !important;
@@ -1663,6 +1616,12 @@ if st.session_state.selected_section_index == 0:
             ]
 
     def show_tasks_tab():
+        if is_empty_openai_api_key():
+            st.error(
+                """No OpenAI API key found. Please set an API key in the `"Settings"` section by 14th January, 2025."""
+            )
+            return
+
         cols = st.columns([1, 6])
 
         add_task = cols[0].button("Add a new task", type="primary")
@@ -2271,12 +2230,10 @@ if st.session_state.selected_section_index == 0:
                 )
 
         def _show_users_tab(users: List[Dict], key: str):
-            if st.button("Add Members", key=f"add_member_{key}"):
+            action_cols = st.columns([1, 7])
+            if action_cols[0].button("Add Members", key=f"add_member_{key}"):
                 show_add_members_to_cohort_dialog(selected_cohort["id"], cohort_info)
 
-            selection_action_container = st.container(
-                key=f"selected_cohort_members_actions_{key}"
-            )
             action_error_container = st.container()
 
             event = st.dataframe(
@@ -2288,7 +2245,7 @@ if st.session_state.selected_section_index == 0:
             )
 
             if len(event.selection["rows"]):
-                if selection_action_container.button(
+                if action_cols[1].button(
                     "Remove members", key=f"remove_cohort_members_{key}"
                 ):
                     members_to_remove = [users[i] for i in event.selection["rows"]]
@@ -3168,7 +3125,10 @@ elif st.session_state.selected_section_index == 1:
             user_id = metrics.iloc[event.selection["rows"]]["user_id"].tolist()[0]
             if action_container.button("Inspect task history"):
                 show_task_picker_dialog_for_task_history_inspection(
-                    user_id, filtered_tasks, selected_cohort['id'], selected_course['id']
+                    user_id,
+                    filtered_tasks,
+                    selected_cohort["id"],
+                    selected_course["id"],
                 )
 
     with tabs[0]:
@@ -3232,20 +3192,68 @@ else:
 
     def show_account_tab():
         with st.form("edit_org_details_form", border=False):
-            new_org_name = st.text_input(
+            cols = st.columns([4, 1])
+            new_org_name = cols[0].text_input(
                 "Organization Name", value=st.session_state.org["name"]
             )
-            if st.form_submit_button("Update"):
+
+            cols[1].container(height=10, border=False)
+            if cols[1].form_submit_button(
+                "Update",
+                disabled=new_org_name == st.session_state.org["name"],
+            ):
                 if not new_org_name:
                     st.error("Empty name not allowed")
                     return
 
                 if new_org_name == st.session_state.org["name"]:
                     st.error("No changes made")
+                else:
+                    update_org(st.session_state.org_id, new_org_name)
+                    clear_cache_for_org_details(st.session_state.org_id)
+                    set_toast("Organization name updated")
+                    st.rerun()
+
+        with st.form("edit_org_openai_api_key_form", border=False):
+            st.markdown("#### Link your OpenAI account")
+            st.write(
+                """We use AI models from [OpenAI](https://platform.openai.com/) which costs money for each use. To make sure that you are charged proportional to your usage of SensAI, we need to connect with your OpenAI account and all your usage will be billed to your OpenAI account. You can find your OpenAI API key on the [API key page](https://platform.openai.com/api-keys). Create a new API key from the same page if you don't have one."""
+            )
+
+            cols = st.columns([4, 1])
+            if not is_empty_openai_api_key():
+                api_key_to_display = decrypt_openai_api_key(
+                    st.session_state.org["openai_api_key"]
+                )
+            else:
+                api_key_to_display = ""
+
+            new_openai_api_key = cols[0].text_input(
+                "OpenAI API Key",
+                value=api_key_to_display,
+                type="password",
+            )
+
+            cols[1].container(height=10, border=False)
+
+            if cols[1].form_submit_button(
+                "Update",
+            ):
+                if not new_openai_api_key:
+                    st.error("API key cannot be empty")
                     return
 
-                update_org(st.session_state.org_id, new_org_name)
+                if api_key_to_display and new_openai_api_key == api_key_to_display:
+                    st.error("No changes made")
+                    return
+
+                if not validate_openai_api_key(new_openai_api_key):
+                    st.error("Invalid key")
+                    return
+
+                update_org_openai_api_key(st.session_state.org_id, new_openai_api_key)
                 clear_cache_for_org_details(st.session_state.org_id)
+                set_toast("OpenAI API key updated")
                 st.rerun()
 
     with tabs[0]:

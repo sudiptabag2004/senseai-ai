@@ -115,6 +115,11 @@ def authenticated_menu(selected_cohort: Dict, role: str):
                 format_func=lambda val: f"{val['name']} ({val['role']})",
             )
 
+            if not selected_org["openai_api_key"]:
+                st.sidebar.error(
+                    """No OpenAI API key found. Please set an API key in the "Settings" section by 14th January, 2025. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
+                )
+
             cols[1].container(height=10, border=False)
             cols[1].button(
                 "",

@@ -73,15 +73,11 @@ def display_user_chat_message(chat_container, user_response: str):
 
 
 def get_ai_chat_response(
-    ai_chat_history: List[Dict], response_type: str, task_context: str, container
+    ai_chat_history: List[Dict], response_type: str, task_context: str, api_key: str
 ):
-    with container.chat_message("assistant"):
-        ai_response_container = st.empty()
+    display_waiting_indicator()
 
-    with ai_response_container:
-        display_waiting_indicator()
-
-    client = instructor.from_openai(openai.OpenAI())
+    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
 
     class Output(BaseModel):
         analysis: str = Field(description="Analysis of the student's response")
@@ -135,9 +131,7 @@ def get_ai_chat_response(
         ai_response_list = result_dict["feedback"]
         if ai_response_list:
             ai_response = " ".join(ai_response_list)
-            ai_response_container.markdown(
-                cleanup_ai_response(ai_response), unsafe_allow_html=True
-            )
+            st.markdown(cleanup_ai_response(ai_response), unsafe_allow_html=True)
 
     logger.info(system_prompt)
 

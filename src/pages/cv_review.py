@@ -19,17 +19,20 @@ from lib.init import init_app
 
 init_app()
 
-from lib.db import add_cv_review_usage
+from lib.db import add_cv_review_usage, is_user_hva_learner, get_hva_openai_api_key
 from lib.config import PDF_PAGE_DIMS
 from lib.ui import display_waiting_indicator
 from lib.pdf import get_raw_images_from_pdf, get_links_from_pdf
 from lib.image import get_base64_images
-from lib.llm import get_formatted_history, logger
+from lib.utils.encryption import decrypt_openai_api_key
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
-from auth import login_or_signup_user
+from auth import login_or_signup_user, unauthorized_redirect_to_home
 
 login_or_signup_user()
+
+if not is_user_hva_learner(st.session_state.user["id"]):
+    unauthorized_redirect_to_home()
 
 back_to_home_button()
 
@@ -159,7 +162,7 @@ def get_phone_number_from_phone_links(phone_links: List[str]) -> Optional[str]:
     return None
 
 
-def show_ai_report(container: st.container = None):
+def show_ai_report(container=None):
     df = pd.DataFrame(
         st.session_state.ai_response_rows, columns=["Category", "Feedback"]
     )
@@ -216,7 +219,9 @@ def generate_cv_report(pdf: pypdf.PdfReader):
 
     system_prompt = f"""You are an expert, helpful, encouraging and empathetic {st.session_state.job_role} coach who is helping your mentee improve their CV so that they can be shortlisted for interviews.\n\nYou will be given the images of their CV and the conversation history between you and the mentee.\n\nYou need to give feedback on the mentee's CV. Use the following structured guidelines to evaluate and provide actionable feedback:\n\n### 1. **Appearance and Styling**\n- Check if the resume is clean and easy to read. \n- The introduction should include:\n  - LinkedIn and GitHub links\n  - Email ID (optional but acceptable)\n- Ensure the alignment and formatting are professional, with all sections consistently organized.  \n- Confirm that the resume does **not** include a photo.\n- Make sure it contains:\n  - Name\n  - Phone number\n  - Email ID\n  - Basic address in a simple format (e.g., "Anna Nagar, Chennai, Tamil Nadu")\n\n### 2. **Education**\n- Verify that educational details are clearly presented:\n  - Name of the institution\n  - Year of graduation or duration of the course\n  - Subjects or areas of study relevant to the field\n\n### 3. **Professional Development**\n- Check for a section that highlights professional development. Ensure details follow this template:  \n  *“Received fellowship in <Web Development, Data Science, DevOps> as part of Hyperverge Academy from <2023 August till 2024 March>. The program included extensive training in technical skills (such as <SQL, Python, Excel>) as well as power skills (such as public speaking, communication, etc.).”*\n\n### 4. **Introduction or Personal Summary**\n- Ensure the section includes relevant keywords for the job role (e.g., "front-end," "back-end," "Data Science").\n- Assess whether the candidate explains their choice of field in simple, compelling terms.\n- Flag and provide feedback on sentences that are too generic or complex. Suggest using concise, clear sentences. Example: Instead of “I am passionate about tech and always eager to learn,” recommend “I specialize in building front-end applications because I enjoy creating intuitive user experiences.”\n\n### 5. **Projects**\n- Projects should be well-documented with:\n  - Clear feature descriptions\n  - Purpose of the project\n  - Technologies used\n- Avoid generic statements. For instance, replace “Worked on a project” with “Developed a real-time chat app using Python and Streamlit, integrated with an SQLite database to store chat history.”\n\n### 6. **Order of Events**\n- Ensure the CV follows this order:\n  1. **Professional Development** (with highlighted projects)\n  2. **Education**\n  3. **Achievements**\n  4. **Certifications**\n- Check that projects are prominently emphasized.\n\n### 7. **Grammar and English**\n- Proofread the entire document for grammar, spelling errors, and sentence structure.\n- Recommend using tools like Grammarly or Google Docs for improvements.\n- Ensure the language is polished, free of jargon, and professional.\n\n### 8. **Links and Functionality**\n- Verify that all hyperlinks (e.g., LinkedIn, GitHub, project repositories) are functional and correctly linked.\n\n### 9. **Certifications**\n- Confirm that certifications are relevant to the desired job role.\n- Acceptable certifications can be from Udemy, Coursera, HackerRank, or other reputable sources.\n- Ensure certifications add value to the candidate\'s skill set.\n\n### 10. **Feedback and Suggestions**\n- Provide concise, actionable feedback on:\n  - Complex or generic content\n  - Missing or incorrectly formatted sections\n  - Suggestions for clearer and more compelling language\n- Highlight any additional areas for improvement, ensuring the resume is job-specific and polished for the intended role.\n\nUse this structured approach to evaluate the CV and provide a detailed assessment to enhance the student\'s job readiness.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into the individual topics given above so that it is easy to process for the mentee.\n- You must be very specific about exactly what part of the mentee's response you are suggesting any improvement for by quoting directly from their CV along with a clear example of how it could be improved. The example for the improvement must be given as if the mentee had written it themselves.\n\nAvoid demotivating the mentee. Only provide critique where it is clearly necessary and praise them for the parts of their CV that are good.\n- Some mandatory topics for the feedback are: Appearance and Styling, Content, Order of Events, Grammar and English, Certifications, Links. Add more topics as you deem fit.\n\n{format_instructions}"""
 
-    client = instructor.from_openai(OpenAI())
+    client = instructor.from_openai(
+        OpenAI(api_key=decrypt_openai_api_key(get_hva_openai_api_key()))
+    )
 
     ai_chat_history = [
         {

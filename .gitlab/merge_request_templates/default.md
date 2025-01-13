@@ -24,3 +24,5 @@
 - [ ] I have made sure that all of the APIs are working fine.
 - [ ] I have added appropriate comments to the code to explain the changes made.
 - [ ] I have updated `requirements.txt` if any new packages have been used.
+- [ ] I have updated `.env.example` and `docs/ENV.md` with any new environment variables and added them to the CD pipeline.
+- [ ] I have updated `INSTALL.md` with any additional steps required to run the app.

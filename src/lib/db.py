@@ -45,6 +45,7 @@ from lib.utils import (
     convert_utc_to_ist,
     load_json,
 )
+from lib.utils.encryption import encrypt_openai_api_key
 from lib.url import slugify
 from lib.utils.db import (
     execute_db_operation,
@@ -80,6 +81,7 @@ def create_organizations_table(cursor):
                 slug TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
                 default_logo_color TEXT,
+                openai_api_key TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )"""
     )
@@ -1467,6 +1469,7 @@ def get_cohort_by_id(cohort_id: int):
 
         cohort_data = {
             "id": cohort[0],
+            "org_id": cohort[2],
             "name": cohort[1],
             "members": [
                 {"id": member[0], "email": member[1], "role": member[2]}
@@ -2084,6 +2087,15 @@ def update_org(org_id: int, org_name: str):
     )
 
 
+def update_org_openai_api_key(org_id: int, openai_api_key: str):
+    encrypted_openai_api_key = encrypt_openai_api_key(openai_api_key)
+
+    execute_db_operation(
+        f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
+        (encrypted_openai_api_key, org_id),
+    )
+
+
 def add_user_to_org_by_user_id(
     user_id: int,
     org_id: int,
@@ -2133,6 +2145,7 @@ def convert_org_db_to_dict(org: Tuple):
         "slug": org[1],
         "name": org[2],
         "logo_color": org[3],
+        "openai_api_key": org[5],
     }
 
 
@@ -2159,6 +2172,30 @@ def get_hva_org_id():
 
     st.session_state.hva_org_id = hva_org_id
     return hva_org_id
+
+
+def get_hva_cohort_ids() -> List[int]:
+    cohorts = execute_db_operation(
+        "SELECT id FROM cohorts WHERE org_id = ?",
+        (get_hva_org_id(),),
+        fetch_all=True,
+    )
+    return [cohort[0] for cohort in cohorts]
+
+
+def is_user_hva_learner(user_id: int) -> bool:
+    return (
+        execute_db_operation(
+            f"SELECT COUNT(*) FROM user_cohorts WHERE user_id = ? AND cohort_id IN ({', '.join(map(str, get_hva_cohort_ids()))})",
+            (user_id,),
+            fetch_one=True,
+        )[0]
+        > 0
+    )
+
+
+def get_hva_openai_api_key() -> str:
+    return get_org_by_id(get_hva_org_id())["openai_api_key"]
 
 
 def add_user_to_org_by_email(
@@ -2201,7 +2238,7 @@ def convert_user_organization_db_to_dict(user_organization: Tuple):
 
 def get_user_organizations(user_id: int):
     user_organizations = execute_db_operation(
-        f"""SELECT uo.org_id, o.name, uo.role
+        f"""SELECT uo.org_id, o.name, uo.role, o.openai_api_key
         FROM {user_organizations_table_name} uo
         JOIN organizations o ON uo.org_id = o.id 
         WHERE uo.user_id = ? ORDER BY uo.id DESC""",
@@ -2214,6 +2251,7 @@ def get_user_organizations(user_id: int):
             "id": user_organization[0],
             "name": user_organization[1],
             "role": user_organization[2],
+            "openai_api_key": user_organization[3],
         }
         for user_organization in user_organizations
     ]
@@ -2782,3 +2820,47 @@ def migrate_chat_history_table():
         conn.rollback()
     finally:
         conn.close()
+
+
+def migrate_org_table():
+    conn = get_new_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        f"ALTER TABLE {organizations_table_name} ADD COLUMN openai_api_key TEXT"
+    )
+    conn.commit()
+    conn.close()
+
+
+def seed_openai_api_key():
+    conn = get_new_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        hva_org_id = get_hva_org_id()
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+        print(openai_api_key)
+        print(hva_org_id)
+
+        if openai_api_key:
+            encrypted_key = encrypt_openai_api_key(openai_api_key)
+            cursor.execute(
+                f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
+                (encrypted_key, hva_org_id),
+            )
+            print("done")
+            conn.commit()
+    except Exception as e:
+        print(f"Error seeding OpenAI API key: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def set_openai_api_key_for_org(org_id: int, openai_api_key: str):
+    encrypted_key = encrypt_openai_api_key(openai_api_key)
+    execute_db_operation(
+        f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
+        (encrypted_key, org_id),
+    )

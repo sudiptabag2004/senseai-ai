@@ -15,7 +15,7 @@ from langchain.output_parsers.fix import OutputFixingParser
 from langchain_community.callbacks import (
     get_openai_callback,
 )
-
+from openai import OpenAI
 
 from pydantic import BaseModel
 
@@ -174,6 +174,7 @@ def get_parsed_output_dict(
 async def call_openai_chat_model(
     messages: List,
     model: str,
+    api_key: str,
     max_tokens: int,
     verbose: bool = True,
     **kwargs,
@@ -193,7 +194,9 @@ async def call_openai_chat_model(
         "presence_penalty": 0,
         "store": True,
     }
-    llm = ChatOpenAI(model=model, **common_model_args, **openai_model_kwargs)
+    llm = ChatOpenAI(
+        model=model, api_key=api_key, **common_model_args, **openai_model_kwargs
+    )
 
     with get_openai_callback() as llm_callback:
         ai_response = await llm.ainvoke(messages)
@@ -214,6 +217,7 @@ async def call_llm_and_parse_output(
     messages,
     model,
     output_parser,
+    api_key: str,
     max_tokens,
     # labels,
     verbose: bool = True,
@@ -222,6 +226,7 @@ async def call_llm_and_parse_output(
     llm_output = await call_openai_chat_model(
         messages,
         model=model,
+        api_key=api_key,
         max_tokens=max_tokens,
         # labels=labels,
         verbose=verbose,
@@ -233,3 +238,12 @@ async def call_llm_and_parse_output(
         model=model,
         verbose=verbose,
     )
+
+
+def validate_openai_api_key(openai_api_key: str) -> bool:
+    client = OpenAI(api_key=openai_api_key)
+    try:
+        client.models.list()
+        return True
+    except Exception:
+        return False
