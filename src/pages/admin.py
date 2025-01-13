@@ -2683,12 +2683,25 @@ if st.session_state.selected_section_index == 0:
                     # "verified",
                     "name",
                     "type",
+                    "input_type",
                     "response_type",
                     "coding_language",
                 ],
             )
 
             action_container = st.container()
+
+            filtered_df["Task Type"] = filtered_df["type"].apply(
+                lambda x: task_type_to_label[x]
+            )
+
+            column_order = [
+                "name",
+                "Task Type",
+                "input_type",
+                "response_type",
+                # "coding_language",
+            ]
 
             event = st.dataframe(
                 filtered_df,
@@ -2703,7 +2716,12 @@ if st.session_state.selected_section_index == 0:
                     #     width="small",
                     # ),
                     "name": st.column_config.TextColumn(width="large"),
+                    "response_type": st.column_config.TextColumn(
+                        label="AI response type"
+                    ),
+                    "input_type": st.column_config.TextColumn(label="User input type"),
                 },
+                column_order=column_order,
             )
 
             if len(event.selection["rows"]):

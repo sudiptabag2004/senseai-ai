@@ -2673,7 +2673,7 @@ def drop_courses_table():
 
 
 def get_tasks_for_course(course_id: int, milestone_id: int = None):
-    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id, t.milestone_id
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id, t.milestone_id, t.type
         FROM {course_tasks_table_name} ct 
         JOIN {tasks_table_name} t ON ct.task_id = t.id 
         LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
@@ -2696,12 +2696,13 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
             "name": task[1],
             "milestone": task[2],
             "verified": task[3],
-            "type": task[4],
+            "input_type": task[4],
             "response_type": task[5],
             "coding_language": deserialise_list_from_str(task[6]),
             "ordering": task[7],
             "course_task_id": task[8],
             "milestone_id": task[9],
+            "type": task[10],
         }
         for task in tasks
     ]
