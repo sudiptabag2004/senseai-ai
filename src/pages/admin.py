@@ -826,11 +826,13 @@ def show_scoring_criteria_addition_form(scoring_criteria):
                 "Category",
                 value=scoring_criterion["category"],
                 key=f"scoring_criterion_category_{index}",
+                autocomplete="off",
             )
             updated_description = st.text_input(
                 "Description",
                 value=scoring_criterion["description"],
                 key=f"scoring_criterion_description_{index}",
+                autocomplete="off",
             )
             cols = st.columns(2)
             updated_range_start = cols[0].number_input(
@@ -873,6 +875,7 @@ def show_scoring_criteria_addition_form(scoring_criteria):
             "Add a new category to the scoring criterion",
             placeholder="e.g. Correctness",
             key="new_scoring_criterion_category",
+            autocomplete="off",
         )
         st.text_area(
             "Add a description for the new category",
@@ -908,11 +911,12 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
 
     set_task_type_vars(st.session_state.task_type["value"])
 
-    st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales")
+    st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales", autocomplete="off")
     st.text_area(
         "Description",
         key="task_description",
         placeholder="e.g. Write a short story about a cat",
+        autocomplete="off",
     )
 
     task_answer = None
@@ -1802,7 +1806,7 @@ if st.session_state.selected_section_index == 0:
     @st.dialog("Create Cohort")
     def show_create_cohort_dialog():
         with st.form("create_cohort_form", border=False):
-            cohort_name = st.text_input("Enter cohort name")
+            cohort_name = st.text_input("Enter cohort name", autocomplete="off")
 
             if st.form_submit_button(
                 "Create",
@@ -1832,7 +1836,7 @@ if st.session_state.selected_section_index == 0:
 
         with tabs[0]:
             with st.form("add_cohort_member_form", border=False):
-                member_email = st.text_input("Enter email", key="cohort_member_email")
+                member_email = st.text_input("Enter email", key="cohort_member_email", autocomplete="off")
 
                 submit_button = st.form_submit_button(
                     "Add Member",
@@ -1920,7 +1924,7 @@ if st.session_state.selected_section_index == 0:
     ):
         with st.form(key, border=False):
             new_group_name = st.text_input(
-                "Enter group name", key="cohort_group_name", value=group_name
+                "Enter group name", key="cohort_group_name", value=group_name, autocomplete="off"
             )
 
             learner_options = [
@@ -2388,7 +2392,7 @@ if st.session_state.selected_section_index == 0:
         with st.form("update_cohort_name_form", border=False):
             cols = st.columns([1, 0.4])
             updated_cohort_name = cols[0].text_input(
-                "Cohort Name", value=selected_cohort["name"]
+                "Cohort Name", value=selected_cohort["name"], autocomplete="off"
             )
             cols[1].container(height=10, border=False)
             if cols[1].form_submit_button("Update"):
@@ -2446,7 +2450,7 @@ if st.session_state.selected_section_index == 0:
     @st.dialog("Create Course")
     def show_create_course_dialog():
         with st.form("create_course_form", border=False):
-            course_name = st.text_input("Enter course name")
+            course_name = st.text_input("Enter course name", autocomplete="off")
 
             cohort_selector("create_course")
 
@@ -2616,7 +2620,7 @@ if st.session_state.selected_section_index == 0:
         with st.form("update_course_name_form", border=False):
             cols = st.columns([1, 0.4])
             updated_course_name = cols[0].text_input(
-                "Course Name", value=selected_course["name"]
+                "Course Name", value=selected_course["name"], autocomplete="off"
             )
             cols[1].container(height=10, border=False)
             if cols[1].form_submit_button("Update"):
@@ -2818,7 +2822,7 @@ if st.session_state.selected_section_index == 0:
         with st.form("milestone_edit_form", border=False):
             cols = st.columns([6, 1])
             new_milestone_name = cols[0].text_input(
-                "Enter new milestone name", value=milestone["name"]
+                "Enter new milestone name", value=milestone["name"], autocomplete="off"
             )
             new_milestone_color = cols[1].color_picker(
                 "Select",
@@ -2856,6 +2860,7 @@ if st.session_state.selected_section_index == 0:
             new_milestone = cols[0].text_input(
                 "Enter milestone",
                 key="new_milestone",
+                autocomplete="off",
             )
 
             if (
@@ -2971,7 +2976,7 @@ if st.session_state.selected_section_index == 0:
     def show_tags_tab():
         with st.form("new_tag_form", clear_on_submit=True, border=False):
             cols = st.columns(4)
-            new_tag = cols[0].text_input("Enter Tag", key="new_tag")
+            new_tag = cols[0].text_input("Enter Tag", key="new_tag", autocomplete="off")
 
             cols[1].container(height=10, border=False)
             if cols[1].form_submit_button("Add"):
@@ -3190,7 +3195,7 @@ else:
         with st.form("edit_org_details_form", border=False):
             cols = st.columns([4, 1])
             new_org_name = cols[0].text_input(
-                "Organization Name", value=st.session_state.org["name"]
+                "Organization Name", value=st.session_state.org["name"], autocomplete="off"
             )
 
             cols[1].container(height=10, border=False)
@@ -3227,6 +3232,7 @@ else:
                 "OpenAI API Key",
                 value=api_key_to_display,
                 type="password",
+                autocomplete="off",
             )
 
             cols[1].container(height=10, border=False)
@@ -3256,7 +3262,7 @@ else:
     @st.dialog("Add Member")
     def show_add_member_dialog(org_users):
         with st.form("add_member_form", border=False):
-            member_email = st.text_input("Enter email")
+            member_email = st.text_input("Enter email", autocomplete="off")
             role = st.selectbox("Select role", ["admin"], disabled=True)
 
             submit_button = st.form_submit_button(
