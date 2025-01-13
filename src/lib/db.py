@@ -2856,11 +2856,3 @@ def seed_openai_api_key():
         conn.rollback()
     finally:
         conn.close()
-
-
-def set_openai_api_key_for_org(org_id: int, openai_api_key: str):
-    encrypted_key = encrypt_openai_api_key(openai_api_key)
-    execute_db_operation(
-        f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
-        (encrypted_key, org_id),
-    )
