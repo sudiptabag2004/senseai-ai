@@ -911,7 +911,9 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
 
     set_task_type_vars(st.session_state.task_type["value"])
 
-    st.text_input("Name", key="task_name", placeholder="e.g. Purrfect Tales", autocomplete="off")
+    st.text_input(
+        "Name", key="task_name", placeholder="e.g. Purrfect Tales", autocomplete="off"
+    )
     st.text_area(
         "Description",
         key="task_description",
@@ -1835,7 +1837,9 @@ if st.session_state.selected_section_index == 0:
 
         with tabs[0]:
             with st.form("add_cohort_member_form", border=False):
-                member_email = st.text_input("Enter email", key="cohort_member_email", autocomplete="off")
+                member_email = st.text_input(
+                    "Enter email", key="cohort_member_email", autocomplete="off"
+                )
 
                 submit_button = st.form_submit_button(
                     "Add Member",
@@ -1923,7 +1927,10 @@ if st.session_state.selected_section_index == 0:
     ):
         with st.form(key, border=False):
             new_group_name = st.text_input(
-                "Enter group name", key="cohort_group_name", value=group_name, autocomplete="off"
+                "Enter group name",
+                key="cohort_group_name",
+                value=group_name,
+                autocomplete="off",
             )
 
             learner_options = [
@@ -2673,7 +2680,7 @@ if st.session_state.selected_section_index == 0:
                 filtered_tasks,
                 columns=[
                     "id",
-                    "verified",
+                    # "verified",
                     "name",
                     "type",
                     "response_type",
@@ -2691,10 +2698,10 @@ if st.session_state.selected_section_index == 0:
                 use_container_width=True,
                 column_config={
                     "id": None,
-                    "verified": st.column_config.CheckboxColumn(
-                        default=False,
-                        width="small",
-                    ),
+                    # "verified": st.column_config.CheckboxColumn(
+                    #     default=False,
+                    #     width="small",
+                    # ),
                     "name": st.column_config.TextColumn(width="large"),
                 },
             )
@@ -3194,7 +3201,9 @@ else:
         with st.form("edit_org_details_form", border=False):
             cols = st.columns([4, 1])
             new_org_name = cols[0].text_input(
-                "Organization Name", value=st.session_state.org["name"], autocomplete="off"
+                "Organization Name",
+                value=st.session_state.org["name"],
+                autocomplete="off",
             )
 
             cols[1].container(height=10, border=False)
