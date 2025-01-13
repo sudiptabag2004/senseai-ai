@@ -1118,7 +1118,9 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
             )
             if task_tag_names:
                 task_tags = [
-                    tag for tag in st.session_state.tags if tag["name"] in task_tag_names
+                    tag
+                    for tag in st.session_state.tags
+                    if tag["name"] in task_tag_names
                 ]
 
         if (
@@ -1862,10 +1864,9 @@ if st.session_state.selected_section_index == 0:
         with tabs[1]:
             columns = [
                 "Email",
-                "Role",
             ]
             uploaded_file = st.file_uploader(
-                f"Choose a CSV file with the following columns:\n\n{','.join([f'`{column}`' for column in columns])} (can be either `{group_role_learner}` or `{group_role_mentor}`)",
+                f"Choose a CSV file with a column named `Email`",
                 type="csv",
                 key=f"cohort_uploader_{st.session_state.cohort_uploader_key}",
             )
@@ -1876,16 +1877,6 @@ if st.session_state.selected_section_index == 0:
             cohort_df = pd.read_csv(uploaded_file)
             if cohort_df.columns.tolist() != columns:
                 st.error("The uploaded file does not have the correct columns.")
-                return
-
-            if (
-                not cohort_df["Role"]
-                .isin([group_role_learner, group_role_mentor])
-                .all()
-            ):
-                st.error(
-                    f"The uploaded file contains invalid roles. Please ensure that the `Role` column only contains `{group_role_learner}` or `{group_role_mentor}`."
-                )
                 return
 
             for email in cohort_df["Email"].tolist():
@@ -1910,7 +1901,7 @@ if st.session_state.selected_section_index == 0:
                 add_members_to_cohort(
                     cohort_id,
                     cohort_df["Email"].tolist(),
-                    cohort_df["Role"].tolist(),
+                    [role] * len(cohort_df),
                 )
                 refresh_cohorts()
                 set_toast(f"Members added to cohort successfully!")
