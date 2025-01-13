@@ -2464,13 +2464,16 @@ if st.session_state.selected_section_index == 0:
 
                 new_course_id = create_course(course_name, st.session_state.org_id)
 
-                if st.session_state.course_cohorts:
+                if st.session_state.course_cohorts_create_course:
                     add_course_to_cohorts(
                         new_course_id,
-                        [cohort["id"] for cohort in st.session_state.course_cohorts],
+                        [
+                            cohort["id"]
+                            for cohort in st.session_state.course_cohorts_create_course
+                        ],
                     )
                     # invalidate cache
-                    clear_course_cache_for_cohorts(st.session_state.course_cohorts)
+                    clear_course_cache_for_cohorts(st.session_state.course_cohorts_create_course)
 
                 refresh_courses()
                 st.session_state.current_course_index = (
