@@ -916,7 +916,6 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
         "Description",
         key="task_description",
         placeholder="e.g. Write a short story about a cat",
-        autocomplete="off",
     )
 
     task_answer = None
