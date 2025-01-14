@@ -122,7 +122,7 @@ async def generate_tests_for_task_from_llm(
     try:
         pred_dict = await call_llm_and_parse_output(
             llm_input_messages,
-            model=model["version"],
+            model=model,
             output_parser=output_parser,
             api_key=api_key,
             max_tokens=2048,

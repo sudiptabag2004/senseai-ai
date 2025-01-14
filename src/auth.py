@@ -63,7 +63,7 @@ def login():
     cols[1].markdown(
         f"""
         <p style='margin-top: 20px; margin-left: 40px; font-size: 2rem; color: {subtitle_color}'>
-        Your personal AI tutor
+        Your personal AI coach
         </p>
         """,
         unsafe_allow_html=True,

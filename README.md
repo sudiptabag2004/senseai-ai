@@ -1,6 +1,6 @@
 # SensAI
 
-SensAI is an open-source, AI-powered Learning Management System (LMS) which enables educators to create their own Coursera-style structured courses with the help of AI while serving as a tutor that offers real-time feedback to learners, helping them improve through personalized coaching that encourages them to think for themselves instead of giving away the answers. Teachers get access to detailed learning data at the level of each learner along with AI-generated insights to better understand and support their learners.
+SensAI is an open-source, AI-powered Learning Management System (LMS) which enables educators to create their own Coursera-style structured courses with the help of AI while serving as a coach that offers real-time feedback to learners, helping them improve through personalized coaching that encourages them to think for themselves instead of giving away the answers. Teachers get access to detailed learning data at the level of each learner along with AI-generated insights to better understand and support their learners.
 
 Our mission is to make quality education accessible to everyone everywhere in the world.
 
