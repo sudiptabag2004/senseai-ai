@@ -125,6 +125,16 @@ def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: D
         )
 
 
+def show_course_tab(course_tasks, cohort_id, course, user_id):
+    if not course_tasks:
+        return show_empty_error_message()
+
+    if st.session_state.show_list_view:
+        show_roadmap_as_list(course_tasks, cohort_id, course["id"])
+    else:
+        show_roadmap_by_milestone(course_tasks, user_id, cohort_id, course)
+
+
 def show_roadmap_by_course(user_id: int, cohort_id: int):
     cohort_courses = get_courses_for_cohort(cohort_id)
 
@@ -140,13 +150,7 @@ def show_roadmap_by_course(user_id: int, cohort_id: int):
         )
 
         with tab:
-            if not course_tasks:
-                return show_empty_error_message()
-
-            if st.session_state.show_list_view:
-                show_roadmap_as_list(course_tasks, cohort_id, course["id"])
-            else:
-                show_roadmap_by_milestone(course_tasks, user_id, cohort_id, course)
+            show_course_tab(course_tasks, cohort_id, course, user_id)
 
 
 def update_task_view():
