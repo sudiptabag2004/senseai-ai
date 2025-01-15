@@ -127,6 +127,7 @@ st.session_state.org = get_org_by_id(st.session_state.org_id)
 
 back_to_home_button(params={"org_id": st.session_state.org_id})
 
+
 def reset_ai_running():
     st.session_state.is_ai_running = False
 
@@ -3113,6 +3114,21 @@ elif st.session_state.selected_section_index == 1:
             st.error("No usage data yet!")
             return
 
+        num_tasks = len(filtered_tasks)
+
+        num_completed_percentage = (
+            np.mean([metric["num_completed"] / num_tasks for metric in metrics]) * 100
+        )
+
+        if num_completed_percentage.is_integer():
+            num_completed_percentage = f"{int(num_completed_percentage)}%"
+        else:
+            num_completed_percentage = f"{num_completed_percentage:.2f}%"
+
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Task Completion Rate", num_completed_percentage)
+        metric_cols[1].metric("Number of Tasks", num_tasks)
+        metric_cols[2].metric("Number of Learners", len(metrics))
         column_order = ["email", "num_completed"]
 
         column_config = {
