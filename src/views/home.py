@@ -185,9 +185,13 @@ def show_home():
             role = "admin"
 
         if role == "mentor":
-            cols[1].container(height=2, border=False)
-            is_mentor = cols[1].toggle("Mentor view", key="is_mentor", value=True)
-            st.divider()
+            home_view = st.segmented_control(
+                "Select view",
+                options=["Mentor view", "Learner view"],
+                default="Mentor view",
+                label_visibility="collapsed",
+            )
+            is_mentor = home_view == "Mentor view"
 
         if is_mentor:
             mentor_view(selected_cohort)
