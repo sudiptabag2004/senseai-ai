@@ -13,7 +13,11 @@ if not st.experimental_user.is_authenticated:
     login()
 else:
     login_or_signup_user()
-    show_home()
 
-if not st.query_params:
-    st.query_params.clear()
+    if st.query_params:
+        if "org_id" in st.query_params:
+            # make sure that if someone is coming from the admin panel to the home page,
+            # the selected org is the one they came from
+            st.session_state.org_id = int(st.query_params["org_id"])
+
+    show_home()

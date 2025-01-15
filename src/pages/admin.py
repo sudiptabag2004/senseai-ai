@@ -117,8 +117,6 @@ init_app()
 
 login_or_signup_user()
 
-back_to_home_button()
-
 if "org_id" not in st.query_params:
     unauthorized_redirect_to_home(
         "`org_id` not present in the URL. Redirecting to home page..."
@@ -127,6 +125,7 @@ if "org_id" not in st.query_params:
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
 
+back_to_home_button(params={"org_id": st.session_state.org_id})
 
 def reset_ai_running():
     st.session_state.is_ai_running = False

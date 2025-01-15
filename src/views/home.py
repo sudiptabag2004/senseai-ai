@@ -56,7 +56,9 @@ def mentor_view(selected_cohort: Dict):
         )
 
     if not mentor_groups:
-        st.info("You are not added to any group in this cohort")
+        st.info(
+            "You are added as a mentor to this cohort but you are not assigned to any group"
+        )
         return
 
     with cols[1]:
