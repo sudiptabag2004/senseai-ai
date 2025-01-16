@@ -871,6 +871,35 @@ def get_task_chat_history_for_user(task_id: int, user_id: int):
     return chat_history_dicts
 
 
+def get_user_chat_history_for_tasks(task_ids: List[int], user_id: int):
+    chat_history = execute_db_operation(
+        f"""
+    SELECT ch.task_id, t.name, t.description, t.context, ch.id, ch.timestamp, ch.role, ch.content, ch.is_solved, ch.response_type FROM {chat_history_table_name} ch
+    INNER JOIN {tasks_table_name} t ON ch.task_id = t.id
+    WHERE ch.task_id IN ({','.join(map(str, task_ids))}) AND ch.user_id = ?
+    """,
+        (user_id,),
+        fetch_all=True,
+    )
+
+    chat_history_dicts = [
+        {
+            "task_id": row[0],
+            "task_name": row[1],
+            "task_description": row[2],
+            "task_context": row[3],
+            "chat_id": row[4],
+            "timestamp": row[5],
+            "role": row[6],
+            "content": row[7],
+            "is_solved": bool(row[8]),
+            "response_type": row[9],
+        }
+        for row in chat_history
+    ]
+    return chat_history_dicts
+
+
 def get_solved_tasks_for_user(
     user_id: int,
     cohort_id: int,
@@ -1731,7 +1760,9 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
     ]
 
 
-def get_cohort_metrics_for_milestone(milestone_task_ids: List[int], cohort_id: int):
+def get_cohort_course_metrics_for_milestone(
+    milestone_task_ids: List[int], cohort_id: int
+):
     results = execute_db_operation(
         f"""
         WITH cohort_learners AS (
@@ -1798,6 +1829,80 @@ def get_cohort_metrics_for_milestone(milestone_task_ids: List[int], cohort_id: i
     for index, row in enumerate(user_metrics):
         for task_id in milestone_task_ids:
             row[f"task_{task_id}"] = task_metrics[task_id][index]
+
+    return user_metrics
+
+
+def get_cohort_course_attempt_data_for_milestone(
+    milestone_task_ids: List[int], cohort_id: int
+):
+    results = execute_db_operation(
+        f"""
+        WITH cohort_learners AS (
+            SELECT u.id, u.email
+            FROM {users_table_name} u
+            JOIN {user_cohorts_table_name} uc ON u.id = uc.user_id 
+            WHERE uc.cohort_id = ? AND uc.role = 'learner'
+        ),
+        task_attempts AS (
+            SELECT 
+                cl.id as user_id,
+                cl.email,
+                ch.task_id,
+                CASE WHEN COUNT(ch.id) > 0 THEN 1 ELSE 0 END as has_attempted
+            FROM cohort_learners cl
+            LEFT JOIN {chat_history_table_name} ch 
+                ON cl.id = ch.user_id 
+                AND ch.task_id IN ({','.join('?' * len(milestone_task_ids))})
+            LEFT JOIN {tasks_table_name} t
+                ON ch.task_id = t.id
+            GROUP BY cl.id, cl.email, ch.task_id, t.name
+        )
+        SELECT 
+            user_id,
+            email,
+            GROUP_CONCAT(task_id) as task_ids,
+            GROUP_CONCAT(has_attempted) as task_attempts
+        FROM task_attempts
+        GROUP BY user_id, email
+        """,
+        (cohort_id, *milestone_task_ids),
+        fetch_all=True,
+    )
+
+    user_metrics = []
+    task_attempts = defaultdict(list)
+
+    for row in results:
+        task_attempts_data = [
+            int(x) if x else 0 for x in (row[3].split(",") if row[3] else [])
+        ]
+        task_ids = list(map(int, row[2].split(","))) if row[2] else []
+
+        for task_id, task_attempt in zip(task_ids, task_attempts_data):
+            task_attempts[task_id].append(task_attempt)
+
+        for task_id in milestone_task_ids:
+            if task_id in task_ids:
+                continue
+
+            task_attempts[task_id].append(0)
+
+        num_attempted = sum(task_attempts_data)
+
+        user_metrics.append(
+            {
+                "user_id": row[0],
+                "email": row[1],
+                "num_attempted": num_attempted,
+            }
+        )
+
+    task_attempts = {task_id: task_attempts[task_id] for task_id in milestone_task_ids}
+
+    for index, row in enumerate(user_metrics):
+        for task_id in milestone_task_ids:
+            row[f"task_{task_id}"] = task_attempts[task_id][index]
 
     return user_metrics
 
