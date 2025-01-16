@@ -4,7 +4,7 @@ import os
 import math
 from datetime import datetime
 import asyncio
-from functools import partial
+from collections import defaultdict
 import numpy as np
 import streamlit as st
 import json
@@ -19,7 +19,15 @@ import pandas as pd
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
-from lib.prompts import generate_answer_for_task, generate_tests_for_task_from_llm
+from lib.prompts import (
+    generate_answer_for_task,
+    generate_tests_for_task_from_llm,
+    generate_learner_insights_for_task,
+    summarize_learner_insights,
+    async_index_wrapper,
+    task_level_insights_base_prompt,
+    insights_summary_base_prompt,
+)
 from lib.llm import (
     validate_openai_api_key,
 )
@@ -99,9 +107,12 @@ from lib.db import (
     update_org,
     update_org_openai_api_key,
     get_org_by_id,
-    get_cohort_metrics_for_milestone,
+    get_cohort_course_metrics_for_milestone,
+    get_cohort_course_attempt_data_for_milestone,
+    get_user_chat_history_for_tasks,
 )
 from lib.utils import generate_random_color
+from lib.utils.concurrency import async_batch_gather
 from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
 from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
@@ -1401,6 +1412,7 @@ if "selected_section_index" not in st.session_state:
 
 def change_selected_section(section_index: int):
     st.session_state.selected_section_index = section_index
+    reset_ai_running()
 
 
 with layout_cols[0]:
@@ -3034,12 +3046,233 @@ elif st.session_state.selected_section_index == 1:
     is_hva_org = get_hva_org_id() == st.session_state.org_id
 
     with layout_cols[-1]:
-        tab_names = ["Metrics"]
+        tab_names = ["Insights `[Beta]`", "Metrics"]
 
         if is_hva_org:
             tab_names.append("CV review")
 
         tabs = st.tabs(tab_names)
+
+    def _get_usage_data(key):
+        if not st.session_state.cohorts:
+            st.info(
+                "No cohorts found. Create a cohort and add members to it. You will see their usage metrics here!"
+            )
+            return
+
+        cols = st.columns(3)
+
+        selected_cohort = cols[0].selectbox(
+            "Select a cohort",
+            st.session_state.cohorts,
+            format_func=lambda cohort: cohort["name"],
+            key=f"selected_cohort_{key}",
+        )
+
+        cohort_courses = get_courses_for_cohort(selected_cohort["id"])
+
+        if not cohort_courses:
+            st.error(
+                "No courses found for this. Add courses to this cohort to see the usage metrics here!"
+            )
+            return
+
+        selected_course = cols[1].selectbox(
+            "Select a course",
+            st.session_state.courses,
+            format_func=lambda course: course["name"],
+            key=f"selected_course_{key}",
+        )
+
+        course_tasks = get_tasks_for_course(selected_course["id"])
+
+        if not course_tasks:
+            st.error(
+                "No tasks found. The course must have at least one task added to it!"
+            )
+            return
+
+        milestone = cols[2].selectbox(
+            "Filter by milestone",
+            set([task["milestone"] for task in course_tasks]),
+            key=f"metrics_course_task_milestone_filter_{key}",
+        )
+
+        filtered_tasks = [
+            task for task in course_tasks if task["milestone"] == milestone
+        ]
+
+        return filtered_tasks, selected_cohort, selected_course
+
+    def group_chat_history_by_task(chat_history: List[Dict]) -> Dict[int, List[Dict]]:
+        chat_history_grouped_by_task = defaultdict(list)
+        for chat in chat_history:
+            chat_history_grouped_by_task[chat["task_id"]].append(chat)
+
+        for task_id, chats in chat_history_grouped_by_task.items():
+            chat_history_grouped_by_task[task_id] = sorted(
+                chats, key=lambda x: x["chat_id"]
+            )
+
+        return chat_history_grouped_by_task
+
+    async def generate_learner_insights_for_tasks(
+        task_ids: List[int],
+        learner_id: int,
+        task_level_insights_prompt: str,
+        insights_summary_prompt: str,
+    ) -> str:
+        chat_history = get_user_chat_history_for_tasks(task_ids, learner_id)
+
+        chat_history_grouped_by_task = group_chat_history_by_task(chat_history)
+
+        coroutines = [
+            async_index_wrapper(
+                generate_learner_insights_for_task,
+                index,
+                task_chat_history,
+                task_level_insights_prompt,
+                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            )
+            for index, task_chat_history in enumerate(
+                chat_history_grouped_by_task.values()
+            )
+        ]
+
+        # with st.spinner("Generating insights across all tasks attempted..."):
+        task_level_insights = await async_batch_gather(
+            coroutines, description="Generating insights for each task attempted"
+        )
+
+        with st.spinner("Summarizing the insights..."):
+            insights_summary = await summarize_learner_insights(
+                task_level_insights,
+                insights_summary_prompt,
+                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            )
+
+        return insights_summary, task_level_insights
+
+    def show_insights_tab():
+        usage_data = _get_usage_data("insights")
+
+        if not usage_data:
+            return
+
+        filtered_tasks, selected_cohort, _ = usage_data
+
+        if any(task["input_type"] == "audio" for task in filtered_tasks):
+            st.info("We currently do not support generating insights for audio tasks.")
+            return
+
+        filtered_questions = [
+            task
+            for task in filtered_tasks
+            if task["type"] == "question" and task["input_type"] != "audio"
+        ]
+
+        metrics = get_cohort_course_attempt_data_for_milestone(
+            [task["id"] for task in filtered_questions], selected_cohort["id"]
+        )
+
+        if not metrics:
+            st.error("No usage data yet!")
+            return
+
+        metrics = [metric for metric in metrics if metric["num_attempted"]]
+
+        if not metrics:
+            st.error(
+                "No learners have attempted any questions in this milestone to generate insights!"
+            )
+            return
+
+        learners = [
+            {"email": metric["email"], "id": metric["user_id"]} for metric in metrics
+        ]
+
+        email_to_metrics = {metric["email"]: metric for metric in metrics}
+
+        if "is_insight_learner_selected" not in st.session_state:
+            st.session_state.is_insight_learner_selected = False
+
+        # def toggle_insight_learner_selected():
+        #     st.session_state.is_insight_learner_selected = (
+        #         not st.session_state.is_insight_learner_selected
+        #     )
+
+        # def reset_insight_learner_selected():
+        #     st.session_state.is_insight_learner_selected = False
+
+        with st.expander("Prompts", expanded=True):
+            prompt_cols = st.columns(2)
+
+            task_level_insights_prompt = prompt_cols[0].text_area(
+                "Task level insights",
+                height=400,
+                value=task_level_insights_base_prompt,
+            )
+            insights_summary_prompt = prompt_cols[1].text_area(
+                "Summary of insights",
+                height=400,
+                value=insights_summary_base_prompt,
+            )
+
+        cols = st.columns([5, 1])
+
+        selected_learner = cols[0].selectbox(
+            "Select a learner",
+            learners,
+            format_func=lambda learner: learner["email"],
+            key=f"selected_learner",
+            # on_change=reset_insight_learner_selected,
+            disabled=st.session_state.is_ai_running,
+        )
+
+        learner_metrics = email_to_metrics[selected_learner["email"]]
+        tasks_attempted_by_learner = [
+            task for task in filtered_questions if learner_metrics[f'task_{task["id"]}']
+        ]
+
+        st.write(f"Num tasks attempted: {len(tasks_attempted_by_learner)}")
+
+        cols[1].container(height=10, border=False)
+        if cols[1].button(
+            "Generate Insights",
+            type="primary",
+            use_container_width=True,
+            disabled=st.session_state.is_ai_running,
+            on_click=set_ai_running,
+            # on_click=toggle_insight_learner_selected,
+            # disabled=st.session_state.is_insight_learner_selected,
+        ):
+            with st.container(height=2000, border=False):
+                insights, task_level_insights = asyncio.run(
+                    generate_learner_insights_for_tasks(
+                        [task["id"] for task in tasks_attempted_by_learner],
+                        selected_learner["id"],
+                        task_level_insights_prompt,
+                        insights_summary_prompt,
+                    )
+                )
+
+                reset_ai_running()
+
+                st.write(insights)
+
+                with st.expander("Task level insights"):
+                    for index, task in enumerate(tasks_attempted_by_learner):
+                        task["index"] = index
+
+                    selected_task = st.selectbox(
+                        "Select a task",
+                        tasks_attempted_by_learner,
+                        format_func=lambda row: row["name"],
+                    )
+                    st.write(task_level_insights[selected_task["index"]])
+
+    with tabs[0]:
+        show_insights_tab()
 
     @st.dialog("Select task")
     def show_task_picker_dialog_for_task_history_inspection(
@@ -3058,55 +3291,14 @@ elif st.session_state.selected_section_index == 1:
         )
 
     def show_metrics_tab():
-        if not st.session_state.cohorts:
-            st.info(
-                "No cohorts found. Create a cohort and add members to it. You will see their usage metrics here!"
-            )
+        usage_data = _get_usage_data("metrics")
+
+        if not usage_data:
             return
 
-        cols = st.columns(3)
+        filtered_tasks, selected_cohort, selected_course = usage_data
 
-        selected_cohort = cols[0].selectbox(
-            "Select a cohort",
-            st.session_state.cohorts,
-            format_func=lambda cohort: cohort["name"],
-            key="selected_cohort",
-        )
-
-        cohort_courses = get_courses_for_cohort(selected_cohort["id"])
-
-        if not cohort_courses:
-            st.error(
-                "No courses found for this. Add courses to this cohort to see the usage metrics here!"
-            )
-            return
-
-        selected_course = cols[1].selectbox(
-            "Select a course",
-            st.session_state.courses,
-            format_func=lambda course: course["name"],
-            key="selected_course",
-        )
-
-        course_tasks = get_tasks_for_course(selected_course["id"])
-
-        if not course_tasks:
-            st.error(
-                "No tasks found. The course must have at least one task added to it!"
-            )
-            return
-
-        milestone = cols[2].selectbox(
-            "Filter by milestone",
-            set([task["milestone"] for task in course_tasks]),
-            key="metrics_course_task_milestone_filter",
-        )
-
-        filtered_tasks = [
-            task for task in course_tasks if task["milestone"] == milestone
-        ]
-
-        metrics = get_cohort_metrics_for_milestone(
+        metrics = get_cohort_course_metrics_for_milestone(
             [task["id"] for task in filtered_tasks], selected_cohort["id"]
         )
 
@@ -3171,7 +3363,7 @@ elif st.session_state.selected_section_index == 1:
                     selected_course["id"],
                 )
 
-    with tabs[0]:
+    with tabs[1]:
         show_metrics_tab()
 
     def show_cv_review_usage():
