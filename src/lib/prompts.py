@@ -181,7 +181,7 @@ Additional Context:
 - Avoid being overly verbose. Keep your feedback concise but always include examples to back up the struggles you have identified.
 
 Task:
-Analyze the provided chat history between the tutor and the student according to the above criteria. Identify key areas where the student is struggling, and conclude with specific, evidence-based recommendations tailored to the student’s learning behavior and subject-specific challenges."""
+Analyze the provided chat history between the tutor and the student according to the above criteria. Identify key areas where the student is struggling, and conclude with specific, evidence-based recommendations tailored to the student’s learning behavior and subject-specific challenges. Avoid starting your response with a header/title for the task."""
 
 
 insights_summary_base_prompt = """You are an advanced learning analytics assistant tasked with integrating insights from multiple tasks to produce a single, comprehensive summary of a student's performance. Your focus is exclusively on identifying and elaborating on the areas where the student is struggling. Do not mention any strengths or positive aspects of the student’s performance—your analysis should solely target the challenges and deficiencies observed.
@@ -209,7 +209,7 @@ insights_summary_base_prompt = """You are an advanced learning analytics assista
    - Focus exclusively on the areas of difficulty without referencing any strengths or positive aspects in the summary.
 
 **Task:**
-Using the provided multi-task insights, generate a comprehensive summary that details the specific areas where the student is struggling, integrating evidence from content comprehension, feedback response, behavioral patterns, and learning strategies."""
+Using the provided multi-task insights, generate a comprehensive summary that details the specific areas where the student is struggling, integrating evidence from content comprehension, feedback response, behavioral patterns, and learning strategies. Avoid starting your response with a header/title for the task."""
 
 
 async def generate_learner_insights_for_task(

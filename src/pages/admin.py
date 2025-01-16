@@ -3196,10 +3196,11 @@ elif st.session_state.selected_section_index == 1:
         if "is_insight_learner_selected" not in st.session_state:
             st.session_state.is_insight_learner_selected = False
 
-        # def toggle_insight_learner_selected():
-        #     st.session_state.is_insight_learner_selected = (
-        #         not st.session_state.is_insight_learner_selected
-        #     )
+        def clear_insights_cache():
+            # st.session_state.is_insight_learner_selected = (
+            #     not st.session_state.is_insight_learner_selected
+            # )
+            st.session_state.insights = None
 
         # def reset_insight_learner_selected():
         #     st.session_state.is_insight_learner_selected = False
@@ -3225,7 +3226,7 @@ elif st.session_state.selected_section_index == 1:
             learners,
             format_func=lambda learner: learner["email"],
             key=f"selected_learner",
-            # on_change=reset_insight_learner_selected,
+            on_change=clear_insights_cache,
             disabled=st.session_state.is_ai_running,
         )
 
@@ -3234,7 +3235,8 @@ elif st.session_state.selected_section_index == 1:
             task for task in filtered_questions if learner_metrics[f'task_{task["id"]}']
         ]
 
-        st.write(f"Num tasks attempted: {len(tasks_attempted_by_learner)}")
+        st.write(f"Number of tasks attempted: {len(tasks_attempted_by_learner)}")
+        st.divider()
 
         cols[1].container(height=10, border=False)
         if cols[1].button(
@@ -3246,30 +3248,30 @@ elif st.session_state.selected_section_index == 1:
             # on_click=toggle_insight_learner_selected,
             # disabled=st.session_state.is_insight_learner_selected,
         ):
-            with st.container(height=2000, border=False):
-                insights, task_level_insights = asyncio.run(
-                    generate_learner_insights_for_tasks(
-                        [task["id"] for task in tasks_attempted_by_learner],
-                        selected_learner["id"],
-                        task_level_insights_prompt,
-                        insights_summary_prompt,
-                    )
+            insights, task_level_insights = asyncio.run(
+                generate_learner_insights_for_tasks(
+                    [task["id"] for task in tasks_attempted_by_learner],
+                    selected_learner["id"],
+                    task_level_insights_prompt,
+                    insights_summary_prompt,
                 )
+            )
+            st.session_state.insights = {
+                "summary": insights,
+                "tasks": task_level_insights,
+            }
 
-                reset_ai_running()
+            reset_ai_running()
 
-                st.write(insights)
+        if "insights" in st.session_state and st.session_state.insights:
+            st.write(st.session_state.insights["summary"])
 
-                with st.expander("Task level insights"):
-                    for index, task in enumerate(tasks_attempted_by_learner):
-                        task["index"] = index
-
-                    selected_task = st.selectbox(
-                        "Select a task",
-                        tasks_attempted_by_learner,
-                        format_func=lambda row: row["name"],
-                    )
-                    st.write(task_level_insights[selected_task["index"]])
+            st.markdown("#### Task level insights")
+            for task, task_insights in zip(
+                tasks_attempted_by_learner, st.session_state.insights["tasks"]
+            ):
+                with st.expander(task["name"]):
+                    st.write(task_insights)
 
     with tabs[0]:
         show_insights_tab()
