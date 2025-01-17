@@ -140,6 +140,12 @@ st.session_state.scoring_criteria = None
 if task["response_type"] == "report":
     st.session_state.scoring_criteria = get_scoring_criteria_for_task(task_id)
 
+    if not st.session_state.scoring_criteria:
+        st.error(
+            "No scoring criteria found for this task. Please contact your admin to set up scoring criteria for this task!"
+        )
+        st.stop()
+
 if "learner" in st.query_params:
     task_user_id = st.query_params["learner"]
 else:

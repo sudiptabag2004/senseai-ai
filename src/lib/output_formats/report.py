@@ -223,7 +223,7 @@ def get_containers(is_review_mode: bool):
     if not is_review_mode:
         user_input_kwargs = {"height": 100, "border": False}
 
-    user_input_display_container = report_col.container(**user_input_kwargs)
+    user_input_display_container = report_col.container(**user_input_kwargs).empty()
 
     # for spacing
     report_col.container(height=1, border=False)
@@ -248,21 +248,21 @@ def get_containers(is_review_mode: bool):
 def display_user_text_input_report(
     user_input_display_container, user_response: str, is_review_mode: bool = False
 ):
-    user_input_display_container.empty()
+    container = user_input_display_container.container()
 
     description = "**Your response**" if not is_review_mode else "**Response**"
 
-    with user_input_display_container:
+    with container:
         st.markdown(f"{description}<br>{user_response}", unsafe_allow_html=True)
 
 
 def display_user_audio_input_report(
     user_input_display_container, audio_data: bytes, is_review_mode: bool = False
 ):
-    user_input_display_container.empty()
+    container = user_input_display_container.container()
 
     description = "**Your response**" if not is_review_mode else "**Response**"
 
-    with user_input_display_container:
+    with container:
         st.markdown(f"{description}", unsafe_allow_html=True)
         st.audio(audio_data)
