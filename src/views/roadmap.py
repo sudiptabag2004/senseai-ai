@@ -35,6 +35,10 @@ def show_roadmap_as_list(
     if not len(filtered_df):
         return show_empty_error_message()
 
+    filtered_df["tags"] = filtered_df["tags"].apply(
+        lambda tags: [tag["name"] for tag in tags] if tags else [],
+    )
+
     st.write("Select a task by clicking beside the `id` of the task")
 
     df_actions = st.container(border=True)

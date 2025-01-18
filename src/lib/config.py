@@ -12,8 +12,6 @@ else:
         os.makedirs(data_root_dir)
     root_dir = os.path.dirname(os.path.abspath(__file__))
 
-tags_list_path = f"{data_root_dir}/tags.json"
-
 sqlite_db_path = f"{data_root_dir}/db.sqlite"
 
 chat_history_table_name = "chat_history"

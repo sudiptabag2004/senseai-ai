@@ -1275,10 +1275,10 @@ def insert_or_return_user(
         color = generate_random_color()
         cursor.execute(
             f"""
-            INSERT INTO {users_table_name} (email, default_dp_color)
-            VALUES (?, ?)
+            INSERT INTO {users_table_name} (email, default_dp_color, first_name, middle_name, last_name)
+            VALUES (?, ?, ?, ?, ?)
         """,
-            (email, color),
+            (email, color, first_name, middle_name, family_name),
         )
 
         cursor.execute(
