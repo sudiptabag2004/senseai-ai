@@ -470,6 +470,9 @@ def update_task_courses(task_details: Dict):
 
 def is_scoring_criteria_changed(new_task_scoring_criteria, old_task_scoring_criteria):
     for index, criterion in enumerate(new_task_scoring_criteria):
+        if index >= len(old_task_scoring_criteria):
+            return True
+
         for key in new_task_scoring_criteria[0].keys():
             if criterion[key] != old_task_scoring_criteria[index][key]:
                 return True
