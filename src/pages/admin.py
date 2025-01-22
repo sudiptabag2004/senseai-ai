@@ -3241,6 +3241,9 @@ elif st.session_state.selected_section_index == 1:
                     height=400,
                     value=insights_summary_base_prompt,
                 )
+        else:
+            task_level_insights_prompt = task_level_insights_base_prompt
+            insights_summary_prompt = insights_summary_base_prompt
 
         cols = st.columns([5, 1])
 

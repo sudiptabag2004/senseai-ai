@@ -49,6 +49,7 @@ coding_languages_supported = [
     "React",
     "SQL",
 ]
+
 leaderboard_view_types = [
     str(LeaderboardViewType.ALL_TIME),
     str(LeaderboardViewType.WEEKLY),
