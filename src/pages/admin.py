@@ -1304,10 +1304,12 @@ def show_bulk_upload_tasks_form():
         course_selector("task", default=None)
 
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
+    is_answer_needed = False
     if (
         st.session_state.is_task_type_question
         and st.session_state.task_ai_response_type in ["chat", "exam"]
     ):
+        is_answer_needed = True
         file_uploader_label += ", `Answer` (optional)"
 
     uploaded_file = st.file_uploader(
@@ -1315,6 +1317,11 @@ def show_bulk_upload_tasks_form():
         type="csv",
         key=f"bulk_upload_tasks_{st.session_state.task_uploader_key}",
     )
+
+    if is_answer_needed:
+        st.write(
+            "If the `Answer` column is not present, AI will generate answers for the tasks for you to review"
+        )
 
     if uploaded_file:
         display_container = st.empty()
@@ -3162,7 +3169,7 @@ elif st.session_state.selected_section_index == 1:
                 """No OpenAI API key found. Please set an API key in the `"Settings"` section."""
             )
             return
-        
+
         usage_data = _get_usage_data("insights")
 
         if not usage_data:
