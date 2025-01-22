@@ -975,7 +975,11 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
             generate_help_text = (
                 "Task name or description is missing"
                 if is_task_details_missing
-                else "Answer already added" if is_generate_answer_disabled else ""
+                else (
+                    "Answer already added"
+                    if is_generate_answer_disabled
+                    else "Generate answer using AI"
+                )
             )
             if cols[-1].button(
                 "Generate",
