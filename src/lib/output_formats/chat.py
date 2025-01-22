@@ -107,33 +107,39 @@ def get_ai_chat_response(
 
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
-    stream = client.chat.completions.create_partial(
-        model=model,
-        messages=messages,
-        response_model=Output,
-        stream=True,
-        max_completion_tokens=2048,
-        top_p=1,
-        temperature=0,
-        frequency_penalty=0,
-        presence_penalty=0,
-        store=True,
-    )
+    while True:
+        stream = client.chat.completions.create_partial(
+            model=model,
+            messages=messages,
+            response_model=Output,
+            stream=True,
+            max_completion_tokens=2048,
+            top_p=1,
+            temperature=0,
+            frequency_penalty=0,
+            presence_penalty=0,
+            store=True,
+        )
 
-    ai_response = None
+        ai_response = None
 
-    for extraction in stream:
-        # print(extraction)
-        result_dict = extraction.model_dump()
-        if response_type == "exam":
-            continue
+        for extraction in stream:
+            # print(extraction)
+            result_dict = extraction.model_dump()
+            if response_type == "exam":
+                continue
 
-        ai_response_list = result_dict["feedback"]
-        if ai_response_list:
-            ai_response = " ".join(ai_response_list)
-            st.markdown(cleanup_ai_response(ai_response), unsafe_allow_html=True)
+            ai_response_list = result_dict["feedback"]
+            if ai_response_list:
+                ai_response = " ".join(ai_response_list)
+                st.markdown(cleanup_ai_response(ai_response), unsafe_allow_html=True)
 
-    logger.info(system_prompt)
+        logger.info(system_prompt)
+
+        if ai_response:
+            break
+
+        logger.info("AI feedback empty. Retrying...")
 
     # import ipdb
 
