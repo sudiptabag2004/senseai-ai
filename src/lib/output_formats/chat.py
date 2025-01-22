@@ -124,7 +124,7 @@ def get_ai_chat_response(
         ai_response = None
 
         for extraction in stream:
-            # print(extraction)
+            # logger.info(extraction)
             result_dict = extraction.model_dump()
             if response_type == "exam":
                 continue
@@ -136,7 +136,7 @@ def get_ai_chat_response(
 
         logger.info(system_prompt)
 
-        if ai_response:
+        if response_type == "exam" or (response_type == "chat" and ai_response):
             break
 
         logger.info("AI feedback empty. Retrying...")
