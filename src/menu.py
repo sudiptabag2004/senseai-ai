@@ -112,12 +112,11 @@ def authenticated_menu(selected_cohort: Dict, role: str):
             # make sure that if someone is coming from the admin panel to the home page,
             # the selected org is the one they came from
             if "org_id" in st.session_state and st.session_state.org_id is not None:
-                default_selected_org = [
+                st.session_state.selected_org = [
                     org
                     for org in st.session_state.user_orgs
                     if org["id"] == st.session_state.org_id
                 ][0]
-                st.session_state.selected_org = default_selected_org
 
             selected_org = cols[0].selectbox(
                 f'`{st.session_state["email"]}`',

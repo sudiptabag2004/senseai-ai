@@ -20,4 +20,12 @@ else:
             # the selected org is the one they came from
             st.session_state.org_id = int(st.query_params["org_id"])
 
+            st.session_state.selected_org = [
+                org
+                for org in st.session_state.user_orgs
+                if org["id"] == st.session_state.org_id
+            ][0]
+
+            st.query_params.clear()
+
     show_home()
