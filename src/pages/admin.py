@@ -1372,8 +1372,10 @@ def show_bulk_upload_tasks_form():
                 tasks_df["Answer"] = st.session_state.ai_answers
 
             # verified = False
-            display_container.dataframe(
-                tasks_df, hide_index=True, column_config=column_config
+            tasks_df = display_container.data_editor(
+                tasks_df,
+                hide_index=True,
+                column_config=column_config,
             )
 
         if st.button(
