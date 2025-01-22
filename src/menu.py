@@ -107,6 +107,10 @@ def authenticated_menu(selected_cohort: Dict, role: str):
             or selected_cohort is None
             or selected_cohort["org_id"] != get_hva_org_id()
         ):
+
+            def set_org_in_query_params():
+                st.query_params["org_id"] = st.session_state.selected_org["id"]
+
             cols = st.sidebar.columns([6, 1])
 
             # make sure that if someone is coming from the admin panel to the home page,
@@ -123,6 +127,7 @@ def authenticated_menu(selected_cohort: Dict, role: str):
                 st.session_state.user_orgs,
                 key="selected_org",
                 format_func=lambda val: f"{val['name']} ({val['role']})",
+                on_change=set_org_in_query_params,
             )
 
             if not selected_org["openai_api_key"]:

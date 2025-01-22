@@ -26,6 +26,6 @@ else:
                 if org["id"] == st.session_state.org_id
             ][0]
 
-            st.query_params.clear()
+            # st.query_params.clear()
 
     show_home()
