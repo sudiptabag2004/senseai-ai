@@ -3288,6 +3288,7 @@ elif st.session_state.selected_section_index == 1:
             }
 
             reset_ai_running()
+            st.rerun()
 
         if "insights" in st.session_state and st.session_state.insights:
             st.write(st.session_state.insights["summary"])
