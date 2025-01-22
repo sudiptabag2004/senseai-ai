@@ -3157,6 +3157,12 @@ elif st.session_state.selected_section_index == 1:
         return insights_summary, task_level_insights
 
     def show_insights_tab():
+        if is_empty_openai_api_key():
+            st.error(
+                """No OpenAI API key found. Please set an API key in the `"Settings"` section."""
+            )
+            return
+        
         usage_data = _get_usage_data("insights")
 
         if not usage_data:
@@ -3208,19 +3214,20 @@ elif st.session_state.selected_section_index == 1:
         # def reset_insight_learner_selected():
         #     st.session_state.is_insight_learner_selected = False
 
-        with st.expander("Prompts", expanded=True):
-            prompt_cols = st.columns(2)
+        if st.session_state.org_id == get_hva_org_id():
+            with st.expander("Prompts", expanded=True):
+                prompt_cols = st.columns(2)
 
-            task_level_insights_prompt = prompt_cols[0].text_area(
-                "Task level insights",
-                height=400,
-                value=task_level_insights_base_prompt,
-            )
-            insights_summary_prompt = prompt_cols[1].text_area(
-                "Summary of insights",
-                height=400,
-                value=insights_summary_base_prompt,
-            )
+                task_level_insights_prompt = prompt_cols[0].text_area(
+                    "Task level insights",
+                    height=400,
+                    value=task_level_insights_base_prompt,
+                )
+                insights_summary_prompt = prompt_cols[1].text_area(
+                    "Summary of insights",
+                    height=400,
+                    value=insights_summary_base_prompt,
+                )
 
         cols = st.columns([5, 1])
 
@@ -3455,7 +3462,7 @@ else:
         with st.form("edit_org_openai_api_key_form", border=False):
             st.markdown("#### Link your OpenAI account")
             st.write(
-                """We use AI models from [OpenAI](https://platform.openai.com/) which costs money for each use. To make sure that you are charged proportional to your usage of SensAI, we need to connect with your OpenAI account and all your usage will be billed to your OpenAI account. You can find your OpenAI API key on the [API key page](https://platform.openai.com/api-keys). Create a new API key from the same page if you don't have one."""
+                """We use AI models from [OpenAI](https://platform.openai.com/) which costs money for each use. To make sure that you are charged proportional to your usage of SensAI, we need to connect with your OpenAI account and all your usage will be billed to your OpenAI account. You can find your OpenAI API keys [here](https://platform.openai.com/api-keys). Create a new API key from the same page if you don't have one. Make sure to add credits to your account from the [billing page](https://platform.openai.com/settings/organization/billing/overview) before adding the API key to SensAI."""
             )
 
             cols = st.columns([4, 1])
