@@ -37,6 +37,10 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   You can get the path to poppler using `brew list poppler`
 - Copy `src/lib/.env.example` to `src/lib/.env` and set the OpenAI credentials. Refer to [ENV.md](./ENV.md) for more details on the environment variables.
 - Copy `src/.streamlit/secrets.example.toml` to `src/.streamlit/secrets.toml` and set the Google credentials. Refer [this](https://github.com/kajarenc/stauthlib/tree/main) for more details on how to set up the credentials.
+- Initialize the database
+  ```
+  python src/startup.py
+  ```
 - Running the app locally
     ```
     cd src; streamlit run home.py

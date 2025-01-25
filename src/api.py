@@ -25,7 +25,7 @@ async def get_chat_history(org_id: int) -> List[ChatMessage]:
     response_model=List[Task],
 )
 async def get_tasks(org_id: int) -> List[Task]:
-    return get_all_tasks_for_org_or_course(org_id=org_id)
+    return get_all_tasks_for_org_or_course(org_id=org_id, return_tests=True)
 
 
 @app.get(

@@ -186,6 +186,12 @@ def show_milestone_card(
     # Calculate the progress percentage
     progress_percentage = (completed_tasks / total_tasks) * 100
 
+    # import ipdb
+
+    # ipdb.set_trace()
+
+    # print(course_id, milestone["name"], progress_percentage)
+
     header_bg_color = milestone["color"]
     progress_bg_color = generate_progress_bar_background_color(header_bg_color)
 
@@ -194,7 +200,7 @@ def show_milestone_card(
     )
 
     # Generate a unique class name based on the milestone name
-    milestone_class = f"milestone-{milestone['id']}"
+    milestone_class = f"milestone-{milestone['id']}-{course_id}"
 
     task_list_view = "".join(
         get_task_view(task, cohort_id, course_id) for task in tasks

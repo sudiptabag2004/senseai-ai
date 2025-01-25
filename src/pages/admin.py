@@ -188,7 +188,9 @@ def refresh_courses():
 
 
 def refresh_tasks():
-    st.session_state.tasks = get_all_tasks_for_org_or_course(st.session_state.org_id)
+    st.session_state.tasks = get_all_tasks_for_org_or_course(
+        st.session_state.org_id, return_tests=True
+    )
 
 
 def refresh_milestones():

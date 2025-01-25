@@ -6,7 +6,7 @@ from langchain.output_parsers import PydanticOutputParser
 import instructor
 from openai import OpenAI
 from lib.ui import display_waiting_indicator
-from lib.llm import logger
+from lib.utils.logging import logger
 
 
 def show_ai_report(ai_response_rows, column_names):
