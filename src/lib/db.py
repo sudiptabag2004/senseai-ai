@@ -39,6 +39,7 @@ from lib.config import (
     uncategorized_milestone_color,
 )
 from models import LeaderboardViewType
+from lib.utils.logging import logger
 from lib.utils import (
     get_date_from_str,
     generate_random_color,
@@ -51,11 +52,11 @@ from lib.utils.db import (
     execute_db_operation,
     get_new_db_connection,
     check_table_exists,
-    get_shared_db_connection,
     serialise_list_to_str,
     deserialise_list_from_str,
     execute_multiple_db_operations,
     execute_many_db_operation,
+    set_db_defaults,
 )
 
 
@@ -68,7 +69,8 @@ def create_tests_table(cursor):
                 input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
                 output TEXT NOT NULL,
                 description TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+                INDEX idx_test_task_id (task_id)
             )
             """
     )
@@ -110,6 +112,8 @@ def create_user_organizations_table(cursor):
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, org_id),
+                INDEX idx_user_org_user_id (user_id),
+                INDEX idx_user_org_org_id (org_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
@@ -127,7 +131,8 @@ def create_badges_table(cursor):
                 bg_color TEXT NOT NULL,
                 cohort_id INTEGER NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
+                INDEX idx_badge_user_id (user_id)
             )"""
     )
 
@@ -139,7 +144,8 @@ def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
+                INDEX idx_cohort_org_id (org_id)
             )"""
     )
 
@@ -152,7 +158,9 @@ def create_cohort_tables(cursor):
                 role TEXT NOT NULL,
                 UNIQUE(user_id, cohort_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
+                INDEX idx_user_cohort_user_id (user_id),
+                INDEX idx_user_cohort_cohort_id (cohort_id)
             )"""
     )
 
@@ -162,7 +170,8 @@ def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cohort_id INTEGER NOT NULL,
                 name TEXT,
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
+                INDEX idx_group_cohort_id (cohort_id)
             )"""
     )
 
@@ -175,6 +184,8 @@ def create_cohort_tables(cursor):
                 UNIQUE(user_id, group_id),
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                INDEX idx_user_group_user_id (user_id),
+                INDEX idx_user_group_group_id (group_id)
             )"""
     )
 
@@ -189,7 +200,9 @@ def create_course_tasks_table(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
+                INDEX idx_course_task_task_id (task_id),
+                INDEX idx_course_task_course_id (course_id)
             )"""
     )
 
@@ -201,7 +214,8 @@ def create_milestones_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
+                INDEX idx_milestone_org_id (org_id)
             )"""
     )
 
@@ -213,7 +227,8 @@ def create_tag_tables(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
+                INDEX idx_tag_org_id (org_id)
             )"""
     )
 
@@ -225,7 +240,8 @@ def create_tag_tables(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, tag_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id)
+                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id),
+                INDEX idx_task_tag_task_id (task_id)
             )"""
     )
 
@@ -237,7 +253,8 @@ def create_courses_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
+                INDEX idx_course_org_id (org_id)
             )"""
     )
 
@@ -251,7 +268,9 @@ def create_course_cohorts_table(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(course_id, cohort_id),
                 FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
+                INDEX idx_course_cohort_course_id (course_id),
+                INDEX idx_course_cohort_cohort_id (cohort_id)
             )"""
     )
 
@@ -275,7 +294,8 @@ def create_tasks_table(cursor):
                     deleted_at DATETIME,
                     type TEXT,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
+                    INDEX idx_task_org_id (org_id)
                 )"""
     )
 
@@ -289,7 +309,8 @@ def create_task_scoring_criteria_table(cursor):
                 description TEXT NOT NULL,
                 min_score INTEGER NOT NULL,
                 max_score INTEGER NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+                INDEX idx_scoring_criteria_task_id (task_id)
             )"""
     )
 
@@ -307,7 +328,9 @@ def create_chat_history_table(cursor):
                     response_type TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
+                    INDEX idx_chat_history_task_id (task_id),
+                    INDEX idx_chat_history_user_id (user_id)
                 )
                 """
     )
@@ -333,7 +356,11 @@ def init_db():
     if not os.path.exists(db_folder):
         os.makedirs(db_folder)
 
-    with get_shared_db_connection() as conn:
+    if not exists(sqlite_db_path):
+        # only set the defaults the first time
+        set_db_defaults()
+
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
 
         if exists(sqlite_db_path):
@@ -420,7 +447,6 @@ def init_db():
 
         except Exception as exception:
             # delete db
-            conn.rollback()
             os.remove(sqlite_db_path)
             raise exception
 
@@ -484,7 +510,7 @@ def store_task(
         task_type,
     )
 
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             # Insert task and get its ID
@@ -518,7 +544,6 @@ def store_task(
             conn.commit()
             return task_id
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -576,13 +601,13 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
     ]
 
 
-def convert_task_db_to_dict(task, tests):
+def convert_task_db_to_dict(task, tests=None):
     tag_ids = list(map(int, deserialise_list_from_str(task[17])))
     tag_names = deserialise_list_from_str(task[4])
 
     tags = [{"id": tag_ids[i], "name": tag_names[i]} for i in range(len(tag_ids))]
 
-    return {
+    task = {
         "id": task[0],
         "name": task[1],
         "description": task[2],
@@ -600,11 +625,15 @@ def convert_task_db_to_dict(task, tests):
         "response_type": task[14],
         "context": task[15],
         "type": task[16],
-        "tests": tests,
     }
 
+    if tests is not None:
+        task["tests"] = tests
 
-def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
+    return task
+
+
+def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None, return_tests: bool = False):
     if org_id is None and course_id is None:
         raise ValueError("Either org_id or course_id must be provided")
     if org_id is not None and course_id is not None:
@@ -644,16 +673,19 @@ def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None):
     for row in tasks:
         task_id = row[0]
 
-        # Fetch associated tests for each task
-        tests = execute_db_operation(
-            f"""
-            SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
-            """,
-            (task_id,),
-            fetch_all=True,
-        )
+        tests = None
+        if return_tests:
+            # Fetch associated tests for each task
+            tests = execute_db_operation(
+                f"""
+                SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
+                """,
+                (task_id,),
+                fetch_all=True,
+            )
 
-        tests = return_test_rows_as_dict(tests)
+            tests = return_test_rows_as_dict(tests)
+
         tasks_dicts.append(convert_task_db_to_dict(row, tests))
 
     return tasks_dicts
@@ -1126,7 +1158,7 @@ def get_streaks(
 
 
 def update_tests_for_task(task_id: int, tests: List[dict]):
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             # Delete existing tests for the task
@@ -1152,7 +1184,6 @@ def update_tests_for_task(task_id: int, tests: List[dict]):
 
             conn.commit()
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -1249,68 +1280,69 @@ def insert_or_return_user(
         cursor = conn.cursor()
         is_master_connection = True
 
-    try:
-        # if user exists, no need to do anything, just return the user
-        cursor.execute(
-            f"""SELECT * FROM {users_table_name} WHERE email = ?""",
-            (email,),
-        )
+    with conn:
+        try:
+            # if user exists, no need to do anything, just return the user
+            cursor.execute(
+                f"""SELECT * FROM {users_table_name} WHERE email = ?""",
+                (email,),
+            )
 
-        user = cursor.fetchone()
+            user = cursor.fetchone()
 
-        if user:
-            user = convert_user_db_to_dict(user)
-            if user["first_name"] is None and first_name:
-                user = update_user(
-                    user["id"],
-                    first_name,
-                    middle_name,
-                    family_name,
-                    user["default_dp_color"],
-                )
+            if user:
+                user = convert_user_db_to_dict(user)
+                if user["first_name"] is None and first_name:
+                    user = update_user(
+                        user["id"],
+                        first_name,
+                        middle_name,
+                        family_name,
+                        user["default_dp_color"],
+                    )
+
+                return user
+
+            # create a new user
+            color = generate_random_color()
+            cursor.execute(
+                f"""
+                INSERT INTO {users_table_name} (email, default_dp_color, first_name, middle_name, last_name)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (email, color, first_name, middle_name, family_name),
+            )
+
+            cursor.execute(
+                f"""SELECT * FROM {users_table_name} WHERE email = ?""",
+                (email,),
+            )
+
+            user = convert_user_db_to_dict(cursor.fetchone())
+
+            # create a new organization for the user (Personal Workspace)
+            create_organization_with_user(
+                org_name="Personal Workspace",
+                user_id=user["id"],
+                conn=conn,
+                cursor=cursor,
+            )
+            if is_master_connection:
+                conn.commit()
 
             return user
 
-        # create a new user
-        color = generate_random_color()
-        cursor.execute(
-            f"""
-            INSERT INTO {users_table_name} (email, default_dp_color, first_name, middle_name, last_name)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            (email, color, first_name, middle_name, family_name),
-        )
-
-        cursor.execute(
-            f"""SELECT * FROM {users_table_name} WHERE email = ?""",
-            (email,),
-        )
-
-        user = convert_user_db_to_dict(cursor.fetchone())
-
-        # create a new organization for the user (Personal Workspace)
-        create_organization_with_user(
-            org_name="Personal Workspace",
-            user_id=user["id"],
-            conn=conn,
-            cursor=cursor,
-        )
-        if is_master_connection:
-            conn.commit()
-
-        return user
-
-    except Exception as e:
-        if is_master_connection:
-            conn.rollback()
-        raise e
-    finally:
-        if is_master_connection:
-            conn.close()
+        except Exception as e:
+            # if is_master_connection:
+            #     conn.rollback()
+            raise e
+        # finally:
+        #     if is_master_connection:
+        #         conn.close()
 
 
 def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             users_to_add = []
@@ -1333,7 +1365,6 @@ def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
             conn.commit()
 
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -1352,21 +1383,18 @@ def add_members_to_cohort_group(
         conn = get_new_db_connection()
         cursor = conn.cursor()
         is_master_connection = True
-
-    try:
-        cursor.executemany(
-            f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
-            [(member_id, group_id) for member_id in member_ids],
-        )
-        if is_master_connection:
-            conn.commit()
-    except Exception as e:
-        if is_master_connection:
-            conn.rollback()
-        raise e
-    finally:
-        if is_master_connection:
-            conn.close()
+    with conn:
+        try:
+            cursor.executemany(
+                f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
+                [(member_id, group_id) for member_id in member_ids],
+            )
+            if is_master_connection:
+                conn.commit()
+        except Exception as e:
+            # if is_master_connection:
+            #     conn.rollback()
+            raise e
 
 
 def remove_members_from_cohort_group(group_id: int, member_ids: List[int]):
@@ -1377,7 +1405,7 @@ def remove_members_from_cohort_group(group_id: int, member_ids: List[int]):
 
 
 def create_cohort_group(name: str, cohort_id: int, member_ids: List[int]):
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             # Create the group
@@ -1396,7 +1424,6 @@ def create_cohort_group(name: str, cohort_id: int, member_ids: List[int]):
             return group_id
 
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -2166,23 +2193,21 @@ def create_organization(name: str, color: str = None, conn=None, cursor=None):
         cursor = conn.cursor()
         is_master_connection = True
 
-    try:
-        cursor.execute(
-            f"""INSERT INTO {organizations_table_name} 
-                (slug, name, default_logo_color)
-                VALUES (?, ?, ?)""",
-            (slug, name, default_logo_color),
-        )
-        if is_master_connection:
-            conn.commit()
+    with conn:
+        try:
+            cursor.execute(
+                f"""INSERT INTO {organizations_table_name} 
+                    (slug, name, default_logo_color)
+                    VALUES (?, ?, ?)""",
+                (slug, name, default_logo_color),
+            )
+            if is_master_connection:
+                conn.commit()
 
-        return cursor.lastrowid
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        if is_master_connection:
-            conn.close()
+            return cursor.lastrowid
+        except Exception as e:
+            # conn.rollback()
+            raise e
 
 
 def update_org(org_id: int, org_name: str):
@@ -2221,23 +2246,21 @@ def add_user_to_org_by_user_id(
         cursor = conn.cursor()
         is_master_connection = True
 
-    try:
-        cursor.execute(
-            f"""INSERT INTO {user_organizations_table_name}
-                (user_id, org_id, role)
-                VALUES (?, ?, ?)""",
-            (user_id, org_id, role),
-        )
-        if is_master_connection:
-            conn.commit()
+    with conn:
+        try:
+            cursor.execute(
+                f"""INSERT INTO {user_organizations_table_name}
+                    (user_id, org_id, role)
+                    VALUES (?, ?, ?)""",
+                (user_id, org_id, role),
+            )
+            if is_master_connection:
+                conn.commit()
 
-        return cursor.lastrowid
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        if is_master_connection:
-            conn.close()
+            return cursor.lastrowid
+        except Exception as e:
+            # conn.rollback()
+            raise e
 
 
 def create_organization_with_user(
@@ -2314,7 +2337,7 @@ def add_user_to_org_by_email(
     org_id: int,
     role: Literal["owner", "admin"],
 ):
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             user = insert_or_return_user(email, conn=conn, cursor=cursor)
@@ -2327,7 +2350,6 @@ def add_user_to_org_by_email(
             )
             conn.commit()
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -2428,7 +2450,7 @@ def create_bulk_tags(tag_names: List[str], org_id: int) -> bool:
     if not tag_names:
         return False
 
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
 
         # Get existing tags
@@ -2453,7 +2475,6 @@ def create_bulk_tags(tag_names: List[str], org_id: int) -> bool:
                 conn.commit()
                 return has_new_tags
             except Exception as e:
-                conn.rollback()
                 raise e
 
 
@@ -2524,7 +2545,7 @@ def get_courses_for_tasks(task_ids: List[int]):
 
 
 def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int]]):
-    with get_shared_db_connection() as conn:
+    with get_new_db_connection() as conn:
         cursor = conn.cursor()
         try:
             # Group tasks by course_id
@@ -2552,7 +2573,6 @@ def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int]]):
 
             conn.commit()
         except Exception as e:
-            conn.rollback()
             raise e
 
 
@@ -2813,158 +2833,96 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
     ]
 
 
-def migrate_tasks_table():
-    conn = get_new_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(f"PRAGMA table_info({tasks_table_name})")
-    columns = cursor.fetchall()
-
-    try:
-        if not any(column[1] == "input_type" for column in columns):
-            cursor.execute(
-                f"""CREATE TABLE IF NOT EXISTS {tasks_table_name}_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    answer TEXT,
-                    input_type TEXT ,
-                    coding_language TEXT,
-                    generation_model TEXT,
-                    verified BOOLEAN NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    milestone_id INTEGER,
-                    org_id INTEGER NOT NULL,
-                    response_type TEXT,
-                    context TEXT,
-                    deleted_at DATETIME,
-                    type TEXT NOT NULL,
-                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
-                )"""
-            )
-            cursor.execute(
-                f"""
-                INSERT INTO {tasks_table_name}_new 
-                (
-                    id, name, description, answer, input_type, coding_language, generation_model, 
-                    verified, timestamp, milestone_id, org_id, response_type, context, deleted_at, type
-                )
-                SELECT 
-                    id, 
-                    name, 
-                    description, 
-                    answer, 
-                    type as input_type, 
-                    coding_language, 
-                    generation_model, 
-                    verified, 
-                    timestamp, 
-                    milestone_id, 
-                    org_id, 
-                    response_type, 
-                    context, 
-                    deleted_at,
-                    CASE 
-                        WHEN type = 'NA' THEN 'reading_material'
-                        ELSE 'question'
-                    END AS type 
-                FROM {tasks_table_name}
-            """
-            )
-            cursor.execute(f"DROP TABLE {tasks_table_name}")
-            cursor.execute(
-                f"ALTER TABLE {tasks_table_name}_new RENAME TO {tasks_table_name}"
-            )
-
-        conn.commit()
-    except Exception as e:
-        print(f"Error adding deleted_at column to tasks table: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-
-def migrate_chat_history_table():
-    conn = get_shared_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {chat_history_table_name}_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                task_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT,
-                is_solved BOOLEAN NOT NULL DEFAULT 0,
-                response_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (task_id) REFERENCES tasks (id),
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )"""
-        )
-        cursor.execute(
-            f"""
-            INSERT INTO {chat_history_table_name}_new
+def add_indices_to_tables():
+    execute_multiple_db_operations(
+        [
             (
-                id, user_id, task_id, role, content, is_solved, response_type, timestamp
-            )
-            SELECT 
-                id, 
-                user_id, 
-                task_id, 
-                role, 
-                content, 
-                is_solved, 
-                response_type, 
-                timestamp
-            FROM {chat_history_table_name}
-        """
-        )
-        cursor.execute(f"DROP TABLE {chat_history_table_name}")
-        cursor.execute(
-            f"ALTER TABLE {chat_history_table_name}_new RENAME TO {chat_history_table_name}"
-        )
-
-        conn.commit()
-    except Exception as e:
-        print(f"Error migrating chat history table: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-
-def migrate_org_table():
-    conn = get_new_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        f"ALTER TABLE {organizations_table_name} ADD COLUMN openai_api_key TEXT"
+                f"CREATE INDEX IF NOT EXISTS idx_test_task_id ON {tests_table_name}(task_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_org_user_id ON {user_organizations_table_name}(user_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_org_org_id ON {user_organizations_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_badge_user_id ON {badges_table_name}(user_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_cohort_org_id ON {cohorts_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_cohort_user_id ON {user_cohorts_table_name}(user_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_cohort_cohort_id ON {user_cohorts_table_name}(cohort_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_group_cohort_id ON {groups_table_name}(cohort_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_group_user_id ON {user_groups_table_name}(user_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_user_group_group_id ON {user_groups_table_name}(group_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_milestone_org_id ON {milestones_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_course_task_course_id ON {course_tasks_table_name}(course_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_course_task_task_id ON {course_tasks_table_name}(task_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_tag_org_id ON {tags_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_task_tag_task_id ON {task_tags_table_name}(task_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_course_org_id ON {courses_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_course_cohort_course_id ON {course_cohorts_table_name}(course_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_course_cohort_cohort_id ON {course_cohorts_table_name}(cohort_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_task_org_id ON {tasks_table_name}(org_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_scoring_criteria_task_id ON {task_scoring_criteria_table_name}(task_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_chat_history_task_id ON {chat_history_table_name}(task_id)",
+                (),
+            ),
+            (
+                f"CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON {chat_history_table_name}(user_id)",
+                (),
+            ),
+        ]
     )
-    conn.commit()
-    conn.close()
-
-
-def seed_openai_api_key():
-    conn = get_new_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        hva_org_id = get_hva_org_id()
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-
-        print(openai_api_key)
-        print(hva_org_id)
-
-        if openai_api_key:
-            encrypted_key = encrypt_openai_api_key(openai_api_key)
-            cursor.execute(
-                f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
-                (encrypted_key, hva_org_id),
-            )
-            print("done")
-            conn.commit()
-    except Exception as e:
-        print(f"Error seeding OpenAI API key: {e}")
-        conn.rollback()
-    finally:
-        conn.close()

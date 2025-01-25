@@ -14,7 +14,8 @@ from lib.init import init_app
 
 init_app()
 
-from lib.llm import logger, get_formatted_history
+from lib.llm import get_formatted_history
+from lib.utils.logging import logger
 from components.buttons import back_to_home_button
 from auth import login_or_signup_user, unauthorized_redirect_to_home
 from lib.config import uncategorized_milestone_name

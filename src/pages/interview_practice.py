@@ -18,7 +18,8 @@ init_app()
 
 from auth import unauthorized_redirect_to_home, login_or_signup_user
 from lib.ui import display_waiting_indicator
-from lib.llm import logger, get_formatted_history
+from lib.llm import get_formatted_history
+from lib.utils.logging import logger
 from lib.db import is_user_hva_learner, get_hva_openai_api_key
 from lib.utils.encryption import decrypt_openai_api_key
 from lib.audio import validate_audio_input, prepare_audio_input_for_ai

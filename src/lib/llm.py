@@ -19,28 +19,7 @@ from openai import OpenAI
 
 from pydantic import BaseModel
 
-
-def setup_logging():
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-
-    # Add a StreamHandler to output logs to the console
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
-    # Create a formatter and add it to the handler
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    console_handler.setFormatter(formatter)
-
-    # Add the console handler to the logger
-    logger.addHandler(console_handler)
-
-    return logger
-
-
-logger = setup_logging()
+from lib.utils.logging import logger
 
 # Test log message
 logger.info("Logging system initialized")

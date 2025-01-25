@@ -6,7 +6,7 @@ import openai
 from langchain.output_parsers import PydanticOutputParser
 from lib.db import delete_message as delete_message_from_db
 from lib.ui import display_waiting_indicator, cleanup_ai_response
-from lib.llm import logger
+from lib.utils.logging import logger
 
 
 def delete_user_chat_message(index_to_delete: int):
