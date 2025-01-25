@@ -13,10 +13,22 @@ def show_ai_report(ai_response_rows, column_names):
     display_rows = []
 
     for row in ai_response_rows:
+        feedback_lines = []
+
         if isinstance(row[1], dict):
-            display_feedback = f"""✅ {row[1]['correct']}<br>❌ {row[1]['wrong']}"""
+            if "correct" in row[1] and row[1]["correct"]:
+                feedback_lines.append(f"✅ {row[1]['correct']}")
+
+            if "wrong" in row[1] and row[1]["wrong"]:
+                feedback_lines.append(f"❌ {row[1]['wrong']}")
         else:
-            display_feedback = f"""✅ {row[1].correct}<br>❌ {row[1].wrong}"""
+            if hasattr(row[1], "correct") and row[1].correct:
+                feedback_lines.append(f"✅ {row[1].correct}")
+
+            if hasattr(row[1], "wrong") and row[1].wrong:
+                feedback_lines.append(f"❌ {row[1].wrong}")
+
+        display_feedback = "<br>".join(feedback_lines)
 
         display_rows.append([row[0], display_feedback, row[2]])
 
@@ -44,8 +56,8 @@ def get_ai_report_response(
         model = "gpt-4o-2024-08-06"
 
     class Feedback(BaseModel):
-        correct: str = Field(description="What worked well")
-        wrong: str = Field(description="What needs improvement")
+        correct: Optional[str] = Field(description="What worked well")
+        wrong: Optional[str] = Field(description="What needs improvement")
 
     class Row(BaseModel):
         category: str = Field(description="Category from scoring criteria")
@@ -95,7 +107,7 @@ def get_ai_report_response(
     if task_context:
         context_instructions = f"""\n\nMake sure to use only the information provided within ``` below for responding to the student while ignoring any other information that contradicts the information provided:\n\n```\n{task_context}\n```"""
 
-    system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach for a learner.\n\nYou will be given a task description and the conversation history between you and the student.\n\nYou need to provide concise, actionable feedback to the learner along each of the categories mentioned in the scoring criteria below.\n\n{scoring_criteria_as_prompt}{context_instructions}\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the student's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- No matter how frustrated the student gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\n{format_instructions}"""
+    system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach for a learner.\n\nYou will be given a task description and the conversation history between you and the learner.\n\nYou need to provide concise, actionable feedback to the learner along each of the categories mentioned in the scoring criteria below.\n\n{scoring_criteria_as_prompt}{context_instructions}\n\nUse the following principles for responding to the learner:\n- Ask thought-provoking, open-ended questions that challenges the learner's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the learner, creating an environment where diverse viewpoints are valued and the learner feels comfortable sharing their ideas.\n- Actively listen to the learner's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the learner in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the learner to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the learner's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- No matter how frustrated the learner gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\n- If there is nothing to praise about the learner's response, never mention what worked well in your feedback. If there is nothing left to improve in their response, never mention what could be improved in your feedback.\n\n{format_instructions}"""
 
     client = instructor.from_openai(OpenAI(api_key=api_key))
 
@@ -123,8 +135,8 @@ def get_ai_report_response(
             if (
                 not topicwise_feedback.category
                 or not topicwise_feedback.feedback
-                or not topicwise_feedback.feedback.correct
-                or not topicwise_feedback.feedback.wrong
+                # or not topicwise_feedback.feedback.correct
+                # or not topicwise_feedback.feedback.wrong
                 or topicwise_feedback.score is None
             ):
                 continue
