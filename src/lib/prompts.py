@@ -2,6 +2,7 @@ import traceback
 from typing import List, Dict
 from pydantic import BaseModel, Field
 from datetime import datetime
+import streamlit as st
 from langchain_core.output_parsers import PydanticOutputParser
 from lib.llm import (
     call_llm_and_parse_output,
@@ -59,6 +60,13 @@ async def generate_answer_for_task(
         return pred_dict["solution"]
     except Exception as exception:
         traceback.print_exc()
+
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Your OpenAI account credits have been exhausted. Please recharge your OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
         raise exception
 
 
@@ -141,6 +149,13 @@ async def generate_tests_for_task_from_llm(
         ]
     except Exception as exception:
         traceback.print_exc()
+
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Your OpenAI account credits have been exhausted. Please recharge your OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
         raise exception
 
 
@@ -258,6 +273,13 @@ async def generate_learner_insights_for_task(
         return response
     except Exception as exception:
         traceback.print_exc()
+
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Your OpenAI account credits have been exhausted. Please recharge your OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
         raise exception
 
 
@@ -297,6 +319,13 @@ async def summarize_learner_insights(
         return response
     except Exception as exception:
         traceback.print_exc()
+
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Your OpenAI account credits have been exhausted. Please recharge your OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
         raise exception
 
 

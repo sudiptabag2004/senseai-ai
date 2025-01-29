@@ -4,6 +4,7 @@ import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 import instructor
+import openai
 from openai import OpenAI
 from lib.ui import display_waiting_indicator
 from lib.utils.logging import logger
@@ -120,18 +121,27 @@ def get_ai_report_response(
 
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
-    stream = client.chat.completions.create_partial(
-        model=model,
-        messages=messages,
-        response_model=Output,
-        stream=True,
-        max_completion_tokens=max_completion_tokens,
-        temperature=0,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0,
-        store=True,
-    )
+    try:
+        stream = client.chat.completions.create_partial(
+            model=model,
+            messages=messages,
+            response_model=Output,
+            stream=True,
+            max_completion_tokens=max_completion_tokens,
+            temperature=0,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+            store=True,
+        )
+    except Exception as exception:
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Notify your admin that their OpenAI account credits have been exhausted. Please ask them to recharge their OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
+        raise exception
 
     rows = []
     for val in stream:

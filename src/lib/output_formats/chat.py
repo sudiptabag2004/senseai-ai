@@ -118,18 +118,27 @@ def get_ai_chat_response(
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
     while True:
-        stream = client.chat.completions.create_partial(
-            model=model,
-            messages=messages,
-            response_model=Output,
-            stream=True,
-            max_completion_tokens=2048,
-            top_p=1,
-            temperature=0,
-            frequency_penalty=0,
-            presence_penalty=0,
-            store=True,
-        )
+        try:
+            stream = client.chat.completions.create_partial(
+                model=model,
+                messages=messages,
+                response_model=Output,
+                stream=True,
+                max_completion_tokens=2048,
+                top_p=1,
+                temperature=0,
+                frequency_penalty=0,
+                presence_penalty=0,
+                store=True,
+            )
+        except Exception as exception:
+            if "insufficient_quota" in str(exception):
+                st.error(
+                    "Notify your admin that their OpenAI account credits have been exhausted. Please ask them to recharge their OpenAI account for you to continue using SensAI."
+                )
+                st.stop()
+
+            raise exception
 
         ai_response = None
 
