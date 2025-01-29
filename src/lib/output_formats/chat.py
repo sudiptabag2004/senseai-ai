@@ -3,6 +3,7 @@ from typing import List, Dict
 from pydantic import BaseModel, Field
 import instructor
 import openai
+import backoff
 from langchain.output_parsers import PydanticOutputParser
 from lib.db import delete_message as delete_message_from_db
 from lib.ui import display_waiting_indicator, cleanup_ai_response
@@ -45,6 +46,7 @@ def get_containers(task, is_review_mode):
     if task["input_type"] == "coding" and not is_review_mode:
         chat_column, code_column = st.columns(2)
         description_container = chat_column.container(height=200)
+
         chat_container = chat_column.container(height=325)
 
         code_input_container = code_column.container(height=475, border=False)
@@ -73,6 +75,7 @@ def display_user_chat_message(chat_container, user_response: str):
         st.markdown(user_response, unsafe_allow_html=True)
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=5, factor=2)
 def get_ai_chat_response(
     ai_chat_history: List[Dict],
     response_type: str,
@@ -118,6 +121,9 @@ def get_ai_chat_response(
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
     while True:
+        ai_response = None
+        result_dict = None
+
         try:
             stream = client.chat.completions.create_partial(
                 model=model,
@@ -131,6 +137,27 @@ def get_ai_chat_response(
                 presence_penalty=0,
                 store=True,
             )
+
+            for extraction in stream:
+                # logger.info(extraction)
+                result_dict = extraction.model_dump()
+                if response_type == "exam":
+                    continue
+
+                ai_response_list = result_dict["feedback"]
+                if ai_response_list:
+                    ai_response = " ".join(ai_response_list)
+                    st.markdown(
+                        cleanup_ai_response(ai_response), unsafe_allow_html=True
+                    )
+
+            logger.info(system_prompt)
+
+            if response_type == "exam" or (response_type == "chat" and ai_response):
+                break
+
+            logger.info("AI feedback empty. Retrying...")
+
         except Exception as exception:
             if "insufficient_quota" in str(exception):
                 st.error(
@@ -138,27 +165,8 @@ def get_ai_chat_response(
                 )
                 st.stop()
 
+            logger.error(exception)
             raise exception
-
-        ai_response = None
-
-        for extraction in stream:
-            # logger.info(extraction)
-            result_dict = extraction.model_dump()
-            if response_type == "exam":
-                continue
-
-            ai_response_list = result_dict["feedback"]
-            if ai_response_list:
-                ai_response = " ".join(ai_response_list)
-                st.markdown(cleanup_ai_response(ai_response), unsafe_allow_html=True)
-
-        logger.info(system_prompt)
-
-        if response_type == "exam" or (response_type == "chat" and ai_response):
-            break
-
-        logger.info("AI feedback empty. Retrying...")
 
     # import ipdb
 
