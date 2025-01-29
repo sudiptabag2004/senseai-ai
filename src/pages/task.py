@@ -1,6 +1,7 @@
 from typing import List, Literal
 import os
 import time
+import traceback
 import json
 from copy import deepcopy
 
@@ -415,7 +416,10 @@ if task["type"] == "question":
                 )
 
 
-def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]):
+def get_ai_feedback_chat(
+    user_response: str,
+    input_type: Literal["text", "code"],
+):
     # import ipdb; ipdb.set_trace()
     if not st.session_state.chat_history:
         empty_container.empty()
@@ -434,13 +438,21 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
 
     # ipdb.set_trace()
     with ai_response_container:
-        ai_response, result_dict = get_ai_chat_response(
-            st.session_state.ai_chat_history.messages,
-            task["response_type"],
-            task["context"],
-            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-            st.session_state.org["openai_free_trial"],
-        )
+        try:
+            ai_response, result_dict = get_ai_chat_response(
+                st.session_state.ai_chat_history.messages,
+                task["response_type"],
+                task["context"],
+                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                st.session_state.org["openai_free_trial"],
+            )
+        except Exception:
+            st.markdown(
+                "<p style='color: red;'>Error fetching AI feedback. Please reload the page and try again.</p>",
+                unsafe_allow_html=True,
+            )
+
+            return
 
     is_solved = (
         result_dict["is_correct"] if result_dict["is_correct"] is not None else False
@@ -510,14 +522,22 @@ def get_ai_feedback_report_text_input(user_response: str):
     )
 
     with ai_report_container:
-        rows = get_ai_report_response(
-            st.session_state.ai_chat_history.messages,
-            st.session_state.scoring_criteria,
-            task["context"],
-            task["input_type"],
-            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-            st.session_state.org["openai_free_trial"],
-        )
+        try:
+            rows = get_ai_report_response(
+                st.session_state.ai_chat_history.messages,
+                st.session_state.scoring_criteria,
+                task["context"],
+                task["input_type"],
+                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                st.session_state.org["openai_free_trial"],
+            )
+        except:
+            st.markdown(
+                "<p style='color: red;'>Error fetching AI feedback. Please reload the page and try again.</p>",
+                unsafe_allow_html=True,
+            )
+
+            return
 
     is_solved = all(
         row[2] == st.session_state.scoring_criteria[index]["range"][1]
@@ -593,14 +613,22 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
     st.session_state.ai_chat_history.add_messages([user_message])
 
     with ai_report_container:
-        rows = get_ai_report_response(
-            st.session_state.ai_chat_history.messages,
-            st.session_state.scoring_criteria,
-            task["context"],
-            task["input_type"],
-            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-            st.session_state.org["openai_free_trial"],
-        )
+        try:
+            rows = get_ai_report_response(
+                st.session_state.ai_chat_history.messages,
+                st.session_state.scoring_criteria,
+                task["context"],
+                task["input_type"],
+                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                st.session_state.org["openai_free_trial"],
+            )
+        except:
+            st.markdown(
+                "<p style='color: red;'>Error fetching AI feedback. Please reload the page and try again.</p>",
+                unsafe_allow_html=True,
+            )
+
+            return
 
     is_solved = all(
         row[2] == st.session_state.scoring_criteria[index]["range"][1]

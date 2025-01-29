@@ -4,7 +4,7 @@ import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 import instructor
-import openai
+import backoff
 from openai import OpenAI
 from lib.ui import display_waiting_indicator
 from lib.utils.logging import logger
@@ -42,6 +42,7 @@ def show_ai_report(ai_response_rows, column_names):
     )
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=5, factor=2)
 def get_ai_report_response(
     ai_chat_history: List[Dict],
     scoring_criteria: List[Dict],
@@ -79,31 +80,6 @@ def get_ai_report_response(
             description="List of rows with one row for each category from scoring criteria"
         )
 
-        # @classmethod
-        # def validate_score_ranges(cls, value):
-        #     for feedback_item in value.feedback:
-        #         matching_criterion = next(
-        #             (
-        #                 criterion
-        #                 for criterion in scoring_criteria
-        #                 if criterion["category"] == feedback_item.category
-        #             ),
-        #             None,
-        #         )
-        #         if not matching_criterion:
-        #             raise ValueError(
-        #                 f"Category {feedback_item.category} not found in scoring criteria"
-        #             )
-
-        #         min_score, max_score = matching_criterion["range"]
-        #         if not (min_score <= feedback_item.score <= max_score):
-        #             raise ValueError(
-        #                 f"Score {feedback_item.score} for category {feedback_item.category} "
-        #                 f"must be between {min_score} and {max_score}"
-        #             )
-
-        #     return value
-
     parser = PydanticOutputParser(pydantic_object=Output)
     format_instructions = parser.get_format_instructions()
 
@@ -134,6 +110,49 @@ def get_ai_report_response(
             presence_penalty=0,
             store=True,
         )
+
+        rows = []
+        for val in stream:
+            if not val.feedback:
+                continue
+
+            for index, topicwise_feedback in enumerate(val.feedback):
+                if (
+                    not topicwise_feedback.category
+                    or not topicwise_feedback.feedback
+                    # or not topicwise_feedback.feedback.correct
+                    # or not topicwise_feedback.feedback.wrong
+                    or topicwise_feedback.score is None
+                ):
+                    continue
+
+                if (
+                    rows
+                    and len(rows) > index
+                    and rows[index][0] == topicwise_feedback.category
+                ):
+                    if rows[index][1] != topicwise_feedback.feedback:
+                        rows[index][1] = topicwise_feedback.feedback
+
+                    if rows[index][2] != topicwise_feedback.score:
+                        rows[index][2] = topicwise_feedback.score
+                else:
+                    rows.append(
+                        [
+                            topicwise_feedback.category,
+                            topicwise_feedback.feedback,
+                            topicwise_feedback.score,
+                        ]
+                    )
+
+            show_ai_report(rows, ["Category", "Feedback", "Score"])
+
+        for row in rows:
+            row[1] = row[1].model_dump()
+
+        logger.info(system_prompt)
+
+        return rows
     except Exception as exception:
         if "insufficient_quota" in str(exception):
             st.error(
@@ -141,50 +160,8 @@ def get_ai_report_response(
             )
             st.stop()
 
+        logger.error(exception)
         raise exception
-
-    rows = []
-    for val in stream:
-        if not val.feedback:
-            continue
-
-        for index, topicwise_feedback in enumerate(val.feedback):
-            if (
-                not topicwise_feedback.category
-                or not topicwise_feedback.feedback
-                # or not topicwise_feedback.feedback.correct
-                # or not topicwise_feedback.feedback.wrong
-                or topicwise_feedback.score is None
-            ):
-                continue
-
-            if (
-                rows
-                and len(rows) > index
-                and rows[index][0] == topicwise_feedback.category
-            ):
-                if rows[index][1] != topicwise_feedback.feedback:
-                    rows[index][1] = topicwise_feedback.feedback
-
-                if rows[index][2] != topicwise_feedback.score:
-                    rows[index][2] = topicwise_feedback.score
-            else:
-                rows.append(
-                    [
-                        topicwise_feedback.category,
-                        topicwise_feedback.feedback,
-                        topicwise_feedback.score,
-                    ]
-                )
-
-        show_ai_report(rows, ["Category", "Feedback", "Score"])
-
-    for row in rows:
-        row[1] = row[1].model_dump()
-
-    logger.info(system_prompt)
-
-    return rows
 
 
 def reset_displayed_attempt_index():
