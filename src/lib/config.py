@@ -99,3 +99,14 @@ task_type_to_label = {
 }
 
 PDF_PAGE_DIMS = [595, 842]
+
+openai_plan_to_model_name = {
+    "free_trial": {
+        "4o-text": "gpt-4o-2024-11-20",
+        "4o-audio": "gpt-4o-audio-preview-2024-12-17",
+    },
+    "paid": {
+        "4o-text": "gpt-4o-mini-2024-07-18",
+        "4o-audio": "gpt-4o-mini-audio-preview-2024-12-17",
+    },
+}

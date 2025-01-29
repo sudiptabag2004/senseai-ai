@@ -14,6 +14,10 @@ def is_empty_openai_api_key() -> bool:
     return not st.session_state.org["openai_api_key"]
 
 
+def is_free_trial_openai_api_key() -> bool:
+    return st.session_state.org["openai_free_trial"]
+
+
 def update_user_orgs(user: Dict):
     st.session_state.user_orgs = get_user_organizations(user["id"])
 

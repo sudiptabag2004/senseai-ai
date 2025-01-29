@@ -196,6 +196,7 @@ def generate_cv_report(pdf: pypdf.PdfReader):
     with container:
         display_waiting_indicator()
 
+    # HARDCODED FOR HVA
     model = "gpt-4o-2024-08-06"
 
     class Feedback(BaseModel):

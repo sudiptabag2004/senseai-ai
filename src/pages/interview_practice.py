@@ -168,6 +168,7 @@ def give_feedback_on_audio_input():
     with container:
         display_waiting_indicator()
 
+    # HARDCODED FOR HVA
     model = "gpt-4o-audio-preview-2024-12-17"
 
     class Feedback(BaseModel):

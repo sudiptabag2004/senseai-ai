@@ -83,8 +83,9 @@ def create_organizations_table(cursor):
                 slug TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
                 default_logo_color TEXT,
-                openai_api_key TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                openai_api_key TEXT,
+                openai_free_trial BOOLEAN,
             )"""
     )
 
@@ -633,7 +634,9 @@ def convert_task_db_to_dict(task, tests=None):
     return task
 
 
-def get_all_tasks_for_org_or_course(org_id: int = None, course_id: int = None, return_tests: bool = False):
+def get_all_tasks_for_org_or_course(
+    org_id: int = None, course_id: int = None, return_tests: bool = False
+):
     if org_id is None and course_id is None:
         raise ValueError("Either org_id or course_id must be provided")
     if org_id is not None and course_id is not None:
@@ -2217,12 +2220,12 @@ def update_org(org_id: int, org_name: str):
     )
 
 
-def update_org_openai_api_key(org_id: int, openai_api_key: str):
+def update_org_openai_api_key(org_id: int, openai_api_key: str, is_free_trial: bool):
     encrypted_openai_api_key = encrypt_openai_api_key(openai_api_key)
 
     execute_db_operation(
-        f"UPDATE {organizations_table_name} SET openai_api_key = ? WHERE id = ?",
-        (encrypted_openai_api_key, org_id),
+        f"UPDATE {organizations_table_name} SET openai_api_key = ?, openai_free_trial = ? WHERE id = ?",
+        (encrypted_openai_api_key, is_free_trial, org_id),
     )
 
 
@@ -2281,6 +2284,7 @@ def convert_org_db_to_dict(org: Tuple):
         "name": org[2],
         "logo_color": org[3],
         "openai_api_key": org[5],
+        "openai_free_trial": org[6],
     }
 
 
@@ -2371,7 +2375,7 @@ def convert_user_organization_db_to_dict(user_organization: Tuple):
 
 def get_user_organizations(user_id: int):
     user_organizations = execute_db_operation(
-        f"""SELECT uo.org_id, o.name, uo.role, o.openai_api_key
+        f"""SELECT uo.org_id, o.name, uo.role, o.openai_api_key, o.openai_free_trial
         FROM {user_organizations_table_name} uo
         JOIN organizations o ON uo.org_id = o.id 
         WHERE uo.user_id = ? ORDER BY uo.id DESC""",
@@ -2385,6 +2389,7 @@ def get_user_organizations(user_id: int):
             "name": user_organization[1],
             "role": user_organization[2],
             "openai_api_key": user_organization[3],
+            "openai_free_trial": user_organization[4],
         }
         for user_organization in user_organizations
     ]
@@ -2926,3 +2931,29 @@ def add_indices_to_tables():
             ),
         ]
     )
+
+
+def migrate_org_table():
+    execute_db_operation(
+        f"ALTER TABLE {organizations_table_name} ADD COLUMN openai_free_trial BOOLEAN",
+        (),
+    )
+
+
+def seed_openai_free_trial_column():
+    from lib.llm import validate_openai_api_key
+    from lib.utils.encryption import decrypt_openai_api_key
+
+    orgs_with_api_key = execute_db_operation(
+        f"SELECT id, openai_api_key FROM {organizations_table_name} WHERE openai_api_key IS NOT NULL",
+        (),
+        fetch_all=True,
+    )
+
+    for org in orgs_with_api_key:
+        api_key = org[1]
+        is_free_trial = validate_openai_api_key(decrypt_openai_api_key(api_key))
+        execute_db_operation(
+            f"UPDATE {organizations_table_name} SET openai_free_trial = ? WHERE id = ?",
+            (is_free_trial, org[0]),
+        )

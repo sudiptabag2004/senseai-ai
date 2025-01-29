@@ -7,6 +7,7 @@ import instructor
 from openai import OpenAI
 from lib.ui import display_waiting_indicator
 from lib.utils.logging import logger
+from lib.config import openai_plan_to_model_name
 
 
 def show_ai_report(ai_response_rows, column_names):
@@ -46,14 +47,20 @@ def get_ai_report_response(
     task_context: str,
     task_type: Literal["audio", "text"],
     api_key: str,
+    free_trial: bool,
     max_completion_tokens: int = 2048,
 ):
     display_waiting_indicator()
 
-    if task_type == "audio":
-        model = "gpt-4o-audio-preview-2024-12-17"
+    if free_trial:
+        plan_type = "free_trial"
     else:
-        model = "gpt-4o-2024-08-06"
+        plan_type = "paid"
+
+    if task_type == "audio":
+        model = openai_plan_to_model_name[plan_type]["4o-audio"]
+    else:
+        model = openai_plan_to_model_name[plan_type]["4o-text"]
 
     class Feedback(BaseModel):
         correct: Optional[str] = Field(description="What worked well")
