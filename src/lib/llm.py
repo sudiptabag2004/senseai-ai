@@ -1,7 +1,5 @@
 from typing import Dict, List
-import logging
 import traceback
-
 import backoff
 
 
@@ -222,7 +220,12 @@ async def call_llm_and_parse_output(
 def validate_openai_api_key(openai_api_key: str) -> bool:
     client = OpenAI(api_key=openai_api_key)
     try:
-        client.models.list()
-        return True
+        models = client.models.list()
+        model_ids = [model.id for model in models.data]
+
+        if "gpt-4o-audio-preview-2024-12-17" in model_ids:
+            return False  # paid account
+        else:
+            return True  # free trial account
     except Exception:
-        return False
+        return None

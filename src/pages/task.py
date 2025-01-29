@@ -439,6 +439,7 @@ def get_ai_feedback_chat(user_response: str, input_type: Literal["text", "code"]
             task["response_type"],
             task["context"],
             decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            st.session_state.org["openai_free_trial"],
         )
 
     is_solved = (
@@ -515,6 +516,7 @@ def get_ai_feedback_report_text_input(user_response: str):
             task["context"],
             task["input_type"],
             decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            st.session_state.org["openai_free_trial"],
         )
 
     is_solved = all(
@@ -597,6 +599,7 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
             task["context"],
             task["input_type"],
             decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            st.session_state.org["openai_free_trial"],
         )
 
     is_solved = all(

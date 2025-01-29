@@ -42,6 +42,8 @@ from lib.config import (
     allowed_ai_response_types,
     response_type_help_text,
     task_type_to_label,
+    coding_languages_supported,
+    openai_plan_to_model_name,
 )
 from lib.init import init_app
 from lib.cache import (
@@ -114,13 +116,13 @@ from lib.db import (
 from lib.utils import generate_random_color
 from lib.utils.concurrency import async_batch_gather
 from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
-from lib.config import coding_languages_supported
 from lib.profile import show_placeholder_icon
 from lib.toast import set_toast, show_toast
 from auth import (
     unauthorized_redirect_to_home,
     login_or_signup_user,
     is_empty_openai_api_key,
+    is_free_trial_openai_api_key,
 )
 from components.buttons import back_to_home_button
 
@@ -135,6 +137,13 @@ if "org_id" not in st.query_params:
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
+
+model = {
+    "label": "gpt-4o",
+    "version": openai_plan_to_model_name[
+        "paid" if st.session_state.org["openai_free_trial"] else "free_trial"
+    ]["4o-text"],
+}
 
 back_to_home_button(params={"org_id": st.session_state.org_id})
 
@@ -173,6 +182,10 @@ def show_profile_header():
         if is_empty_openai_api_key():
             st.error(
                 """No OpenAI API key found. Please set an API key in the `"Settings"` section. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
+            )
+        elif is_free_trial_openai_api_key():
+            st.warning(
+                "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."
             )
 
 
@@ -278,8 +291,6 @@ def set_task_type_vars(task_type: str):
 
 
 show_toast()
-
-model = {"label": "gpt-4o", "version": "gpt-4o-2024-08-06"}
 
 
 def get_task_context():
@@ -1348,7 +1359,7 @@ def show_bulk_upload_tasks_form():
             )
             return
 
-        text_color = 'white' if st.session_state.theme["base"] == "dark" else 'black'
+        text_color = "white" if st.session_state.theme["base"] == "dark" else "black"
         columns_info_container.markdown(
             f"""<p style='color: {text_color};'>Columns found in CSV: "{'", "'.join(tasks_df.columns)}"</p>""",
             unsafe_allow_html=True,
@@ -3173,6 +3184,7 @@ elif st.session_state.selected_section_index == 1:
                 task_chat_history,
                 task_level_insights_prompt,
                 decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                st.session_state.org["openai_free_trial"],
             )
             for index, task_chat_history in enumerate(
                 chat_history_grouped_by_task.values()
@@ -3189,6 +3201,7 @@ elif st.session_state.selected_section_index == 1:
                 task_level_insights,
                 insights_summary_prompt,
                 decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                st.session_state.org["openai_free_trial"],
             )
 
         return insights_summary, task_level_insights
@@ -3534,11 +3547,18 @@ else:
                     st.error("No changes made")
                     return
 
-                if not validate_openai_api_key(new_openai_api_key):
+                with st.spinner("Validating API key..."):
+                    api_key_validation = validate_openai_api_key(new_openai_api_key)
+
+                if api_key_validation is None:
                     st.error("Invalid key")
                     return
 
-                update_org_openai_api_key(st.session_state.org_id, new_openai_api_key)
+                update_org_openai_api_key(
+                    st.session_state.org_id,
+                    new_openai_api_key,
+                    api_key_validation,
+                )
                 set_toast("OpenAI API key updated")
                 st.rerun()
 

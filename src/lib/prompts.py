@@ -10,6 +10,7 @@ from lib.llm import (
     COMMON_INSTRUCTIONS,
     logger,
 )
+from lib.config import openai_plan_to_model_name
 
 
 async def generate_answer_for_task(
@@ -216,6 +217,7 @@ async def generate_learner_insights_for_task(
     learner_task_chat_history: List[Dict],
     system_prompt_template: str,
     api_key: str,
+    free_trial: bool,
 ) -> str:
     # system_prompt_template = """"You are an advanced learning analytics assistant with expertise in cognitive psychology, educational theory, and data-driven learning analysis. Your task is to analyze the provided input—a chat history between a tutor and a student that includes detailed timestamps and responses for a given task along with the task details—to identify areas where the student is struggling. The analysis should consider both the specifics of the subject matter and the student’s behavioral and systemic learning patterns.\n\nInstructions:\n\n1. Content Comprehension Analysis:\n\n- Conceptual Understanding: Use the chat transcript to pinpoint topics or concepts where the student consistently demonstrates confusion or misinterpretations. Look for instances where the student provides incorrect answers or seems unsure about critical concepts.\n- Application Skills: Identify moments when the student is asked to apply a concept to a new problem or scenario. Evaluate the student's ability to transfer their understanding to these situations, noting any difficulties encountered.\n\n2. Feedback Utilization:\n\n- Responsiveness to Feedback: Analyze the tutor’s feedback alongside the student's subsequent responses. Determine if the student adjusts their approach based on the feedback provided or if similar errors recur.\n- Attention to Detail: Look for patterns in the student’s responses that indicate whether they properly scrutinize the feedback or overlook crucial details in their learning process.\n\n3. Behavioural Learning Patterns:\n\n- Procrastination and Time Management: Examine the timestamps to assess if the student waits until the last minute to respond or if there are gaps that could indicate procrastination. Evaluate how these behaviors correlate with their understanding of the subject.\n- Persistence and Resilience: Assess the student’s willingness to engage with difficult questions or challenges. Determine if the student shows perseverance by attempting follow-up questions or re-engaging with the material after a setback.\n- Engagement and Study Habits: Evaluate the overall engagement level throughout the conversation. Look for signs of consistent study habits, such as detailed questions, clarification requests, or a proactive approach in seeking help.\n\n4. Systemic and Strategic Factors:\n\n- Learning Strategy: Based on the conversation, evaluate if the student employs effective strategies (such as breaking down problems, asking clarifying questions, or iterative problem-solving) or if they rely on less effective approaches.\n- Resource Utilization: Consider how the student interacts with the tutor—are they making good use of the available guidance, or do they seem hesitant to ask for additional explanations when needed?\n- Self-Monitoring: Look for evidence within the chat history that the student is actively monitoring their learning progress, such as asking for summaries, clarifications, or additional resources when encountering difficulties.\n\n5. Recommendations:\n\n- Based on your findings, provide targeted, actionable recommendations that address both subject-specific challenges and the student’s behavioral or systemic issues.\n- Suggest strategies to improve concept understanding, responsiveness to feedback, time management, and overall study habits. Tailor your advice to the observed patterns and contextual evidence present in the chat history.\n\nAdditional Context:\n- The input includes a detailed chat history between a tutor and the student with timestamps indicating the duration and frequency of interactions.\n- Use both quantitative (e.g., response times, frequency of corrections) and qualitative (e.g., tone of responses, detailed explanations) evidence from the chat history to support your analysis.\n- Focus only on the areas where the student is struggling.\n- Avoid being overly verbose. Keep your feedback concise but always include examples to back up the struggles you have identified.\n\nTask:\nAnalyze the provided chat history between the tutor and the student according to the above criteria. Identify key areas where the student is struggling, and conclude with specific, evidence-based recommendations tailored to the student’s learning behavior and subject-specific challenges."""
 
@@ -238,7 +240,12 @@ async def generate_learner_insights_for_task(
         chat_history=chat_history,
     )
 
-    model = "gpt-4o-2024-11-20"
+    if free_trial:
+        plan_type = "free_trial"
+    else:
+        plan_type = "paid"
+
+    model = openai_plan_to_model_name[plan_type]["4o-text"]
 
     try:
         response = await call_openai_chat_model(
@@ -255,7 +262,10 @@ async def generate_learner_insights_for_task(
 
 
 async def summarize_learner_insights(
-    task_level_insights: List[str], system_prompt_template: str, api_key: str
+    task_level_insights: List[str],
+    system_prompt_template: str,
+    api_key: str,
+    free_trial: bool,
 ) -> str:
     # system_prompt_template = """"You are an advanced learning analytics assistant tasked with integrating insights from multiple tasks to produce a single, comprehensive summary of a student's performance. Your focus is exclusively on identifying and elaborating on the areas where the student is struggling. Do not mention any strengths or positive aspects of the student’s performance—your analysis should solely target the challenges and deficiencies observed.\n\n**Instructions:**\n\n1. **Data Aggregation:**\n- Combine insights from various tasks and assignments to compile a complete picture of the student’s performance.\n- Ensure that all observations across different learning contexts are considered.\n\n2. **Identify Struggles in Content Comprehension:**\n- Highlight concepts, topics, or skills where the student consistently shows misunderstanding, misinterpretation, or difficulty.\n- Detail instances where incorrect reasoning, incomplete explanations, or repeated errors are evident.\n\n3. **Feedback Response and Behavioral Analysis:**\n- Analyze how the student utilizes—or fails to utilize—feedback from instructors. Emphasize patterns of recurring errors or a lack of improvement after corrections.\n- Note any issues related to timing, such as delayed responses or procrastination, along with patterns indicating low persistence or avoidance of complex problems.\n\n4. **Learning Strategy and Process Gaps:**\n- Identify ineffective learning habits, inadequate study methods, or strategic approaches that are contributing to poor outcomes.\n- Discuss any evidence of failure to seek clarifications or additional help when required.\n\n5. **Synthesize and Conclude:**\n- Produce a cohesive summary that integrates all the above points, presenting a clear, consolidated view of where the student is struggling.\n- Focus exclusively on the areas of difficulty without referencing any strengths or positive aspects in the summary.\n\n**Task:**\nUsing the provided multi-task insights, generate a comprehensive summary that details the specific areas where the student is struggling, integrating evidence from content comprehension, feedback response, behavioral patterns, and learning strategies."""
 
@@ -269,7 +279,12 @@ async def summarize_learner_insights(
         task_level_insights=task_level_insights_str,
     )
 
-    model = "gpt-4o-2024-11-20"
+    if free_trial:
+        plan_type = "free_trial"
+    else:
+        plan_type = "paid"
+
+    model = openai_plan_to_model_name[plan_type]["4o-text"]
 
     try:
         response = await call_openai_chat_model(
