@@ -1330,8 +1330,30 @@ def show_bulk_upload_tasks_form():
         )
 
     if uploaded_file:
-        display_container = st.empty()
         tasks_df = pd.read_csv(uploaded_file)
+
+        columns_info_container = st.container(border=True)
+
+        if "Name" not in tasks_df.columns:
+            columns_info_container.markdown(
+                f"""<p style='color: red;'>"Name" column is missing. Found columns: "{'", "'.join(tasks_df.columns)}"</p>""",
+                unsafe_allow_html=True,
+            )
+            return
+
+        if "Description" not in tasks_df.columns:
+            columns_info_container.markdown(
+                f"""<p style='color: red;'>"Description" column is missing. Found columns: "{'", "'.join(tasks_df.columns)}"</p>""",
+                unsafe_allow_html=True,
+            )
+            return
+
+        text_color = 'white' if st.session_state.theme["base"] == "dark" else 'black'
+        columns_info_container.markdown(
+            f"""<p style='color: {text_color};'>Columns found in CSV: "{'", "'.join(tasks_df.columns)}"</p>""",
+            unsafe_allow_html=True,
+        )
+        display_container = st.empty()
 
         column_config = {
             "Name": st.column_config.TextColumn(width="small"),
