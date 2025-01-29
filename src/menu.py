@@ -3,7 +3,7 @@ from typing import Dict
 import os
 from lib.organization import show_create_org_dialog
 from lib.toast import set_toast, show_toast
-from lib.db import get_hva_org_id
+from lib.db import get_hva_org_id, is_user_hva_learner
 
 # if not theme:
 #     theme = {"base": "light"}
@@ -67,17 +67,11 @@ def clear_auth():
     st.rerun()
 
 
-def menu_footer(selected_cohort: Dict, role: str):
+def menu_footer():
     st.sidebar.divider()
 
-    if (
-        role == "learner"
-        and selected_cohort is not None
-        and selected_cohort["org_id"] == get_hva_org_id()
-    ):
-
+    if is_user_hva_learner(st.session_state.user["id"]):
         show_links()
-
         st.sidebar.divider()
 
     st.sidebar.page_link(
@@ -94,7 +88,7 @@ def menu_footer(selected_cohort: Dict, role: str):
                 clear_auth()
 
 
-def authenticated_menu(selected_cohort: Dict, role: str):
+def authenticated_menu():
     with st.sidebar:
         st.page_link(
             f"{os.environ.get('APP_URL')}/profile",
@@ -102,12 +96,7 @@ def authenticated_menu(selected_cohort: Dict, role: str):
             icon="👔",
         )
 
-        if (
-            role != "learner"
-            or selected_cohort is None
-            or selected_cohort["org_id"] != get_hva_org_id()
-        ):
-
+        if not is_user_hva_learner(st.session_state.user["id"]):
             if "is_org_change_complete" not in st.session_state:
                 st.session_state.is_org_change_complete = True
 
@@ -151,7 +140,7 @@ def authenticated_menu(selected_cohort: Dict, role: str):
                 args=(st.session_state.user["id"],),
             )
 
-            print(selected_org["id"])
+            # print(selected_org["id"])
             st.page_link(
                 f"{os.environ.get('APP_URL')}/admin?org_id={selected_org['id']}",
                 label="Admin Panel",
@@ -190,12 +179,12 @@ def authenticated_menu(selected_cohort: Dict, role: str):
         )
 
 
-def menu(selected_cohort: Dict, role: str):
+def menu():
     show_toast()
     menu_header()
 
     if st.experimental_user.is_authenticated:
-        authenticated_menu(selected_cohort, role)
+        authenticated_menu()
 
-    menu_footer(selected_cohort, role)
+    menu_footer()
     # auth(label="Change your logged in email", key_suffix="menu",  sidebar=True)

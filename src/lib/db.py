@@ -2320,7 +2320,7 @@ def get_hva_cohort_ids() -> List[int]:
 def is_user_hva_learner(user_id: int) -> bool:
     return (
         execute_db_operation(
-            f"SELECT COUNT(*) FROM user_cohorts WHERE user_id = ? AND cohort_id IN ({', '.join(map(str, get_hva_cohort_ids()))})",
+            f"SELECT COUNT(*) FROM user_cohorts WHERE user_id = ? AND cohort_id IN ({', '.join(map(str, get_hva_cohort_ids()))}) AND role = 'learner'",
             (user_id,),
             fetch_one=True,
         )[0]

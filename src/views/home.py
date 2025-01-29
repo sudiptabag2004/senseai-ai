@@ -137,6 +137,8 @@ def mentor_view(selected_cohort: Dict):
 
 
 def show_home():
+    menu()
+
     user_cohorts = get_user_cohorts(st.session_state.user["id"])
 
     if "selected_org" not in st.session_state:
@@ -209,5 +211,3 @@ def show_home():
             "You are currently not a member of any cohort. Please ask your admin to add you to one!"
         )
         selected_cohort = None
-
-    menu(selected_cohort, role)
