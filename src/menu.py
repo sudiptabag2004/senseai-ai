@@ -108,8 +108,15 @@ def authenticated_menu(selected_cohort: Dict, role: str):
             or selected_cohort["org_id"] != get_hva_org_id()
         ):
 
+            if "is_org_change_complete" not in st.session_state:
+                st.session_state.is_org_change_complete = True
+
             def set_org_in_query_params():
                 st.query_params["org_id"] = st.session_state.selected_org["id"]
+
+            def selected_org_changed():
+                st.session_state.is_org_change_complete = False
+                set_org_in_query_params()
 
             cols = st.sidebar.columns([6, 1])
 
@@ -127,7 +134,7 @@ def authenticated_menu(selected_cohort: Dict, role: str):
                 st.session_state.user_orgs,
                 key="selected_org",
                 format_func=lambda val: f"{val['name']} ({val['role']})",
-                on_change=set_org_in_query_params,
+                on_change=selected_org_changed,
             )
 
             if not selected_org["openai_api_key"]:
@@ -144,11 +151,17 @@ def authenticated_menu(selected_cohort: Dict, role: str):
                 args=(st.session_state.user["id"],),
             )
 
+            print(selected_org["id"])
             st.page_link(
                 f"{os.environ.get('APP_URL')}/admin?org_id={selected_org['id']}",
                 label="Admin Panel",
                 icon="⚙️",
+                disabled=not st.session_state.is_org_change_complete,
             )
+
+            if not st.session_state.is_org_change_complete:
+                st.session_state.is_org_change_complete = True
+                st.rerun()
 
             return
 

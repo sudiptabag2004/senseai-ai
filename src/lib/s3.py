@@ -5,6 +5,23 @@ import boto3
 import boto3.session
 
 
+def upload_file_to_s3(
+    file_path: str,
+    key: str,
+):
+    bucket_name = os.getenv("S3_BUCKET_NAME")
+
+    session = boto3.Session()
+    s3_client = session.client("s3")
+
+    response = s3_client.upload_file(file_path, bucket_name, key)
+
+    if response is not None:
+        raise Exception(f"Failed to upload to S3. Response: {response}")
+
+    return key
+
+
 def upload_audio_data_to_s3(
     audio_data: bytes,
     key: str,
