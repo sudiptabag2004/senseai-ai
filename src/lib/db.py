@@ -69,11 +69,12 @@ def create_tests_table(cursor):
                 input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
                 output TEXT NOT NULL,
                 description TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                INDEX idx_test_task_id (task_id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
             )
             """
     )
+
+    cursor.execute(f"""CREATE INDEX idx_test_task_id ON {tests_table_name} (task_id)""")
 
 
 def create_organizations_table(cursor):
@@ -83,9 +84,9 @@ def create_organizations_table(cursor):
                 slug TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
                 default_logo_color TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 openai_api_key TEXT,
-                openai_free_trial BOOLEAN,
+                openai_free_trial BOOLEAN
             )"""
     )
 
@@ -113,11 +114,17 @@ def create_user_organizations_table(cursor):
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, org_id),
-                INDEX idx_user_org_user_id (user_id),
-                INDEX idx_user_org_org_id (org_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_org_user_id ON {user_organizations_table_name} (user_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_org_org_id ON {user_organizations_table_name} (org_id)"""
     )
 
 
@@ -132,9 +139,12 @@ def create_badges_table(cursor):
                 bg_color TEXT NOT NULL,
                 cohort_id INTEGER NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
-                INDEX idx_badge_user_id (user_id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_badge_user_id ON {badges_table_name} (user_id)"""
     )
 
 
@@ -145,9 +155,12 @@ def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
-                INDEX idx_cohort_org_id (org_id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_cohort_org_id ON {cohorts_table_name} (org_id)"""
     )
 
     # Create a table to store users in cohorts
@@ -159,10 +172,16 @@ def create_cohort_tables(cursor):
                 role TEXT NOT NULL,
                 UNIQUE(user_id, cohort_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
-                INDEX idx_user_cohort_user_id (user_id),
-                INDEX idx_user_cohort_cohort_id (cohort_id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_cohort_user_id ON {user_cohorts_table_name} (user_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_cohort_cohort_id ON {user_cohorts_table_name} (cohort_id)"""
     )
 
     # Create a table to store groups
@@ -171,9 +190,12 @@ def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cohort_id INTEGER NOT NULL,
                 name TEXT,
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
-                INDEX idx_group_cohort_id (cohort_id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_group_cohort_id ON {groups_table_name} (cohort_id)"""
     )
 
     # Create a table to store user groups
@@ -185,9 +207,15 @@ def create_cohort_tables(cursor):
                 UNIQUE(user_id, group_id),
                 FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
-                INDEX idx_user_group_user_id (user_id),
-                INDEX idx_user_group_group_id (group_id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_group_user_id ON {user_groups_table_name} (user_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_user_group_group_id ON {user_groups_table_name} (group_id)"""
     )
 
 
@@ -201,10 +229,16 @@ def create_course_tasks_table(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                INDEX idx_course_task_task_id (task_id),
-                INDEX idx_course_task_course_id (course_id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_task_task_id ON {course_tasks_table_name} (task_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_task_course_id ON {course_tasks_table_name} (course_id)"""
     )
 
 
@@ -215,9 +249,12 @@ def create_milestones_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
-                INDEX idx_milestone_org_id (org_id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_milestone_org_id ON {milestones_table_name} (org_id)"""
     )
 
 
@@ -228,10 +265,11 @@ def create_tag_tables(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
-                INDEX idx_tag_org_id (org_id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
+
+    cursor.execute(f"""CREATE INDEX idx_tag_org_id ON {tags_table_name} (org_id)""")
 
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {task_tags_table_name} (
@@ -241,9 +279,12 @@ def create_tag_tables(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, tag_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id),
-                INDEX idx_task_tag_task_id (task_id)
+                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_task_tag_task_id ON {task_tags_table_name} (task_id)"""
     )
 
 
@@ -254,9 +295,12 @@ def create_courses_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
-                INDEX idx_course_org_id (org_id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_org_id ON {courses_table_name} (org_id)"""
     )
 
 
@@ -269,10 +313,16 @@ def create_course_cohorts_table(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(course_id, cohort_id),
                 FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id),
-                INDEX idx_course_cohort_course_id (course_id),
-                INDEX idx_course_cohort_cohort_id (cohort_id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_cohort_course_id ON {course_cohorts_table_name} (course_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_cohort_cohort_id ON {course_cohorts_table_name} (cohort_id)"""
     )
 
 
@@ -295,10 +345,11 @@ def create_tasks_table(cursor):
                     deleted_at DATETIME,
                     type TEXT,
                     FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id),
-                    INDEX idx_task_org_id (org_id)
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
     )
+
+    cursor.execute(f"""CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)""")
 
 
 def create_task_scoring_criteria_table(cursor):
@@ -310,9 +361,12 @@ def create_task_scoring_criteria_table(cursor):
                 description TEXT NOT NULL,
                 min_score INTEGER NOT NULL,
                 max_score INTEGER NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                INDEX idx_scoring_criteria_task_id (task_id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
             )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_scoring_criteria_task_id ON {task_scoring_criteria_table_name} (task_id)"""
     )
 
 
@@ -329,11 +383,16 @@ def create_chat_history_table(cursor):
                     response_type TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                    INDEX idx_chat_history_task_id (task_id),
-                    INDEX idx_chat_history_user_id (user_id)
-                )
-                """
+                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_chat_history_user_id ON {chat_history_table_name} (user_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_chat_history_task_id ON {chat_history_table_name} (task_id)"""
     )
 
 
@@ -2306,25 +2365,38 @@ def get_hva_org_id():
         "SELECT id FROM organizations WHERE name = ?",
         ("HyperVerge Academy",),
         fetch_one=True,
-    )[0]
+    )
 
-    st.session_state.hva_org_id = hva_org_id
+    if hva_org_id is None:
+        return None
+
+    st.session_state.hva_org_id = hva_org_id[0]
     return hva_org_id
 
 
 def get_hva_cohort_ids() -> List[int]:
+    hva_org_id = get_hva_org_id()
+
+    if hva_org_id is None:
+        return []
+
     cohorts = execute_db_operation(
         "SELECT id FROM cohorts WHERE org_id = ?",
-        (get_hva_org_id(),),
+        (hva_org_id,),
         fetch_all=True,
     )
     return [cohort[0] for cohort in cohorts]
 
 
 def is_user_hva_learner(user_id: int) -> bool:
+    hva_cohort_ids = get_hva_cohort_ids()
+
+    if not hva_cohort_ids:
+        return False
+
     return (
         execute_db_operation(
-            f"SELECT COUNT(*) FROM user_cohorts WHERE user_id = ? AND cohort_id IN ({', '.join(map(str, get_hva_cohort_ids()))}) AND role = 'learner'",
+            f"SELECT COUNT(*) FROM user_cohorts WHERE user_id = ? AND cohort_id IN ({', '.join(map(str, hva_cohort_ids))}) AND role = 'learner'",
             (user_id,),
             fetch_one=True,
         )[0]
@@ -2836,124 +2908,3 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
         }
         for task in tasks
     ]
-
-
-def add_indices_to_tables():
-    execute_multiple_db_operations(
-        [
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_test_task_id ON {tests_table_name}(task_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_org_user_id ON {user_organizations_table_name}(user_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_org_org_id ON {user_organizations_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_badge_user_id ON {badges_table_name}(user_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_cohort_org_id ON {cohorts_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_cohort_user_id ON {user_cohorts_table_name}(user_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_cohort_cohort_id ON {user_cohorts_table_name}(cohort_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_group_cohort_id ON {groups_table_name}(cohort_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_group_user_id ON {user_groups_table_name}(user_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_user_group_group_id ON {user_groups_table_name}(group_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_milestone_org_id ON {milestones_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_course_task_course_id ON {course_tasks_table_name}(course_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_course_task_task_id ON {course_tasks_table_name}(task_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_tag_org_id ON {tags_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_task_tag_task_id ON {task_tags_table_name}(task_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_course_org_id ON {courses_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_course_cohort_course_id ON {course_cohorts_table_name}(course_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_course_cohort_cohort_id ON {course_cohorts_table_name}(cohort_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_task_org_id ON {tasks_table_name}(org_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_scoring_criteria_task_id ON {task_scoring_criteria_table_name}(task_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_chat_history_task_id ON {chat_history_table_name}(task_id)",
-                (),
-            ),
-            (
-                f"CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON {chat_history_table_name}(user_id)",
-                (),
-            ),
-        ]
-    )
-
-
-def migrate_org_table():
-    execute_db_operation(
-        f"ALTER TABLE {organizations_table_name} ADD COLUMN openai_free_trial BOOLEAN",
-        (),
-    )
-
-
-def seed_openai_free_trial_column():
-    from lib.llm import validate_openai_api_key
-    from lib.utils.encryption import decrypt_openai_api_key
-
-    orgs_with_api_key = execute_db_operation(
-        f"SELECT id, openai_api_key FROM {organizations_table_name} WHERE openai_api_key IS NOT NULL",
-        (),
-        fetch_all=True,
-    )
-
-    for org in orgs_with_api_key:
-        api_key = org[1]
-        is_free_trial = validate_openai_api_key(decrypt_openai_api_key(api_key))
-        execute_db_operation(
-            f"UPDATE {organizations_table_name} SET openai_free_trial = ? WHERE id = ?",
-            (is_free_trial, org[0]),
-        )

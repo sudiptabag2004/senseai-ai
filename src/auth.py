@@ -5,7 +5,6 @@ from typing import Dict
 from lib.db import (
     insert_or_return_user,
     get_user_organizations,
-    get_hva_org_id,
 )
 from lib.utils.encryption import decrypt_openai_api_key
 
