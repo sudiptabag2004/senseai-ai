@@ -2370,7 +2370,9 @@ def get_hva_org_id():
     if hva_org_id is None:
         return None
 
-    st.session_state.hva_org_id = hva_org_id[0]
+    hva_org_id = hva_org_id[0]
+
+    st.session_state.hva_org_id = hva_org_id
     return hva_org_id
 
 
