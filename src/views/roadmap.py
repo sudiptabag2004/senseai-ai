@@ -1,6 +1,7 @@
 from typing import Dict
 import streamlit as st
 import pandas as pd
+from typing import List, Dict
 from lib.db import (
     get_user_metrics_for_all_milestones,
     get_all_verified_tasks_for_course,
@@ -8,12 +9,15 @@ from lib.db import (
     get_courses_for_cohort,
 )
 from components.milestone_learner_view import show_milestone_card
+from components.placeholder import show_empty_tasks_placeholder
 
 
-def show_empty_error_message():
-    error_message = "No tasks added yet!"
-
-    st.error(error_message)
+def show_empty_error_message(role: str):
+    if role == "admin":
+        show_empty_tasks_placeholder(align="left")
+    else:
+        error_message = "No tasks added yet"
+        st.error(error_message)
 
 
 def show_roadmap_as_list(
@@ -22,20 +26,21 @@ def show_roadmap_as_list(
     course_id: int,
     is_review_mode: bool = False,
     learner_id: int = None,
+    role: str = None,
 ):
     df = pd.DataFrame(tasks)
 
     if not len(df):
-        return show_empty_error_message()
+        return show_empty_error_message(role)
 
     df["status"] = df.apply(lambda x: "✅" if x["completed"] else "", axis=1)
 
-    filtered_df = df[df["verified"]][["status", "id", "name", "description", "tags"]]
+    df = df[df["verified"]][["status", "id", "name", "description", "tags"]]
 
-    if not len(filtered_df):
-        return show_empty_error_message()
+    if not len(df):
+        return show_empty_error_message(role)
 
-    filtered_df["tags"] = filtered_df["tags"].apply(
+    df["tags"] = df["tags"].apply(
         lambda tags: [tag["name"] for tag in tags] if tags else [],
     )
 
@@ -44,9 +49,9 @@ def show_roadmap_as_list(
     df_actions = st.container(border=True)
 
     event = st.dataframe(
-        filtered_df.style.map(
+        df.style.map(
             lambda _: "background-color: #62B670;",
-            subset=(filtered_df[filtered_df["status"] != ""].index, slice(None)),
+            subset=(df[df["status"] != ""].index, slice(None)),
         ),
         on_select="rerun",
         selection_mode="single-row",
@@ -69,7 +74,7 @@ def show_roadmap_as_list(
             confirmation_message = "Do you want to work on this task?"
 
         df_actions.write(confirmation_message)
-        task_id = filtered_df.iloc[event.selection["rows"][0]]["id"]
+        task_id = df.iloc[event.selection["rows"][0]]["id"]
         link = f"/task?id={task_id}&course={course_id}&cohort={cohort_id}"
 
         if is_review_mode:
@@ -98,13 +103,15 @@ def get_tasks_with_completion_status(
     return all_tasks
 
 
-def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: Dict):
+def show_roadmap_by_milestone(
+    all_tasks, user_id: int, cohort_id: int, course: Dict, role: str
+):
     all_milestone_data = get_user_metrics_for_all_milestones(
         user_id, course_id=course["id"]
     )
 
     if not all_milestone_data:
-        return show_empty_error_message()
+        return show_empty_error_message(role)
 
     for milestone_data in all_milestone_data:
         milestone_tasks = [
@@ -129,23 +136,19 @@ def show_roadmap_by_milestone(all_tasks, user_id: int, cohort_id: int, course: D
         )
 
 
-def show_course_tab(course_tasks, cohort_id, course, user_id):
+def show_course_tab(course_tasks, cohort_id, course, user_id, role):
     if not course_tasks:
-        return show_empty_error_message()
+        return show_empty_error_message(role)
 
     if st.session_state.show_list_view:
-        show_roadmap_as_list(course_tasks, cohort_id, course["id"])
+        show_roadmap_as_list(course_tasks, cohort_id, course["id"], role)
     else:
-        show_roadmap_by_milestone(course_tasks, user_id, cohort_id, course)
+        show_roadmap_by_milestone(course_tasks, user_id, cohort_id, course, role)
 
 
-def show_roadmap_by_course(user_id: int, cohort_id: int):
-    cohort_courses = get_courses_for_cohort(cohort_id)
-
-    if not cohort_courses:
-        st.error("No courses found for this cohort")
-        return
-
+def show_roadmap_by_course(
+    user_id: int, cohort_id: int, cohort_courses: List[Dict], role: str
+):
     tabs = st.tabs([course["name"] for course in cohort_courses])
 
     for tab, course in zip(tabs, cohort_courses):
@@ -154,14 +157,14 @@ def show_roadmap_by_course(user_id: int, cohort_id: int):
         )
 
         with tab:
-            show_course_tab(course_tasks, cohort_id, course, user_id)
+            show_course_tab(course_tasks, cohort_id, course, user_id, role)
 
 
 def update_task_view():
     st.query_params.view = "list" if st.session_state.show_list_view else "milestone"
 
 
-def show_roadmap(cohort_id: int):
+def show_roadmap(cohort_id: int, cohort_courses: List[Dict], role: str):
     st.toggle(
         "Show List View",
         key="show_list_view",
@@ -169,4 +172,9 @@ def show_roadmap(cohort_id: int):
         on_change=update_task_view,
     )
 
-    show_roadmap_by_course(user_id=st.session_state.user["id"], cohort_id=cohort_id)
+    show_roadmap_by_course(
+        user_id=st.session_state.user["id"],
+        cohort_id=cohort_id,
+        cohort_courses=cohort_courses,
+        role=role,
+    )

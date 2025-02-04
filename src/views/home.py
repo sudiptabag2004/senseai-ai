@@ -17,18 +17,30 @@ from components.leaderboard import show_leaderboard
 from lib.url import update_query_params
 from menu import menu
 from views.roadmap import show_roadmap
-from components.placeholder import show_empty_home_placeholder
+from components.placeholder import show_no_courses_placeholder
 
 
-def learner_view(selected_cohort: Dict):
+def learner_view(selected_cohort: Dict, role: str):
     if "view" in st.query_params:
         st.session_state.view = st.query_params["view"]
     else:
         st.session_state.view = "milestone"
 
+    cohort_courses = get_courses_for_cohort(selected_cohort["id"])
+
+    if not cohort_courses:
+        if role == "admin":
+            show_no_courses_placeholder(view="cohort")
+        else:
+            st.error("No courses added yet")
+        return
+
+    if role == "admin":
+        st.info("You are an admin for the cohort")
+
     cols = st.columns([4, 0.1, 3])
     with cols[0]:
-        show_roadmap(selected_cohort["id"])
+        show_roadmap(selected_cohort["id"], cohort_courses, role)
 
     with cols[-1]:
         show_streak(selected_cohort["id"])
@@ -202,12 +214,7 @@ def show_home():
         if is_mentor:
             mentor_view(selected_cohort)
         else:
-            if role == "admin":
-                st.info(
-                    "You are an admin for the cohort. You are seeing the learner view"
-                )
-
-            learner_view(selected_cohort)
+            learner_view(selected_cohort, role)
     else:
         selected_cohort = None
-        show_empty_home_placeholder()
+        show_no_courses_placeholder(view="home")
