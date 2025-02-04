@@ -9,7 +9,7 @@ def show_no_courses_placeholder(
     if view == "home":
         _, container, _ = st.columns([1, 2, 1])
     else:
-        container = st.container()
+        container, _, _ = st.columns([2, 1, 1])
 
     with container:
         # Set theme-dependent colors
@@ -45,7 +45,7 @@ def show_no_courses_placeholder(
                 background: linear-gradient(to bottom, {bg_gradient_start}, {bg_gradient_end});
                 border-radius: 16px;
                 box-shadow: 0 4px 6px {shadow_color};
-                max-width: 600px;
+                max-width: 500px;
                 margin: auto;
             '>
                 <!-- Illustration -->
