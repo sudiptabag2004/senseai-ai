@@ -4,6 +4,7 @@ import os
 from lib.organization import show_create_org_dialog
 from lib.toast import set_toast, show_toast
 from lib.db import is_user_hva_learner
+from components.status import error_markdown
 
 # if not theme:
 #     theme = {"base": "light"}
@@ -127,9 +128,10 @@ def authenticated_menu():
             )
 
             if not selected_org["openai_api_key"]:
-                st.sidebar.error(
-                    """No OpenAI API key found. Please set an API key in the "Settings" section. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
-                )
+                with st.sidebar:
+                    error_markdown(
+                        f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.selected_org['id']}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of."""
+                    )
             elif selected_org["openai_free_trial"]:
                 st.sidebar.warning(
                     "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."

@@ -125,6 +125,14 @@ from auth import (
     is_free_trial_openai_api_key,
 )
 from components.buttons import back_to_home_button
+from components.status import error_markdown
+from components.placeholder import (
+    show_empty_cohorts_placeholder,
+    show_empty_courses_placeholder,
+    show_empty_milestones_placeholder,
+    show_empty_tags_placeholder,
+    show_empty_tasks_placeholder,
+)
 
 init_app()
 
@@ -134,6 +142,11 @@ if "org_id" not in st.query_params:
     unauthorized_redirect_to_home(
         "`org_id` not present in the URL. Redirecting to home page..."
     )
+
+
+if "section" in st.query_params:
+    st.session_state.selected_section_index = int(st.query_params["section"])
+
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
@@ -180,8 +193,8 @@ def show_profile_header():
         st.subheader(st.session_state.org["name"])
 
         if is_empty_openai_api_key():
-            st.error(
-                """No OpenAI API key found. Please set an API key in the `"Settings"` section. Otherwise, AI will not work, neither for generating tasks nor for providing feedback."""
+            error_markdown(
+                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of.""",
             )
         elif is_free_trial_openai_api_key():
             st.warning(
@@ -1462,27 +1475,36 @@ if "selected_section_index" not in st.session_state:
 
 
 def change_selected_section(section_index: int):
-    st.session_state.selected_section_index = section_index
+    st.query_params["section"] = section_index
     reset_ai_running()
 
 
 with layout_cols[0]:
-    sections = ["Dashboard", "Analytics", "Settings"]
+    sections = ["Dashboard", "Analytics", "Settings", "Tutorials"]
+    icons = ["🏠", "📈", "⚙️", "📚"]
     st.markdown(
         "<hr style='margin: 0px; margin-bottom: 10px; margin-top: 20px;'>",
         unsafe_allow_html=True,
     )
 
-    for section_index, section in enumerate(sections):
+    for section_index, section in enumerate(sections[:-1]):
         st.button(
             section,
             key=f"section_{section_index}",
             type="tertiary",
+            icon=icons[section_index],
             disabled=st.session_state.selected_section_index == section_index,
             on_click=change_selected_section,
             args=(section_index,),
         )
         st.markdown("<hr style='margin: 0px;'>", unsafe_allow_html=True)
+
+    st.link_button(
+        "Tutorials",
+        "https://docs.sensai.hyperverge.org",
+        type="tertiary",
+        icon=icons[-1],
+    )
 
     # Add custom CSS to style the disabled button
     st.markdown(
@@ -1690,9 +1712,15 @@ if st.session_state.selected_section_index == 0:
             ]
 
     def show_tasks_tab():
+        refresh_tasks()
+
+        if not st.session_state.tasks:
+            show_empty_tasks_placeholder()
+            st.container(height=5, border=False)
+
         if is_empty_openai_api_key():
-            st.error(
-                """No OpenAI API key found. Please set an API key in the `"Settings"` section."""
+            error_markdown(
+                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
             )
             return
 
@@ -1711,10 +1739,7 @@ if st.session_state.selected_section_index == 0:
             update_task_uploader_key()
             show_bulk_upload_tasks_form()
 
-        refresh_tasks()
-
         if not st.session_state.tasks:
-            st.error("No tasks added yet")
             return
 
         df = pd.DataFrame(st.session_state.tasks)
@@ -1777,7 +1802,7 @@ if st.session_state.selected_section_index == 0:
             df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
         if not len(df):
-            st.error("No tasks matching the filters")
+            st.info("No tasks matching the filters")
             return
 
         column_config = {
@@ -2476,7 +2501,6 @@ if st.session_state.selected_section_index == 0:
                 update_cohort_name(selected_cohort, updated_cohort_name)
 
     def show_cohorts_tab():
-        cols = st.columns([1.2, 0.5, 2])
 
         if (
             "current_cohort" in st.session_state
@@ -2487,25 +2511,32 @@ if st.session_state.selected_section_index == 0:
                 st.session_state.current_cohort_index
             ]
 
-        selected_cohort = cols[0].selectbox(
-            "Select a cohort",
-            st.session_state.cohorts,
-            format_func=lambda cohort: cohort["name"],
-            key="current_cohort",
-        )
-
-        if selected_cohort:
-            st.session_state.current_cohort_index = st.session_state.cohorts.index(
-                selected_cohort
+        if not len(st.session_state.cohorts):
+            show_empty_cohorts_placeholder("dashboard")
+            st.container(height=5, border=False)
+            cols = st.columns(3)
+            if cols[0].button(
+                "Create Cohort", type="primary", use_container_width=True
+            ):
+                show_create_cohort_dialog()
+            return
+        else:
+            cols = st.columns([1.2, 0.5, 2])
+            selected_cohort = cols[0].selectbox(
+                "Select a cohort",
+                st.session_state.cohorts,
+                format_func=lambda cohort: cohort["name"],
+                key="current_cohort",
             )
 
-        cols[1].container(height=10, border=False)
-        if cols[1].button("Create Cohort", type="primary"):
-            show_create_cohort_dialog()
+            if selected_cohort:
+                st.session_state.current_cohort_index = st.session_state.cohorts.index(
+                    selected_cohort
+                )
 
-        if not len(st.session_state.cohorts):
-            st.error("No cohorts added yet")
-            return
+            cols[1].container(height=10, border=False)
+            if cols[1].button("Create Cohort", type="primary"):
+                show_create_cohort_dialog()
 
         if not selected_cohort:
             return
@@ -2820,36 +2851,44 @@ if st.session_state.selected_section_index == 0:
             _show_assigned_cohorts_tab()
 
     def show_courses_tab():
-        cols = st.columns([1.2, 0.5, 2])
+        if not st.session_state.courses:
+            show_empty_courses_placeholder()
 
-        if (
-            "current_course" in st.session_state
-            and st.session_state.current_course not in st.session_state.courses
-            and "current_course_index" in st.session_state
-        ):
-            st.session_state.current_course = st.session_state.courses[
-                st.session_state.current_course_index
-            ]
+            st.container(height=10, border=False)
+            cols = st.columns(3)
+            if cols[0].button(
+                "Create Course", type="primary", use_container_width=True
+            ):
+                show_create_course_dialog()
 
-        selected_course = cols[0].selectbox(
-            "Select a course",
-            st.session_state.courses,
-            format_func=lambda course: course["name"],
-            key="current_course",
-        )
+            return
+        else:
+            cols = st.columns([1.2, 0.5, 2])
 
-        if selected_course:
-            st.session_state.current_course_index = st.session_state.courses.index(
-                selected_course
+            if (
+                "current_course" in st.session_state
+                and st.session_state.current_course not in st.session_state.courses
+                and "current_course_index" in st.session_state
+            ):
+                st.session_state.current_course = st.session_state.courses[
+                    st.session_state.current_course_index
+                ]
+
+            selected_course = cols[0].selectbox(
+                "Select a course",
+                st.session_state.courses,
+                format_func=lambda course: course["name"],
+                key="current_course",
             )
 
-        cols[1].container(height=10, border=False)
-        if cols[1].button("Create Course", type="primary"):
-            show_create_course_dialog()
+            if selected_course:
+                st.session_state.current_course_index = st.session_state.courses.index(
+                    selected_course
+                )
 
-        if not len(st.session_state.courses):
-            st.error("No courses added yet")
-            return
+            cols[1].container(height=10, border=False)
+            if cols[1].button("Create Course", type="primary"):
+                show_create_course_dialog()
 
         if not selected_course:
             return
@@ -2938,6 +2977,10 @@ if st.session_state.selected_section_index == 0:
                 st.rerun()
 
     def show_milestones_tab():
+        if not st.session_state.milestones:
+            show_empty_milestones_placeholder()
+            st.container(height=5, border=False)
+
         with st.form(
             "new_milestone_form",
             border=False,
@@ -2969,10 +3012,6 @@ if st.session_state.selected_section_index == 0:
             if cols[2].form_submit_button("Add Milestone"):
                 del st.session_state.new_milestone_init_color
                 add_milestone(new_milestone, milestone_color)
-
-        if not st.session_state.milestones:
-            st.info("No milestones added yet")
-            return
 
         num_layout_cols = 3
         layout_cols = st.columns(num_layout_cols)
@@ -3061,6 +3100,10 @@ if st.session_state.selected_section_index == 0:
             st.rerun()
 
     def show_tags_tab():
+        if not st.session_state.tags:
+            show_empty_tags_placeholder()
+            st.container(height=5, border=False)
+
         with st.form("new_tag_form", clear_on_submit=True, border=False):
             cols = st.columns(4)
             new_tag = cols[0].text_input("Enter Tag", key="new_tag", autocomplete="off")
@@ -3068,10 +3111,6 @@ if st.session_state.selected_section_index == 0:
             cols[1].container(height=10, border=False)
             if cols[1].form_submit_button("Add"):
                 add_tag(new_tag)
-
-        if not st.session_state.tags:
-            st.info("No tags added yet")
-            return
 
         num_layout_cols = 3
         layout_cols = st.columns(num_layout_cols)
@@ -3106,9 +3145,7 @@ elif st.session_state.selected_section_index == 1:
 
     def _get_usage_data(key):
         if not st.session_state.cohorts:
-            st.info(
-                "No cohorts found. Create a cohort and add members to it. You will see their usage metrics here!"
-            )
+            show_empty_cohorts_placeholder("analytics")
             return
 
         cols = st.columns(3)
@@ -3138,7 +3175,7 @@ elif st.session_state.selected_section_index == 1:
         course_tasks = get_tasks_for_course(selected_course["id"])
 
         if not course_tasks:
-            st.error(
+            st.info(
                 "No tasks found. The course must have at least one task added to it!"
             )
             return
@@ -3208,8 +3245,8 @@ elif st.session_state.selected_section_index == 1:
 
     def show_insights_tab():
         if is_empty_openai_api_key():
-            st.error(
-                """No OpenAI API key found. Please set an API key in the `"Settings"` section."""
+            error_markdown(
+                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
             )
             return
 

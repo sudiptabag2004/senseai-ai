@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import os
 from typing import Dict, List
 import pandas as pd
 
@@ -16,6 +17,7 @@ from components.leaderboard import show_leaderboard
 from lib.url import update_query_params
 from menu import menu
 from views.roadmap import show_roadmap
+from components.placeholder import show_empty_home_placeholder
 
 
 def learner_view(selected_cohort: Dict):
@@ -207,7 +209,6 @@ def show_home():
 
             learner_view(selected_cohort)
     else:
-        st.info(
-            "You are currently not a member of any cohort. Please ask your admin to add you to one!"
-        )
+        # st.info("No courses found!")
         selected_cohort = None
+        show_empty_home_placeholder()
