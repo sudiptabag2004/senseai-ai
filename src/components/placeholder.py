@@ -3,8 +3,13 @@ import streamlit as st
 from typing import Literal
 
 
-def show_empty_home_placeholder():
-    _, container, _ = st.columns([1, 2, 1])
+def show_no_courses_placeholder(
+    view: Literal["home", "cohort"] = "home",
+):
+    if view == "home":
+        _, container, _ = st.columns([1, 2, 1])
+    else:
+        container = st.container()
 
     with container:
         # Set theme-dependent colors
@@ -21,6 +26,15 @@ def show_empty_home_placeholder():
         secondary_btn_hover = "#00b359"
 
         admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state["selected_org"]['id']}"
+
+        if view == "home":
+            title = "You don't have any courses yet!"
+            description = "On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Start by creating your first course today!"
+            button_text = "✨ Create Your First Course"
+        else:
+            title = "No courses in this cohort!"
+            description = "On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Start by creating a course and adding it to this cohort!"
+            button_text = "✨ Create Or Add A Course"
 
         # Create a styled container with centered content
         st.markdown(
@@ -45,7 +59,7 @@ def show_empty_home_placeholder():
                     margin-bottom: 1rem;
                     font-family: "Source Sans Pro", sans-serif;
                 '>
-                    You don't have any courses yet!
+                    {title}
                 </h2>
                 <p style='
                     color: {text_muted};
@@ -54,7 +68,7 @@ def show_empty_home_placeholder():
                     line-height: 1.5;
                     font-family: "Source Sans Pro", sans-serif;
                 '>
-                    On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Start by creating your first course today!
+                    {description}
                 </p>
                 <a href='{admin_panel_url}' 
                     style='
@@ -75,7 +89,7 @@ def show_empty_home_placeholder():
                     role="button"
                     aria-label="Create a new course"
                 >
-                    ✨ Create Your First Course
+                    {button_text}
                 </a>
                 <a href='https://docs.sensai.hyperverge.org/quickstart/' 
                     style='
@@ -243,8 +257,11 @@ def show_empty_courses_placeholder():
         )
 
 
-def show_empty_tasks_placeholder():
-    container, _, _ = st.columns([1, 1, 1])
+def show_empty_tasks_placeholder(align: Literal["center", "left"] = "center"):
+    if align == "center":
+        _, container, _ = st.columns([1, 2, 1])
+    else:
+        container = st.container()
 
     with container:
         # Set theme-dependent colors
@@ -290,7 +307,7 @@ def show_empty_tasks_placeholder():
                     line-height: 1.5;
                     font-family: "Source Sans Pro", sans-serif;
                 '>
-                    Tasks are the building blocks of learning on SensAI. Create reading materials for content delivery or questions for assessment. You can even provide custom context for AI-powered feedback!
+                    Tasks are the building blocks of learning on SensAI - create reading materials or questions for assessment
                 </p>
             </div>
         """,
