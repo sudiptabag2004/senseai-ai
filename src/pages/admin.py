@@ -2501,6 +2501,16 @@ if st.session_state.selected_section_index == 0:
                 update_cohort_name(selected_cohort, updated_cohort_name)
 
     def show_cohorts_tab():
+        if not len(st.session_state.cohorts):
+            show_empty_cohorts_placeholder("dashboard")
+
+            st.container(height=5, border=False)
+            cols = st.columns(3)
+            if cols[0].button(
+                "Create Cohort", type="primary", use_container_width=True
+            ):
+                show_create_cohort_dialog()
+            return
 
         if (
             "current_cohort" in st.session_state
@@ -2511,32 +2521,22 @@ if st.session_state.selected_section_index == 0:
                 st.session_state.current_cohort_index
             ]
 
-        if not len(st.session_state.cohorts):
-            show_empty_cohorts_placeholder("dashboard")
-            st.container(height=5, border=False)
-            cols = st.columns(3)
-            if cols[0].button(
-                "Create Cohort", type="primary", use_container_width=True
-            ):
-                show_create_cohort_dialog()
-            return
-        else:
-            cols = st.columns([1.2, 0.5, 2])
-            selected_cohort = cols[0].selectbox(
-                "Select a cohort",
-                st.session_state.cohorts,
-                format_func=lambda cohort: cohort["name"],
-                key="current_cohort",
+        cols = st.columns([1.2, 0.5, 2])
+        selected_cohort = cols[0].selectbox(
+            "Select a cohort",
+            st.session_state.cohorts,
+            format_func=lambda cohort: cohort["name"],
+            key="current_cohort",
+        )
+
+        if selected_cohort:
+            st.session_state.current_cohort_index = st.session_state.cohorts.index(
+                selected_cohort
             )
 
-            if selected_cohort:
-                st.session_state.current_cohort_index = st.session_state.cohorts.index(
-                    selected_cohort
-                )
-
-            cols[1].container(height=10, border=False)
-            if cols[1].button("Create Cohort", type="primary"):
-                show_create_cohort_dialog()
+        cols[1].container(height=10, border=False)
+        if cols[1].button("Create Cohort", type="primary"):
+            show_create_cohort_dialog()
 
         if not selected_cohort:
             return
@@ -2854,7 +2854,7 @@ if st.session_state.selected_section_index == 0:
         if not st.session_state.courses:
             show_empty_courses_placeholder()
 
-            st.container(height=10, border=False)
+            st.container(height=5, border=False)
             cols = st.columns(3)
             if cols[0].button(
                 "Create Course", type="primary", use_container_width=True
@@ -2862,33 +2862,33 @@ if st.session_state.selected_section_index == 0:
                 show_create_course_dialog()
 
             return
-        else:
-            cols = st.columns([1.2, 0.5, 2])
 
-            if (
-                "current_course" in st.session_state
-                and st.session_state.current_course not in st.session_state.courses
-                and "current_course_index" in st.session_state
-            ):
-                st.session_state.current_course = st.session_state.courses[
-                    st.session_state.current_course_index
-                ]
+        cols = st.columns([1.2, 0.5, 2])
 
-            selected_course = cols[0].selectbox(
-                "Select a course",
-                st.session_state.courses,
-                format_func=lambda course: course["name"],
-                key="current_course",
+        if (
+            "current_course" in st.session_state
+            and st.session_state.current_course not in st.session_state.courses
+            and "current_course_index" in st.session_state
+        ):
+            st.session_state.current_course = st.session_state.courses[
+                st.session_state.current_course_index
+            ]
+
+        selected_course = cols[0].selectbox(
+            "Select a course",
+            st.session_state.courses,
+            format_func=lambda course: course["name"],
+            key="current_course",
+        )
+
+        if selected_course:
+            st.session_state.current_course_index = st.session_state.courses.index(
+                selected_course
             )
 
-            if selected_course:
-                st.session_state.current_course_index = st.session_state.courses.index(
-                    selected_course
-                )
-
-            cols[1].container(height=10, border=False)
-            if cols[1].button("Create Course", type="primary"):
-                show_create_course_dialog()
+        cols[1].container(height=10, border=False)
+        if cols[1].button("Create Course", type="primary"):
+            show_create_course_dialog()
 
         if not selected_course:
             return

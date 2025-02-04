@@ -209,6 +209,5 @@ def show_home():
 
             learner_view(selected_cohort)
     else:
-        # st.info("No courses found!")
         selected_cohort = None
         show_empty_home_placeholder()
