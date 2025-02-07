@@ -37,6 +37,7 @@ from lib.config import (
     course_tasks_table_name,
     uncategorized_milestone_name,
     uncategorized_milestone_color,
+    course_milestones_table_name,
 )
 from models import LeaderboardViewType
 from lib.utils.logging import logger
@@ -153,8 +154,8 @@ def create_cohort_tables(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {cohorts_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
+                org_id INTEGER NOT NULL,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -227,9 +228,11 @@ def create_course_tasks_table(cursor):
                 course_id INTEGER NOT NULL,
                 ordering INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                milestone_id INTEGER,
                 UNIQUE(task_id, course_id),
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
+                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
             )"""
     )
 
@@ -239,6 +242,33 @@ def create_course_tasks_table(cursor):
 
     cursor.execute(
         f"""CREATE INDEX idx_course_task_course_id ON {course_tasks_table_name} (course_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_task_milestone_id ON {course_tasks_table_name} (milestone_id)"""
+    )
+
+
+def create_course_milestones_table(cursor):
+    cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {course_milestones_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                course_id INTEGER NOT NULL,
+                milestone_id INTEGER,
+                ordering INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(course_id, milestone_id),
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
+                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
+            )"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_milestone_course_id ON {course_milestones_table_name} (course_id)"""
+    )
+
+    cursor.execute(
+        f"""CREATE INDEX idx_course_milestone_milestone_id ON {course_milestones_table_name} (milestone_id)"""
     )
 
 
@@ -262,9 +292,9 @@ def create_tag_tables(cursor):
     cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tags_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                org_id INTEGER NOT NULL,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
             )"""
     )
@@ -338,13 +368,11 @@ def create_tasks_table(cursor):
                     generation_model TEXT,
                     verified BOOLEAN NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    milestone_id INTEGER,
                     org_id INTEGER NOT NULL,
                     response_type TEXT,
                     context TEXT,
                     deleted_at DATETIME,
                     type TEXT,
-                    FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id),
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
     )
@@ -466,6 +494,9 @@ def init_db():
             if not check_table_exists(course_tasks_table_name, cursor):
                 create_course_tasks_table(cursor)
 
+            if not check_table_exists(course_milestones_table_name, cursor):
+                create_course_milestones_table(cursor)
+
             if not check_table_exists(cv_review_usage_table_name, cursor):
                 create_cv_review_usage_table(cursor)
 
@@ -500,6 +531,8 @@ def init_db():
             create_tests_table(cursor)
 
             create_course_tasks_table(cursor)
+
+            create_course_milestones_table(cursor)
 
             create_cv_review_usage_table(cursor)
 
@@ -542,7 +575,6 @@ def store_task(
     generation_model: str,
     verified: bool,
     tests: List[dict],
-    milestone_id: int,
     org_id: int,
     context: str,
     task_type: str,
@@ -552,8 +584,8 @@ def store_task(
     # Insert main task
     insert_task_query = f"""
     INSERT INTO {tasks_table_name} 
-    (name, description, answer, input_type, coding_language, generation_model, verified, milestone_id, org_id, response_type, context, type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (name, description, answer, input_type, coding_language, generation_model, verified, org_id, response_type, context, type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     task_params = (
         name,
@@ -563,7 +595,6 @@ def store_task(
         coding_language_str,
         generation_model,
         verified,
-        milestone_id,
         org_id,
         response_type,
         context,
@@ -615,7 +646,6 @@ def update_task(
     input_type: str,
     response_type: str,
     coding_languages: List[str],
-    milestone_id: int,
     context: str,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
@@ -623,7 +653,7 @@ def update_task(
     execute_db_operation(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, milestone_id = ?, context = ?
+    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, context = ?
     WHERE id = ?
     """,
         (
@@ -633,7 +663,6 @@ def update_task(
             input_type,
             coding_language_str,
             response_type,
-            milestone_id,
             context,
             task_id,
         ),
@@ -661,13 +690,13 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
     ]
 
 
-def convert_task_db_to_dict(task, tests=None):
-    tag_ids = list(map(int, deserialise_list_from_str(task[17])))
+def convert_task_db_to_dict(task, tests=None, has_milestone=False):
+    tag_ids = list(map(int, deserialise_list_from_str(task[15])))
     tag_names = deserialise_list_from_str(task[4])
 
     tags = [{"id": tag_ids[i], "name": tag_names[i]} for i in range(len(tag_ids))]
 
-    task = {
+    task_dict = {
         "id": task[0],
         "name": task[1],
         "description": task[2],
@@ -678,19 +707,21 @@ def convert_task_db_to_dict(task, tests=None):
         "generation_model": task[7],
         "verified": bool(task[8]),
         "timestamp": task[9],
-        "milestone_id": task[10],
-        "milestone_name": task[11],
-        "org_id": task[12],
-        "org_name": task[13],
-        "response_type": task[14],
-        "context": task[15],
-        "type": task[16],
+        "org_id": task[10],
+        "org_name": task[11],
+        "response_type": task[12],
+        "context": task[13],
+        "type": task[14],
     }
 
-    if tests is not None:
-        task["tests"] = tests
+    if has_milestone:
+        task_dict["milestone_id"] = task[16]
+        task_dict["milestone_name"] = task[17]
 
-    return task
+    if tests is not None:
+        task_dict["tests"] = tests
+
+    return task_dict
 
 
 def get_all_tasks_for_org_or_course(
@@ -701,13 +732,18 @@ def get_all_tasks_for_org_or_course(
     if org_id is not None and course_id is not None:
         raise ValueError("Only one of org_id or course_id can be provided")
 
+    select_query_params = ""
+    has_milestone = False
+    if course_id is not None:
+        select_query_params = ", ct.milestone_id, m.name as milestone_name"
+        has_milestone = True
+
     query = f"""
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tag_names,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, m.name as milestone_name, o.id, o.name as org_name,
-        t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, o.id, o.name as org_name,
+        t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids{select_query_params}
     FROM {tasks_table_name} t
-    LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
     LEFT JOIN {organizations_table_name} o ON t.org_id = o.id"""
@@ -723,6 +759,7 @@ def get_all_tasks_for_org_or_course(
     elif course_id is not None:
         query += f""" 
         INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        INNER JOIN {milestones_table_name} m ON ct.milestone_id = m.id
         WHERE ct.course_id = ? AND t.deleted_at IS NULL
         GROUP BY t.id
         ORDER BY ct.ordering ASC
@@ -748,7 +785,9 @@ def get_all_tasks_for_org_or_course(
 
             tests = return_test_rows_as_dict(tests)
 
-        tasks_dicts.append(convert_task_db_to_dict(row, tests))
+        tasks_dicts.append(
+            convert_task_db_to_dict(row, tests, has_milestone=has_milestone)
+        )
 
     return tasks_dicts
 
@@ -763,21 +802,24 @@ def get_all_verified_tasks_for_course(course_id: int, milestone_id: int = None):
     return verified_tasks
 
 
-def get_task_by_id(task_id: int):
+def get_course_task(task_id: int, course_id: int):
     task = execute_db_operation(
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tag_names,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, m.id as milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.org_id, o.name as org_name, t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, t.org_id, o.name as org_name, t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids,
+        ct.milestone_id,
+        COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
     FROM {tasks_table_name} t
-    LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
     LEFT JOIN {organizations_table_name} o ON t.org_id = o.id
+    LEFT JOIN {course_tasks_table_name} ct ON t.id = ct.task_id AND ct.course_id = ?
+    LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id
     WHERE t.id = ? AND t.deleted_at IS NULL
     GROUP BY t.id
     """,
-        (task_id,),
+        (course_id, task_id),
         fetch_one=True,
     )
 
@@ -795,7 +837,7 @@ def get_task_by_id(task_id: int):
 
     tests = return_test_rows_as_dict(tests)
 
-    return convert_task_db_to_dict(task, tests)
+    return convert_task_db_to_dict(task, tests, has_milestone=True)
 
 
 def get_scoring_criteria_for_task(task_id: int):
@@ -1747,9 +1789,18 @@ def update_milestone(milestone_id: int, name: str, color: str):
 
 
 def delete_milestone(milestone_id: int):
-    execute_db_operation(
-        f"DELETE FROM {milestones_table_name} WHERE id = ?",
-        (milestone_id,),
+    execute_multiple_db_operations(
+        [
+            (f"DELETE FROM {milestones_table_name} WHERE id = ?", (milestone_id,)),
+            (
+                f"UPDATE {course_tasks_table_name} SET milestone_id = NULL WHERE milestone_id = ?",
+                (milestone_id,),
+            ),
+            (
+                f"DELETE FROM {course_milestones_table_name} WHERE milestone_id = ?",
+                (milestone_id,),
+            ),
+        ]
     )
 
 
@@ -1771,7 +1822,7 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
                     SELECT t2.id 
                     FROM {tasks_table_name} t2 
                     JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
-                    WHERE t2.milestone_id = m.id 
+                    WHERE ct2.milestone_id = m.id 
                     AND ct2.course_id = ?
                     AND t2.deleted_at IS NULL
                 )
@@ -1779,9 +1830,11 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
         FROM 
             {milestones_table_name} m
         LEFT JOIN 
-            {tasks_table_name} t ON m.id = t.milestone_id
+            {course_tasks_table_name} ct ON m.id = ct.milestone_id
         LEFT JOIN
-            {course_tasks_table_name} ct ON t.id = ct.task_id
+            {tasks_table_name} t ON ct.task_id = t.id
+        LEFT JOIN
+            {course_milestones_table_name} cm ON m.id = cm.milestone_id AND ct.course_id = cm.course_id
         WHERE 
             t.verified = 1 AND ct.course_id = ? AND t.deleted_at IS NULL
         GROUP BY 
@@ -1789,7 +1842,7 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
         HAVING 
             COUNT(DISTINCT t.id) > 0
         ORDER BY 
-            ct.ordering
+            cm.ordering
         """,
         params=(user_id, course_id, course_id),
         fetch_all=True,
@@ -1812,7 +1865,7 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
                     SELECT t2.id 
                     FROM {tasks_table_name} t2 
                     JOIN {course_tasks_table_name} ct2 ON t2.id = ct2.task_id
-                    WHERE t2.milestone_id IS NULL 
+                    WHERE ct2.milestone_id IS NULL 
                     AND ct2.course_id = ?
                     AND t2.deleted_at IS NULL
                 )
@@ -1822,7 +1875,7 @@ def get_user_metrics_for_all_milestones(user_id: int, course_id: int):
         LEFT JOIN
             {course_tasks_table_name} ct ON t.id = ct.task_id
         WHERE 
-            t.milestone_id IS NULL 
+            ct.milestone_id IS NULL 
             AND t.verified = 1 
             AND t.deleted_at IS NULL
             AND ct.course_id = ?
@@ -2603,14 +2656,25 @@ def drop_user_cohorts_table():
 
 def get_courses_for_tasks(task_ids: List[int]):
     results = execute_db_operation(
-        f"SELECT ct.task_id, c.id, c.name FROM {course_tasks_table_name} ct JOIN {courses_table_name} c ON ct.course_id = c.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})",
+        f"SELECT ct.task_id, c.id, c.name, ct.milestone_id, m.name FROM {course_tasks_table_name} ct JOIN {courses_table_name} c ON ct.course_id = c.id LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})",
         fetch_all=True,
     )
 
     task_courses = [
         {
             "task_id": result[0],
-            "course": {"id": result[1], "name": result[2]},
+            "course": {
+                "id": result[1],
+                "name": result[2],
+                "milestone": (
+                    {
+                        "id": result[3],
+                        "name": result[4],
+                    }
+                    if result[3] is not None
+                    else None
+                ),
+            },
         }
         for result in results
     ]
@@ -2623,36 +2687,79 @@ def get_courses_for_tasks(task_ids: List[int]):
     return task_id_to_courses
 
 
-def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int]]):
+def check_and_insert_missing_course_milestones(
+    course_tasks_to_add: List[Tuple[int, int, int]]
+):
+    # Find unique course, milestone pairs to validate they exist
+    unique_course_milestone_pairs = {
+        (course_id, milestone_id)
+        for _, course_id, milestone_id in course_tasks_to_add
+        if milestone_id is not None
+    }
+
+    if unique_course_milestone_pairs:
+        # Verify all milestone IDs exist for their respective courses
+        milestone_check = execute_db_operation(
+            f"""
+            SELECT course_id, milestone_id FROM {course_milestones_table_name}
+            WHERE (course_id, milestone_id) IN ({','.join(['(?,?)'] * len(unique_course_milestone_pairs))})
+            """,
+            tuple(itertools.chain(*unique_course_milestone_pairs)),
+            fetch_all=True,
+        )
+
+        found_pairs = {(row[0], row[1]) for row in milestone_check}
+        pairs_not_found = unique_course_milestone_pairs - found_pairs
+
+        if pairs_not_found:
+            # For each missing pair, get the max ordering for that course and increment
+            for course_id, milestone_id in pairs_not_found:
+                # Get current max ordering for this course
+                max_ordering = execute_db_operation(
+                    f"SELECT COALESCE(MAX(ordering), -1) FROM {course_milestones_table_name} WHERE course_id = ?",
+                    (course_id,),
+                    fetch_one=True,
+                )[0]
+
+                # Insert with incremented ordering
+                execute_db_operation(
+                    f"INSERT INTO {course_milestones_table_name} (course_id, milestone_id, ordering) VALUES (?, ?, ?)",
+                    (course_id, milestone_id, max_ordering + 1),
+                )
+
+
+def add_tasks_to_courses(course_tasks_to_add: List[Tuple[int, int, int]]):
+    check_and_insert_missing_course_milestones(course_tasks_to_add)
+
     with get_new_db_connection() as conn:
         cursor = conn.cursor()
-        try:
-            # Group tasks by course_id
-            course_to_tasks = defaultdict(list)
-            for task_id, course_id in course_tasks_to_add:
-                course_to_tasks[course_id].append(task_id)
 
-            # For each course, get max ordering and insert tasks with incremented order
-            for course_id, task_ids in course_to_tasks.items():
-                cursor.execute(
-                    f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ?",
-                    (course_id,),
-                )
-                max_ordering = cursor.fetchone()[0]
+        # Group tasks by course_id
+        course_to_tasks = defaultdict(list)
+        for task_id, course_id, milestone_id in course_tasks_to_add:
+            course_to_tasks[course_id].append((task_id, milestone_id))
 
-                # Insert tasks with incremented ordering
-                values_to_insert = []
-                for i, task_id in enumerate(task_ids, start=1):
-                    values_to_insert.append((task_id, course_id, max_ordering + i))
+        # For each course, get max ordering and insert tasks with incremented order
+        for course_id, task_details in course_to_tasks.items():
+            cursor.execute(
+                f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ?",
+                (course_id,),
+            )
+            max_ordering = cursor.fetchone()[0]
 
-                cursor.executemany(
-                    f"INSERT OR IGNORE INTO {course_tasks_table_name} (task_id, course_id, ordering) VALUES (?, ?, ?)",
-                    values_to_insert,
+            # Insert tasks with incremented ordering
+            values_to_insert = []
+            for i, (task_id, milestone_id) in enumerate(task_details, start=1):
+                values_to_insert.append(
+                    (task_id, course_id, max_ordering + i, milestone_id)
                 )
 
-            conn.commit()
-        except Exception as e:
-            raise e
+            cursor.executemany(
+                f"INSERT OR IGNORE INTO {course_tasks_table_name} (task_id, course_id, ordering, milestone_id) VALUES (?, ?, ?, ?)",
+                values_to_insert,
+            )
+
+        conn.commit()
 
 
 def remove_tasks_from_courses(course_tasks_to_remove: List[Tuple[int, int]]):
@@ -2666,6 +2773,13 @@ def update_task_orders(task_orders: List[Tuple[int, int]]):
     execute_many_db_operation(
         f"UPDATE {course_tasks_table_name} SET ordering = ? WHERE id = ?",
         params_list=task_orders,
+    )
+
+
+def update_milestone_orders(milestone_orders: List[Tuple[int, int]]):
+    execute_many_db_operation(
+        f"UPDATE {course_milestones_table_name} SET ordering = ? WHERE id = ?",
+        params_list=milestone_orders,
     )
 
 
@@ -2877,18 +2991,21 @@ def drop_courses_table():
 
 
 def get_tasks_for_course(course_id: int, milestone_id: int = None):
-    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id, t.milestone_id, t.type
-        FROM {course_tasks_table_name} ct 
-        JOIN {tasks_table_name} t ON ct.task_id = t.id 
-        LEFT JOIN {milestones_table_name} m ON t.milestone_id = m.id
-        WHERE ct.course_id = ? AND t.deleted_at IS NULL
+    query = f"""SELECT t.id, t.name, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name, t.verified, t.input_type, t.response_type, t.coding_language, ct.ordering, ct.id as course_task_id, ct.milestone_id, t.type
+        FROM {tasks_table_name} t
+        JOIN {course_tasks_table_name} ct ON ct.task_id = t.id 
+        LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id
+        WHERE t.deleted_at IS NULL
         """
 
-    params = [course_id]
+    params = []
 
     if milestone_id is not None:
-        query += " AND t.milestone_id = ?"
-        params.append(milestone_id)
+        query += f" AND ct.course_id = ? AND ct.milestone_id = ?"
+        params.extend([course_id, milestone_id])
+    else:
+        query += " AND ct.course_id = ?"
+        params.append(course_id)
 
     query += " ORDER BY ct.ordering"
 
@@ -2910,3 +3027,200 @@ def get_tasks_for_course(course_id: int, milestone_id: int = None):
         }
         for task in tasks
     ]
+
+
+def get_milestones_for_course(course_id: int):
+    milestones = execute_db_operation(
+        f"SELECT cm.id, cm.milestone_id, m.name, cm.ordering FROM {course_milestones_table_name} cm JOIN {milestones_table_name} m ON cm.milestone_id = m.id WHERE cm.course_id = ? ORDER BY cm.ordering",
+        (course_id,),
+        fetch_all=True,
+    )
+    return [
+        {
+            "course_milestone_id": milestone[0],
+            "id": milestone[1],
+            "name": milestone[2],
+            "ordering": milestone[3],
+        }
+        for milestone in milestones
+    ]
+
+
+def remove_milestone_from_course(course_id: int, milestone_id: int):
+    execute_db_operation(
+        f"DELETE FROM {course_milestones_table_name} WHERE course_id = ? AND milestone_id = ?",
+        (course_id, milestone_id),
+    )
+    # TODO
+    # also remove all courses marked as that milestone id for that course in course_tasks table
+
+
+def migrate_course_tasks_table():
+    execute_db_operation(
+        f"""CREATE TABLE temp_course_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL,
+            ordering INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            milestone_id INTEGER,
+            UNIQUE(task_id, course_id),
+            FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+            FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
+            FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
+        )""",
+        (),
+    )
+
+    # Copy data from old table to temporary table
+    execute_db_operation(
+        f"""INSERT INTO temp_course_tasks (id, task_id, course_id, ordering, created_at)
+            SELECT id, task_id, course_id, ordering, created_at 
+            FROM {course_tasks_table_name}""",
+        (),
+    )
+
+    # Drop old table
+    execute_db_operation(
+        f"DROP TABLE {course_tasks_table_name}",
+        (),
+    )
+
+    # Rename temporary table to original name
+    execute_db_operation(
+        f"ALTER TABLE temp_course_tasks RENAME TO {course_tasks_table_name}",
+        (),
+    )
+
+    # Recreate indexes
+    execute_db_operation(
+        f"CREATE INDEX idx_course_task_course_id ON {course_tasks_table_name} (course_id)",
+        (),
+    )
+    execute_db_operation(
+        f"CREATE INDEX idx_course_task_task_id ON {course_tasks_table_name} (task_id)",
+        (),
+    )
+    execute_db_operation(
+        f"CREATE INDEX idx_course_task_milestone_id ON {course_tasks_table_name} (milestone_id)",
+        (),
+    )
+
+
+def seed_milestone_to_course_tasks():
+    # Get all tasks with milestone IDs
+    tasks = execute_db_operation(
+        f"SELECT id, milestone_id FROM {tasks_table_name} WHERE milestone_id IS NOT NULL",
+        fetch_all=True,
+    )
+
+    # For each task, get its courses and update course_tasks table
+    with get_new_db_connection() as conn:
+        cursor = conn.cursor()
+        for task_id, milestone_id in tasks:
+            # Get all courses this task is part of
+            cursor.execute(
+                f"SELECT id FROM {course_tasks_table_name} WHERE task_id = ?",
+                (task_id,),
+            )
+            course_task_entries = cursor.fetchall()
+
+            # Update milestone_id for each course_task entry
+            for course_task in course_task_entries:
+                cursor.execute(
+                    f"UPDATE {course_tasks_table_name} SET milestone_id = ? WHERE id = ?",
+                    (milestone_id, course_task[0]),
+                )
+
+        conn.commit()
+
+
+def seed_course_milestones_table():
+    # Get unique course_id and milestone_id combinations from course_tasks table
+    course_milestones = execute_db_operation(
+        f"""SELECT DISTINCT course_id, milestone_id 
+            FROM {course_tasks_table_name} 
+            WHERE milestone_id IS NOT NULL""",
+        fetch_all=True,
+    )
+
+    # Insert each unique combination into course_milestones table
+    with get_new_db_connection() as conn:
+        cursor = conn.cursor()
+        for course_id, milestone_id in course_milestones:
+            # Get max ordering for this course
+            cursor.execute(
+                f"""SELECT COALESCE(MAX(ordering), -1) 
+                    FROM {course_milestones_table_name}
+                    WHERE course_id = ?""",
+                (course_id,),
+            )
+            max_ordering = cursor.fetchone()[0]
+
+            # Insert with incremented ordering
+            cursor.execute(
+                f"""INSERT INTO {course_milestones_table_name}
+                    (course_id, milestone_id, ordering)
+                    VALUES (?, ?, ?)""",
+                (course_id, milestone_id, max_ordering + 1),
+            )
+
+        conn.commit()
+
+
+def migrate_tasks_table():
+    # First, remove the foreign key constraint and milestone_id column
+    execute_db_operation(
+        f"DROP TABLE IF EXISTS temp_tasks",
+        (),
+    )
+
+    execute_db_operation(
+        f"""CREATE TABLE temp_tasks AS 
+            SELECT id, name, description, answer, input_type, coding_language, 
+            generation_model, verified, timestamp, org_id, response_type, context, 
+            deleted_at, type
+            FROM {tasks_table_name}""",
+        (),
+    )
+
+    execute_db_operation(
+        f"DROP TABLE {tasks_table_name}",
+        (),
+    )
+
+    execute_db_operation(
+        f"""CREATE TABLE {tasks_table_name} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            answer TEXT,
+            input_type TEXT,
+            coding_language TEXT,
+            generation_model TEXT,
+            verified BOOLEAN NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            org_id INTEGER NOT NULL,
+            response_type TEXT,
+            context TEXT,
+            deleted_at DATETIME,
+            type TEXT,
+            FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+        )""",
+        (),
+    )
+
+    execute_db_operation(
+        f"INSERT INTO {tasks_table_name} SELECT * FROM temp_tasks",
+        (),
+    )
+
+    execute_db_operation(
+        f"DROP TABLE temp_tasks",
+        (),
+    )
+
+    execute_db_operation(
+        f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)",
+        (),
+    )

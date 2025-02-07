@@ -41,8 +41,6 @@ class Task(BaseModel):
     generation_model: Optional[str]
     verified: bool
     timestamp: str
-    milestone_id: Optional[int]
-    milestone_name: Optional[str]
 
 
 Streaks = List[Tuple]

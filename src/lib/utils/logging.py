@@ -22,7 +22,7 @@ def setup_logging():
     file_handler.setFormatter(formatter)
 
     # Add the handlers to the logger
-    logger.addHandler(console_handler)
+    # logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
     return logger

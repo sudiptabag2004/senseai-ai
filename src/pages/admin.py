@@ -33,6 +33,7 @@ from lib.llm import (
 )
 from lib.ui import show_singular_or_plural
 from lib.config import (
+    uncategorized_milestone_name,
     group_role_learner,
     group_role_mentor,
     all_ai_response_types,
@@ -52,6 +53,7 @@ from lib.cache import (
     clear_cache_for_mentor_groups,
 )
 from lib.db import (
+    update_milestone_orders,
     get_all_tasks_for_org_or_course,
     store_task as store_task_to_db,
     delete_tasks as delete_tasks_from_db,
@@ -112,6 +114,7 @@ from lib.db import (
     get_cohort_course_metrics_for_milestone,
     get_cohort_course_attempt_data_for_milestone,
     get_user_chat_history_for_tasks,
+    get_milestones_for_course,
 )
 from lib.utils import generate_random_color
 from lib.utils.concurrency import async_batch_gather
@@ -260,6 +263,10 @@ def reset_scoring_criteria():
     st.session_state.updated_scoring_criteria = None
 
 
+def reset_selected_task_courses():
+    st.session_state.selected_task_courses = []
+
+
 if "scoring_criteria" not in st.session_state:
     reset_scoring_criteria()
 
@@ -296,6 +303,7 @@ def reset_task_form():
     reset_ai_running()
     reset_tests()
     reset_scoring_criteria()
+    reset_selected_task_courses()
 
 
 def set_task_type_vars(task_type: str):
@@ -437,11 +445,6 @@ def add_new_task():
         get_model_version(),
         True,
         get_task_tests(),
-        (
-            st.session_state.task_milestone["id"]
-            if st.session_state.task_milestone
-            else None
-        ),
         st.session_state.org_id,
         get_task_context(),
         st.session_state["task_type"]["value"],
@@ -450,7 +453,11 @@ def add_new_task():
     if st.session_state.selected_task_courses:
         add_tasks_to_courses(
             [
-                [task_id, course["id"]]
+                [
+                    task_id,
+                    course["id"],
+                    course["milestone"]["id"] if course["milestone"] else None,
+                ]
                 for course in st.session_state.selected_task_courses
             ]
         )
@@ -467,31 +474,36 @@ def update_task_courses(task_details: Dict):
 
     if st.session_state.selected_task_courses != task_details["courses"]:
         # Get current course IDs for this task
-        current_course_ids = [course["id"] for course in task_details["courses"]]
+        current_course_ids = [
+            (course["id"], course["milestone"]["id"] if course["milestone"] else None)
+            for course in task_details["courses"]
+        ]
         # Get selected course IDs
         selected_course_ids = [
-            course["id"] for course in st.session_state.selected_task_courses
+            (course["id"], course["milestone"]["id"] if course["milestone"] else None)
+            for course in st.session_state.selected_task_courses
+        ]
+
+        courses_to_remove = [
+            [task_id, course_id]
+            for course_id, milestone_id in current_course_ids
+            if (course_id, milestone_id) not in selected_course_ids
         ]
 
         # Find courses to add and remove
         courses_to_add = [
-            [task_id, course_id]
-            for course_id in selected_course_ids
-            if course_id not in current_course_ids
+            [task_id, course_id, milestone_id]
+            for course_id, milestone_id in selected_course_ids
+            if (course_id, milestone_id) not in current_course_ids
         ]
-        courses_to_remove = [
-            [task_id, course_id]
-            for course_id in current_course_ids
-            if course_id not in selected_course_ids
-        ]
-
-        # Add task to new courses
-        if courses_to_add:
-            add_tasks_to_courses(courses_to_add)
 
         # Remove task from unselected courses
         if courses_to_remove:
             remove_tasks_from_courses(courses_to_remove)
+
+        # Add task to new courses
+        if courses_to_add:
+            add_tasks_to_courses(courses_to_add)
 
 
 def is_scoring_criteria_changed(new_task_scoring_criteria, old_task_scoring_criteria):
@@ -550,11 +562,6 @@ def edit_task(task_details):
         st.session_state.task_input_type,
         st.session_state.task_ai_response_type,
         st.session_state.coding_languages,
-        (
-            st.session_state.task_milestone["id"]
-            if st.session_state.task_milestone
-            else None
-        ),
         get_task_context(),
     )
 
@@ -713,17 +720,6 @@ def context_addition_form():
         )
 
 
-def milestone_selector():
-    return st.selectbox(
-        "Milestone",
-        st.session_state.milestones,
-        key="task_milestone",
-        format_func=lambda row: row["name"],
-        index=None,
-        help="If you don't see the milestone you want, you can create a new one from the `Milestones` tab",
-    )
-
-
 def cohort_selector(key_suffix: str, default=None):
     return st.multiselect(
         "Cohorts",
@@ -744,6 +740,85 @@ def course_selector(key_prefix: str, default=None):
         format_func=lambda row: row["name"],
         help="If you don't see the course you want, you can create a new one from the `Courses` tab",
     )
+
+
+def add_task_course(task_courses):
+    if not st.session_state.new_task_course:
+        return
+
+    task_courses.append(
+        {
+            "id": st.session_state.new_task_course["id"],
+            "name": st.session_state.new_task_course["name"],
+            "milestone": st.session_state.new_task_milestone,
+        }
+    )
+
+
+def delete_task_course(task_courses, index_to_delete: int):
+    task_courses.pop(index_to_delete)
+
+
+def show_task_course_addition_form(
+    task_courses, show_header: bool = True, show_border: bool = True
+):
+    if show_header:
+        st.subheader("Courses")
+
+    all_possible_courses = [
+        course
+        for course in st.session_state.courses
+        if course["id"] not in [task_course["id"] for task_course in task_courses]
+    ]
+
+    for index, task_course in enumerate(task_courses):
+        with st.expander(
+            task_course["name"],
+        ):
+            cols = st.columns([1, 0.2])
+
+            cols[0].text_input(
+                "Milestone",
+                value=(
+                    task_course["milestone"]["name"] if task_course["milestone"] else ""
+                ),
+                key=f"task_milestone_{index}",
+                disabled=True,
+            )
+
+            cols[-1].container(height=10, border=False)
+            cols[-1].button(
+                "",
+                icon="🗑️",
+                key=f"delete_task_course_{index}",
+                on_click=delete_task_course,
+                args=(task_courses, index),
+                help="Delete",
+                use_container_width=True,
+            )
+
+    with st.form("add_task_course", border=show_border, clear_on_submit=True):
+        cols = st.columns(2)
+        cols[0].selectbox(
+            "Add task to course",
+            all_possible_courses,
+            format_func=lambda row: row["name"],
+            key=f"new_task_course",
+            index=None,
+        )
+        cols[1].selectbox(
+            "Assign to milestone",
+            st.session_state.milestones,
+            format_func=lambda row: row["name"],
+            key=f"new_task_milestone",
+            index=None,
+        )
+        st.form_submit_button(
+            "Add to course",
+            use_container_width=True,
+            on_click=add_task_course,
+            args=(task_courses,),
+        )
 
 
 def task_input_type_selector():
@@ -1038,12 +1113,7 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
         help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
     )
 
-    cols = st.columns(2)
-    with cols[0]:
-        milestone_selector()
-
-    with cols[1]:
-        course_selector("task")
+    show_task_course_addition_form(st.session_state.selected_task_courses)
 
     st.session_state.task_answer = task_answer
 
@@ -1192,11 +1262,6 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
             model["version"],
             True,
             [],
-            (
-                st.session_state.task_milestone["id"]
-                if st.session_state.task_milestone is not None
-                else None
-            ),
             st.session_state.org_id,
             context,
             st.session_state.task_type["value"],
@@ -1207,7 +1272,14 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
         course_tasks_to_add = list(
             itertools.chain(
                 *[
-                    [(task_id, course["id"]) for task_id in new_task_ids]
+                    [
+                        (
+                            task_id,
+                            course["id"],
+                            course["milestone"]["id"] if course["milestone"] else None,
+                        )
+                        for task_id in new_task_ids
+                    ]
                     for course in st.session_state.selected_task_courses
                 ]
             )
@@ -1227,38 +1299,22 @@ def complete_bulk_update_tasks():
     st.rerun()
 
 
-def show_bulk_update_milestone_tab(all_tasks):
-    with st.form("bulk_update_tasks_milestone_form", border=False):
-        milestone_selector()
+def update_task_courses_bulk(all_tasks):
+    for task in all_tasks:
+        update_task_courses(task)
 
-        if st.form_submit_button(
-            "Update all tasks", type="primary", use_container_width=True
-        ):
-            task_ids = [task["id"] for task in all_tasks]
-            update_column_for_task_ids(
-                task_ids, "milestone_id", st.session_state.task_milestone["id"]
-            )
-
-            complete_bulk_update_tasks()
-
-
-def show_bulk_update_courses_tab(all_tasks):
-    with st.form("bulk_update_tasks_courses_form", border=False):
-        course_selector("task")
-
-        if st.form_submit_button(
-            "Update all tasks", type="primary", use_container_width=True
-        ):
-            for task in all_tasks:
-                update_task_courses(task)
-
-            complete_bulk_update_tasks()
+    complete_bulk_update_tasks()
 
 
 def show_bulk_update_scoring_criteria_tab(all_tasks):
     show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
 
-    if st.button("Update all tasks", type="primary", use_container_width=True):
+    if st.button(
+        "Update all tasks",
+        type="primary",
+        use_container_width=True,
+        key="update_bulk_scoring_criteria",
+    ):
         for task in all_tasks:
             update_task_scoring_criteria(task)
 
@@ -1272,7 +1328,7 @@ def show_bulk_edit_tasks_form(all_tasks):
         set([task["response_type"] for task in all_tasks])
     )
 
-    update_type_tabs = ["Milestone", "Courses"]
+    update_type_tabs = ["Courses"]
 
     if (
         len(unique_task_response_types) == 1
@@ -1284,13 +1340,19 @@ def show_bulk_edit_tasks_form(all_tasks):
     tabs = st.tabs(update_type_tabs)
 
     with tabs[0]:
-        show_bulk_update_milestone_tab(all_tasks)
+        show_task_course_addition_form(
+            st.session_state.selected_task_courses, show_header=False, show_border=False
+        )
 
-    with tabs[1]:
-        show_bulk_update_courses_tab(all_tasks)
+        if st.button(
+            "Update all tasks",
+            type="primary",
+            use_container_width=True,
+        ):
+            update_task_courses_bulk(all_tasks)
 
-    if len(tabs) == 3:
-        with tabs[2]:
+    if len(tabs) == 2:
+        with tabs[-1]:
             show_bulk_update_scoring_criteria_tab(all_tasks)
 
 
@@ -1326,12 +1388,7 @@ def show_bulk_upload_tasks_form():
             show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
             st.divider()
 
-    cols = st.columns(2)
-    with cols[0]:
-        milestone_selector()
-
-    with cols[1]:
-        course_selector("task", default=None)
+    show_task_course_addition_form(st.session_state.selected_task_courses)
 
     file_uploader_label = "Choose a CSV file with the columns:\n\n`Name`, `Description`, `Tags` (Optional)"
     is_answer_needed = False
@@ -1558,17 +1615,6 @@ if st.session_state.selected_section_index == 0:
         st.session_state.task_has_context = bool(task_details["context"])
         st.session_state.task_context = task_details["context"]
 
-        if task_details["milestone_id"]:
-            all_milestone_ids = [
-                milestone["id"] for milestone in st.session_state.milestones
-            ]
-            selected_milestone_index = all_milestone_ids.index(
-                task_details["milestone_id"]
-            )
-            st.session_state["task_milestone"] = st.session_state.milestones[
-                selected_milestone_index
-            ]
-
         all_tag_ids = [tag["id"] for tag in st.session_state.tags]
         task_tag_ids = [tag["id"] for tag in task_details["tags"]]
         selected_tag_indices = [
@@ -1578,16 +1624,7 @@ if st.session_state.selected_section_index == 0:
             st.session_state.tags[index] for index in selected_tag_indices
         ]
 
-        all_course_ids = [course["id"] for course in st.session_state.courses]
-        task_course_ids = [course["id"] for course in task_details["courses"]]
-        selected_course_indices = [
-            index
-            for index, course_id in enumerate(all_course_ids)
-            if course_id in task_course_ids
-        ]
-        st.session_state["selected_task_courses"] = [
-            st.session_state.courses[index] for index in selected_course_indices
-        ]
+        st.session_state["selected_task_courses"] = deepcopy(task_details["courses"])
 
         if task_details["type"] == "reading_material":
             return
@@ -1672,50 +1709,37 @@ if st.session_state.selected_section_index == 0:
         #         if len(all_task_coding_languages) == 1:
         #             st.session_state.coding_languages = all_task_coding_languages[0]
 
-        all_task_milestone_ids = [task["milestone_id"] for task in all_tasks]
-        all_task_milestone_ids = list(set(all_task_milestone_ids))
-        if len(all_task_milestone_ids) == 1 and all_task_milestone_ids[0]:
-            all_milestone_ids = [
-                milestone["id"] for milestone in st.session_state.milestones
-            ]
-            selected_milestone_index = all_milestone_ids.index(
-                all_task_milestone_ids[0]
-            )
-            st.session_state.task_milestone = st.session_state.milestones[
-                selected_milestone_index
-            ]
+        # all_task_course_ids = [
+        #     [course["id"] for course in task["courses"]] for task in all_tasks
+        # ]
 
-        all_task_course_ids = [
-            [course["id"] for course in task["courses"]] for task in all_tasks
-        ]
+        # has_same_courses = False
+        # try:
+        #     all_task_course_ids = np.unique(all_task_course_ids, axis=0)
+        #     if len(all_task_course_ids) == 1:
+        #         has_same_courses = True
+        # except:
+        #     # list of lists is not convertible to numpy array
+        #     # as all the sublists don't have the same length
+        #     pass
 
-        has_same_courses = False
-        try:
-            all_task_course_ids = np.unique(all_task_course_ids, axis=0)
-            if len(all_task_course_ids) == 1:
-                has_same_courses = True
-        except:
-            # list of lists is not convertible to numpy array
-            # as all the sublists don't have the same length
-            pass
-
-        if has_same_courses:
-            default_course_ids = all_task_course_ids[0]
-            all_course_ids = [course["id"] for course in st.session_state.courses]
-            selected_course_indices = [
-                index
-                for index, course_id in enumerate(all_course_ids)
-                if course_id in default_course_ids
-            ]
-            st.session_state["selected_task_courses"] = [
-                st.session_state.courses[index] for index in selected_course_indices
-            ]
+        # if has_same_courses:
+        #     default_course_ids = all_task_course_ids[0]
+        #     all_course_ids = [course["id"] for course in st.session_state.courses]
+        #     selected_course_indices = [
+        #         index
+        #         for index, course_id in enumerate(all_course_ids)
+        #         if course_id in default_course_ids
+        #     ]
+        #     st.session_state["selected_task_courses"] = [
+        #         st.session_state.courses[index] for index in selected_course_indices
+        #     ]
 
     def show_tasks_tab():
         refresh_tasks()
 
         if not st.session_state.tasks:
-            show_empty_tasks_placeholder()
+            show_empty_tasks_placeholder(align="left")
             st.container(height=5, border=False)
 
         if is_empty_openai_api_key():
@@ -1789,17 +1813,23 @@ if st.session_state.selected_section_index == 0:
             filtered_type_values = [x["value"] for x in filtered_types]
             df = df[df["type"].apply(lambda x: x in filtered_type_values)]
 
-        filtered_milestones = cols[3].multiselect(
-            "Filter by milestone",
-            st.session_state.milestones,
+        task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
+        df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
+        df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
+
+        filtered_courses = cols[3].multiselect(
+            "Filter by course",
+            st.session_state.courses,
             format_func=lambda x: x["name"],
         )
 
-        if filtered_milestones:
-            filtered_milestone_ids = [
-                milestone["id"] for milestone in filtered_milestones
+        if filtered_courses:
+            filtered_course_ids = [course["id"] for course in filtered_courses]
+            df = df[
+                df["courses"].apply(
+                    lambda x: any(course["id"] in filtered_course_ids for course in x)
+                )
             ]
-            df = df[df["milestone_id"].apply(lambda x: x in filtered_milestone_ids)]
 
         if not len(df):
             st.info("No tasks matching the filters")
@@ -1818,10 +1848,6 @@ if st.session_state.selected_section_index == 0:
             "input_type": st.column_config.TextColumn(label="User input type"),
         }
 
-        task_id_to_courses = get_courses_for_tasks(df["id"].tolist())
-        df["courses"] = df["id"].apply(lambda x: task_id_to_courses[x])
-
-        df["Courses"] = df["courses"].apply(lambda x: [course["name"] for course in x])
         df["Tags"] = df["tags"].apply(lambda x: [tag["name"] for tag in x])
         df["Task Type"] = df["type"].apply(lambda x: task_type_to_label[x])
 
@@ -2302,7 +2328,7 @@ if st.session_state.selected_section_index == 0:
         )
 
         def _show_courses_tab():
-            if st.button("Add/Remove Courses"):
+            if st.button("Add/Remove Courses", icon="➕"):
                 show_update_cohort_courses_dialog(
                     selected_cohort["id"], selected_cohort["courses"]
                 )
@@ -2320,8 +2346,8 @@ if st.session_state.selected_section_index == 0:
                 )
 
         def _show_users_tab(users: List[Dict], key: str):
-            action_cols = st.columns([1, 7])
-            if action_cols[0].button("Add Members", key=f"add_member_{key}"):
+            action_cols = st.columns([2, 7])
+            if action_cols[0].button("Add Members", key=f"add_member_{key}", icon="➕"):
                 show_add_members_to_cohort_dialog(
                     selected_cohort["id"],
                     cohort_info,
@@ -2369,7 +2395,7 @@ if st.session_state.selected_section_index == 0:
             _show_users_tab(mentors, "mentors")
 
         def show_groups_tab(cohort_info):
-            if st.button("Create Group"):
+            if st.button("Create Group", icon="👥"):
                 show_create_group_dialog(selected_cohort["id"], cohort_info)
 
             if not cohort_info["groups"]:
@@ -2656,55 +2682,6 @@ if st.session_state.selected_section_index == 0:
         if cancel_col.button("Cancel"):
             st.rerun()
 
-    def update_task_order(current_order, updated_order, milestone_tasks):
-        selected_task = milestone_tasks[current_order]
-
-        # task ordering in milestones are likely to not be in a sequence
-        # so, to update the ordering, instead of adding/subtracting 1 from the ordering of all tasks,
-        # for each task between the current and updated order, we assign the ordering values
-        if current_order < updated_order:
-            task_indices_to_update = range(current_order + 1, updated_order + 1)
-            update_value = -1
-        else:
-            task_indices_to_update = range(updated_order, current_order)
-            update_value = 1
-
-        task_orders_to_update = [
-            (
-                milestone_tasks[task_index + update_value]["ordering"],
-                milestone_tasks[task_index]["course_task_id"],
-            )
-            for task_index in task_indices_to_update
-        ]
-        task_orders_to_update.append(
-            (
-                milestone_tasks[updated_order]["ordering"],
-                selected_task["course_task_id"],
-            )
-        )
-        update_task_orders_in_db(task_orders_to_update)
-
-    @st.dialog("Update Task Order")
-    def show_update_task_order_dialog(current_order: int, milestone_tasks: List[Dict]):
-        st.write(f"Current Order: `{current_order + 1}`")
-
-        with st.form("update_task_order_form", border=False):
-            updated_order = st.selectbox(
-                "Enter new order",
-                options=list(range(1, len(milestone_tasks) + 1)),
-                index=current_order,
-            )
-            if st.form_submit_button(
-                "Update", type="primary", use_container_width=True
-            ):
-                if updated_order == current_order + 1:
-                    st.error("No changes made")
-                    return
-
-                update_task_order(current_order, updated_order - 1, milestone_tasks)
-                set_toast("Task order updated successfully!")
-                st.rerun()
-
     def update_course_name(course, new_name):
         update_course_name_in_db(course["id"], new_name)
         refresh_courses()
@@ -2745,29 +2722,97 @@ if st.session_state.selected_section_index == 0:
             if st.button("Delete", icon="🗑️", key="delete_course"):
                 show_delete_course_confirmation_dialog(selected_course)
 
-        tab_names = ["Tasks", "Cohorts Assigned to"]
+        tab_names = ["Milestones", "Tasks", "Cohorts Assigned to"]
 
         selected_tab = st.segmented_control(
             "Course Tabs", tab_names, label_visibility="hidden", default=tab_names[0]
         )
 
+        def update_task_order(current_order, updated_order, milestone_tasks):
+            selected_task = milestone_tasks[current_order]
+
+            # task ordering in milestones are likely to not be in a sequence
+            # so, to update the ordering, instead of adding/subtracting 1 from the ordering of all tasks,
+            # for each task between the current and updated order, we assign the ordering values
+            if current_order < updated_order:
+                task_indices_to_update = range(current_order + 1, updated_order + 1)
+                update_value = -1
+            else:
+                task_indices_to_update = range(updated_order, current_order)
+                update_value = 1
+
+            task_orders_to_update = [
+                (
+                    milestone_tasks[task_index + update_value]["ordering"],
+                    milestone_tasks[task_index]["course_task_id"],
+                )
+                for task_index in task_indices_to_update
+            ]
+            task_orders_to_update.append(
+                (
+                    milestone_tasks[updated_order]["ordering"],
+                    selected_task["course_task_id"],
+                )
+            )
+            update_task_orders_in_db(task_orders_to_update)
+
+        @st.dialog("Update Task Order")
+        def show_update_task_order_dialog(
+            current_order: int, milestone_tasks: List[Dict]
+        ):
+            st.write(f"Current Order: `{current_order + 1}`")
+
+            with st.form("update_task_order_form", border=False):
+                updated_order = st.selectbox(
+                    "Enter new order",
+                    options=list(range(1, len(milestone_tasks) + 1)),
+                    index=current_order,
+                )
+                if st.form_submit_button(
+                    "Update", type="primary", use_container_width=True
+                ):
+                    if updated_order == current_order + 1:
+                        st.error("No changes made")
+                        return
+
+                    update_task_order(current_order, updated_order - 1, milestone_tasks)
+                    set_toast("Task order updated successfully!")
+                    st.rerun()
+
         def _show_tasks_tab():
             if not selected_course["tasks"]:
-                st.info("This course has no tasks yet")
+                st.info(
+                    "This course has no tasks yet. Follow the steps [here](https://docs.sensai.hyperverge.org/key_concepts/courses#add-tasks-to-a-course) to add tasks to the course!"
+                )
                 return
+
+            has_uncategorized_tasks = any(
+                task["milestone_id"] is None for task in selected_course["tasks"]
+            )
 
             task_tab_cols = st.columns([1, 2])
             with task_tab_cols[0]:
                 milestone = st.selectbox(
                     "Filter by milestone",
-                    set([task["milestone"] for task in selected_course["tasks"]]),
+                    (
+                        selected_course["milestones"]
+                        + [
+                            {
+                                "id": None,
+                                "name": uncategorized_milestone_name,
+                            }
+                        ]
+                        if has_uncategorized_tasks
+                        else selected_course["milestones"]
+                    ),
+                    format_func=lambda x: x["name"],
                     key="course_task_milestone_filter",
                 )
 
             filtered_tasks = [
                 task
                 for task in selected_course["tasks"]
-                if task["milestone"] == milestone
+                if task["milestone_id"] == milestone["id"]
             ]
 
             filtered_df = pd.DataFrame(
@@ -2821,13 +2866,99 @@ if st.session_state.selected_section_index == 0:
             if len(event.selection["rows"]):
                 index = event.selection["rows"][0]
                 action_container.button(
-                    "Update order",
+                    "Update Order",
+                    icon="🔄",
                     on_click=show_update_task_order_dialog,
                     args=(index, filtered_tasks),
                 )
 
+        def update_milestone_order(current_order, updated_order, course_milestones):
+            selected_milestone = course_milestones[current_order]
+
+            if current_order < updated_order:
+                milestone_indices_to_update = range(
+                    current_order + 1, updated_order + 1
+                )
+                update_value = -1
+            else:
+                milestone_indices_to_update = range(updated_order, current_order)
+                update_value = 1
+
+            milestone_orders_to_update = [
+                (
+                    course_milestones[milestone_index + update_value]["ordering"],
+                    course_milestones[milestone_index]["course_milestone_id"],
+                )
+                for milestone_index in milestone_indices_to_update
+            ]
+            milestone_orders_to_update.append(
+                (
+                    course_milestones[updated_order]["ordering"],
+                    selected_milestone["course_milestone_id"],
+                )
+            )
+            update_milestone_orders(milestone_orders_to_update)
+
+        @st.dialog("Update Milestone Order")
+        def show_update_milestone_order_dialog(
+            current_order: int, course_milestones: List[Dict]
+        ):
+            st.write(f"Current Order: `{current_order + 1}`")
+
+            with st.form("update_milestone_order_form", border=False):
+                updated_order = st.selectbox(
+                    "Enter new order",
+                    options=list(range(1, len(course_milestones) + 1)),
+                    index=current_order,
+                )
+                if st.form_submit_button(
+                    "Update", type="primary", use_container_width=True
+                ):
+                    if updated_order == current_order + 1:
+                        st.error("No changes made")
+                        return
+
+                    update_milestone_order(
+                        current_order, updated_order - 1, course_milestones
+                    )
+                    set_toast("Milestone order updated successfully!")
+                    st.rerun()
+
+        def _show_milestones_tab():
+            if not selected_course["milestones"]:
+                st.info(
+                    "This course has no milestones yet. When you assign milestones to tasks while adding them to the course, the milestones will be displayed here!"
+                )
+                return
+
+            df = pd.DataFrame(selected_course["milestones"])
+
+            action_container = st.container()
+
+            event = st.dataframe(
+                df,
+                on_select="rerun",
+                selection_mode="single-row",
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "id": None,
+                    "name": st.column_config.TextColumn(width="large"),
+                },
+                column_order=["name"],
+            )
+
+            if len(event.selection["rows"]):
+                index = event.selection["rows"][0]
+                action_container.button(
+                    "Update Order",
+                    icon="🔄",
+                    on_click=show_update_milestone_order_dialog,
+                    args=(index, selected_course["milestones"]),
+                )
+
         def _show_assigned_cohorts_tab():
-            if st.button("Add/Remove Cohorts", key="update_course_cohorts"):
+            if st.button("Add/Remove Cohorts", icon="➕", key="update_course_cohorts"):
                 show_update_course_cohorts_dialog(
                     selected_course["id"], selected_course["cohorts"]
                 )
@@ -2844,10 +2975,13 @@ if st.session_state.selected_section_index == 0:
                     label_visibility="collapsed",
                 )
 
-        if selected_tab == tab_names[0]:
+        if selected_tab == tab_names[1]:
             _show_tasks_tab()
 
-        if selected_tab == tab_names[1]:
+        if selected_tab == tab_names[0]:
+            _show_milestones_tab()
+
+        if selected_tab == tab_names[2]:
             _show_assigned_cohorts_tab()
 
     def show_courses_tab():
@@ -2894,6 +3028,7 @@ if st.session_state.selected_section_index == 0:
             return
 
         selected_course["tasks"] = get_tasks_for_course(selected_course["id"])
+        selected_course["milestones"] = get_milestones_for_course(selected_course["id"])
         selected_course["cohorts"] = get_cohorts_for_course(selected_course["id"])
 
         show_course_overview(selected_course)

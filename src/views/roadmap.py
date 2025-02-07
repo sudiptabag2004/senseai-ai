@@ -14,7 +14,7 @@ from components.placeholder import show_empty_tasks_placeholder
 
 def show_empty_error_message(role: str):
     if role == "admin":
-        show_empty_tasks_placeholder(align="left")
+        show_empty_tasks_placeholder()
     else:
         error_message = "No tasks added yet"
         st.error(error_message)
@@ -165,12 +165,13 @@ def update_task_view():
 
 
 def show_roadmap(cohort_id: int, cohort_courses: List[Dict], role: str):
-    st.toggle(
-        "Show List View",
-        key="show_list_view",
-        value=st.session_state.view == "list",
-        on_change=update_task_view,
-    )
+    # st.toggle(
+    #     "Show List View",
+    #     key="show_list_view",
+    #     value=st.session_state.view == "list",
+    #     on_change=update_task_view,
+    # )
+    st.session_state.show_list_view = False
 
     show_roadmap_by_course(
         user_id=st.session_state.user["id"],
