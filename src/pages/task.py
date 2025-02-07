@@ -21,7 +21,7 @@ from components.buttons import back_to_home_button
 from auth import login_or_signup_user, unauthorized_redirect_to_home
 from lib.config import uncategorized_milestone_name
 from lib.db import (
-    get_task_by_id,
+    get_course_task,
     store_message as store_message_to_db,
     get_task_chat_history_for_user,
     get_user_streak,
@@ -108,6 +108,8 @@ cohort_id = int(st.query_params["cohort"])
 cohort = get_cohort_by_id(cohort_id)
 st.session_state.org = get_org_by_id(cohort["org_id"])
 
+course_id = int(st.query_params["course"])
+
 login_or_signup_user()
 
 if not is_user_in_cohort(st.session_state.user["id"], cohort_id):
@@ -125,7 +127,7 @@ except ValueError:
     st.error("Task index must be an integer")
     st.stop()
 
-task = get_task_by_id(task_id)
+task = get_course_task(task_id, course_id)
 
 
 if not task:
@@ -162,7 +164,6 @@ if (
     not st.session_state.is_review_mode
     and task["milestone_name"] != uncategorized_milestone_name
 ):
-    course_id = int(st.query_params["course"])
     display_milestone_tasks_in_sidebar(task_user_id, course_id, cohort_id, task)
 
 if "chat_history" not in st.session_state:
@@ -447,6 +448,7 @@ def get_ai_feedback_chat(
                 st.session_state.org["openai_free_trial"],
             )
         except Exception:
+            traceback.print_exc()
             st.markdown(
                 "<p style='color: red;'>Error fetching AI feedback. Please reload the page and try again.</p>",
                 unsafe_allow_html=True,

@@ -257,9 +257,9 @@ def show_empty_courses_placeholder():
         )
 
 
-def show_empty_tasks_placeholder(align: Literal["center", "left"] = "center"):
-    if align == "center":
-        _, container, _ = st.columns([1, 2, 1])
+def show_empty_tasks_placeholder(align: Literal["left"] | None = None):
+    if align == "left":
+        container, _, _ = st.columns([1, 1, 1])
     else:
         container = st.container()
 

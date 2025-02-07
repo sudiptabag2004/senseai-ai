@@ -120,7 +120,7 @@ def mentor_view(selected_cohort: Dict):
         ],
     )
 
-    df_actions = st.container(border=True)
+    df_actions = st.container()
 
     event = st.dataframe(
         df,
