@@ -24,7 +24,7 @@ def menu_header():
     st.sidebar.markdown(
         f"""
         <p style='margin-top: -25px; margin-bottom: 15px; color: {subtitle_color}'>
-        Your personal AI coach
+        Give every learner a personal AI coach
         </p>
         """,
         unsafe_allow_html=True,

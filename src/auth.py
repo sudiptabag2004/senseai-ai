@@ -52,32 +52,72 @@ def redirect_if_not_logged_in():
 
 
 def login():
-    cols = st.columns([2, 3, 1])
-
     if st.session_state.theme["base"] == "dark":
         logo_path = "./lib/assets/dark_logo.svg"
         subtitle_color = "#fff"
+        background_color = "#090D0E"
+        feature_images_folder = "dark"
     else:
         logo_path = "./lib/assets/light_logo.svg"
         subtitle_color = "#1E2F4D"
+        background_color = "#FFFFFF"
+        feature_images_folder = "light"
 
-    cols[1].image(logo_path, width=400)
-
-    cols[1].markdown(
+    st.markdown(
         f"""
-        <p style='margin-top: 20px; margin-left: 40px; font-size: 2rem; color: {subtitle_color}'>
-        Your personal AI coach
+        <style>
+        .stApp {{
+            background-color: {background_color};
+        }}
+        .stAppHeader {{
+            background-color: {background_color};
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns([0.9, 0.1, 2, 0.1, 0.9])
+
+    cols[2].image(f"./lib/assets/features/{feature_images_folder}/1.png")
+    cols[2].container(height=20, border=False)
+
+    cols[0].container(height=100, border=False)
+    cols[0].image(f"./lib/assets/features/{feature_images_folder}/2_1.png")
+    cols[0].image(f"./lib/assets/features/{feature_images_folder}/2_2.png")
+
+    sub_cols = cols[2].columns([1, 2, 1])
+    sub_cols[1].image(logo_path)
+
+    sub_cols = cols[2].columns([1, 3.5, 1])
+    sub_cols[1].markdown(
+        f"""
+        <p style='margin-top: 10px; font-size: 1.5rem; color: {subtitle_color}'>
+        Give every learner a personal AI coach
         </p>
         """,
         unsafe_allow_html=True,
     )
 
-    cols[1].container(height=20, border=False)
+    cols[2].container(height=20, border=False)
 
-    sub_cols = cols[1].columns([0.6, 1])
-    google_button = sub_cols[0].button("Sign up or Sign in with Google", type="primary")
+    sub_cols = cols[2].columns(2)
+    google_button = sub_cols[0].button(
+        "Sign up or Sign in with Google", type="primary", use_container_width=True
+    )
 
     if google_button:
         st.experimental_user.login(provider="google")
 
-    sub_cols[-1].link_button("See Documentation", "https://docs.sensai.hyperverge.org/")
+    sub_cols[-1].link_button(
+        "See Documentation",
+        "https://docs.sensai.hyperverge.org/",
+        use_container_width=True,
+    )
+
+    cols[-1].container(height=100, border=False)
+    cols[-1].image(f"./lib/assets/features/{feature_images_folder}/3_1.png")
+    cols[-1].image(f"./lib/assets/features/{feature_images_folder}/3_2.png")
+
+    cols[2].container(height=20, border=False)
+    cols[2].image(f"./lib/assets/features/{feature_images_folder}/4.png")
