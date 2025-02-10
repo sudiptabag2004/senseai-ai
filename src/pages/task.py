@@ -786,12 +786,23 @@ if task["type"] == "question":
 
 nav_cols = st.columns([1, 5, 1])
 
+
+def truncate_task_name(task_name: str):
+    return task_name[:7] + "..." if len(task_name) > 10 else task_name
+
+
 if prev_task is not None:
     prev_task_url = get_task_url(prev_task, cohort_id, course_id)
     with nav_cols[0]:
-        link_button(f"← {prev_task['name']}", prev_task_url)
+        link_button(
+            f"← {truncate_task_name(prev_task['name'])}",
+            prev_task_url,
+        )
 
 if next_task is not None:
     next_task_url = get_task_url(next_task, cohort_id, course_id)
     with nav_cols[-1]:
-        link_button(f"{next_task['name']} →", next_task_url)
+        link_button(
+            f"{truncate_task_name(next_task['name'])} →",
+            next_task_url,
+        )
