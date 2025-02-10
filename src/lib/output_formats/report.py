@@ -243,7 +243,7 @@ def get_containers(is_review_mode: bool):
         border=False, height=report_height
     ).empty()
 
-    chat_input_container = st.container(height=60, border=False)
+    chat_input_container = st.container(height=50, border=False)
 
     return (
         navigation_container,

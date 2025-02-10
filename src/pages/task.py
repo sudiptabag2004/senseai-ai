@@ -784,25 +784,29 @@ if task["type"] == "question":
             show_and_handle_report_input()
 
 
-nav_cols = st.columns([1, 5, 1])
+nav_cols = st.columns([1, 2, 1])
 
 
 def truncate_task_name(task_name: str):
-    return task_name[:7] + "..." if len(task_name) > 10 else task_name
+    return task_name[:27] + "..." if len(task_name) > 30 else task_name
 
 
 if prev_task is not None:
     prev_task_url = get_task_url(prev_task, cohort_id, course_id)
     with nav_cols[0]:
         link_button(
-            f"← {truncate_task_name(prev_task['name'])}",
+            f"{truncate_task_name(prev_task['name'])}",
             prev_task_url,
+            icon="←",
+            icon_position="left",
         )
 
 if next_task is not None:
     next_task_url = get_task_url(next_task, cohort_id, course_id)
     with nav_cols[-1]:
         link_button(
-            f"{truncate_task_name(next_task['name'])} →",
+            f"{truncate_task_name(next_task['name'])}",
             next_task_url,
+            icon="→",
+            icon_position="right",
         )

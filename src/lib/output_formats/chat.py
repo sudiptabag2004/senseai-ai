@@ -65,7 +65,7 @@ def get_containers(task, is_review_mode):
     description_container = description_col.container(height=475, border=True)
     chat_container = chat_col.container(border=True, height=475)
 
-    chat_input_container = st.container(height=60, border=False)
+    chat_input_container = st.container(height=50, border=False)
 
     return description_container, chat_container, chat_input_container
 

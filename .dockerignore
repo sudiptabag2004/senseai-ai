@@ -4,3 +4,4 @@ __pycache__/
 src/experimental/
 *.pkl
 src/venv/
+src/logs/app.log
