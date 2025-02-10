@@ -22,20 +22,19 @@ def link_button(
     icon: str = None,
     icon_position: Literal["left", "right"] = "left",
 ):
-    icon_html = f'<span style="margin-right: 0.5rem;">{icon}</span>' if icon else ""
     icon_html = (
-        f'<span style="margin-{"right" if icon_position == "left" else "left"}: 0.5rem;">{icon}</span>'
+        f'<span style="margin-{"right" if icon_position == "left" else "left"}: 0.5rem; background-color: #787777; padding: 0.5rem 1rem;">{icon}</span>'
         if icon
         else ""
     )
     icon_content = (
-        f"{icon_html}<span style='flex-grow: 1;'>{text}</span>"
+        f"{icon_html}<span style='flex-grow: 1; margin-left: 0.5rem;'>{text}</span>"
         if icon_position == "left"
-        else f"<span style='flex-grow: 1;'>{text}</span>{icon_html}"
+        else f"<span style='flex-grow: 1; margin-left: 1rem;'>{text}</span>{icon_html}"
     )
 
     st.markdown(
-        f"""<a href="{url}" target="_self" style="color: white; text-decoration: none; background-color: rgba(49, 51, 63, 0.4); padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block; width: 100%; text-align: left;">
+        f"""<a href="{url}" target="_self" style="color: white; text-decoration: none; background-color: rgba(49, 51, 63, 0.4); border-radius: 0.5rem; display: inline-block; width: 100%; text-align: left;">
             <div style="display: flex; align-items: center;">
                 {icon_content}
             </div>
