@@ -152,11 +152,21 @@ def show_roadmap_by_course(
 
     default_course_id = int(st.query_params.get("course_id", course_ids[0]))
     course_id_to_course = {course["id"]: course for course in cohort_courses}
+
+    def update_course_id_in_query_params():
+        if st.session_state["selected_course_id"] is None:
+            st.session_state["selected_course_id"] = int(st.query_params["course_id"])
+            return
+
+        st.query_params["course_id"] = str(st.session_state["selected_course_id"])
+
+    st.session_state["selected_course_id"] = default_course_id
     selected_course_id = st.segmented_control(
         "Select course",
         course_ids,
-        default=default_course_id,
+        key="selected_course_id",
         format_func=lambda course_id: course_id_to_course[course_id]["name"],
+        on_change=update_course_id_in_query_params,
     )
 
     course_tasks = get_tasks_with_completion_status(

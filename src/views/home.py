@@ -14,7 +14,6 @@ from lib.db import (
 
 from components.streak import show_streak
 from components.leaderboard import show_leaderboard
-from lib.url import update_query_params
 from menu import menu
 from views.roadmap import show_roadmap
 from components.placeholder import show_no_courses_placeholder
@@ -200,11 +199,16 @@ def show_home():
             else:
                 default_cohort_index = 0
 
+            def update_cohort_id_in_query_params():
+                st.query_params["cohort_id"] = st.session_state["selected_cohort"]["id"]
+
             selected_cohort = st.selectbox(
                 "Select a cohort",
                 displayed_cohorts,
                 format_func=get_cohort_display_name,
                 index=default_cohort_index,
+                on_change=update_cohort_id_in_query_params,
+                key="selected_cohort",
             )
 
         if "role" in selected_cohort:
@@ -213,11 +217,18 @@ def show_home():
             role = "admin"
 
         if role == "mentor":
+
+            def update_home_view():
+                if st.session_state["home_view"] is None:
+                    st.session_state["home_view"] = "Learner view"
+
             home_view = st.pills(
                 "Select view",
+                key="home_view",
                 options=["Mentor view", "Learner view"],
                 default="Mentor view",
                 label_visibility="collapsed",
+                on_change=update_home_view,
             )
             is_mentor = home_view == "Mentor view"
 

@@ -3,15 +3,6 @@ import re
 from unidecode import unidecode
 
 
-def update_query_params(key, dtype=str):
-    if dtype == str:
-        st.query_params[key] = st.session_state[key]
-    elif dtype == int:
-        st.query_params[key] = int(st.session_state[key])
-    else:
-        raise NotImplementedError(f"dtype {dtype} not implemented")
-
-
 def slugify(text: str) -> str:
     """
     Convert a string to a URL-friendly slug.
