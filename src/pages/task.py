@@ -271,7 +271,13 @@ if task["type"] == "reading_material":
 
 header_cols = st.columns([1, 7])
 with header_cols[0]:
-    back_to_home_button(params={"cohort_id": cohort_id, "course_id": course_id})
+    back_to_home_button(
+        params={
+            "org_id": cohort["org_id"],
+            "cohort_id": cohort_id,
+            "course_id": course_id,
+        }
+    )
 
 with header_cols[1]:
     show_task_name(
