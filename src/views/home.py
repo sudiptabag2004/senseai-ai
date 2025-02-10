@@ -201,6 +201,8 @@ def show_home():
 
             def update_cohort_id_in_query_params():
                 st.query_params["cohort_id"] = st.session_state["selected_cohort"]["id"]
+                if "course_id" in st.query_params:
+                    del st.query_params["course_id"]
 
             selected_cohort = st.selectbox(
                 "Select a cohort",

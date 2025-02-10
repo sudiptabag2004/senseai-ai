@@ -103,6 +103,9 @@ def authenticated_menu():
 
             def set_org_in_query_params():
                 st.query_params["org_id"] = st.session_state.selected_org["id"]
+                for key in ["course_id", "cohort_id"]:
+                    if key in st.query_params:
+                        del st.query_params[key]
 
             def selected_org_changed():
                 st.session_state.is_org_change_complete = False
