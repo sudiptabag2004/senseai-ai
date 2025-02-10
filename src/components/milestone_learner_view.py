@@ -155,6 +155,7 @@ def get_task_view(task: Dict, cohort_id: int, course_id: int, show_button: bool 
         button_text = "Read"
 
     open_task_button_html = f"""\t\t\t<a href="{task_url}" class="open-task-btn" style="visibility: {'' if show_button else 'hidden'}">{button_text}</a>\n"""
+
     return f"""<div class="task-item">\n\t<div class="task-checkbox">{progress_icon}</div>\n\t<div class="task-content">\n\t\t<div class="task-header">\n\t\t\t<div class="task-name">{task_name}</div>\n{open_task_button_html}\t\t</div>\n\t</div>\n</div>"""
 
 

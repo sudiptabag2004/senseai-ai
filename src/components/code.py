@@ -499,7 +499,7 @@ def show_code_editor(
                             auto_update=True,
                             value=st.session_state[f"{tab_name}_code"],
                             placeholder=f"Write your {language} code here...",
-                            height=275,
+                            height=300,
                         )
 
         else:

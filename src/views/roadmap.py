@@ -121,7 +121,6 @@ def show_roadmap_by_milestone(
         ]
 
         # milestone_tasks = sorted(milestone_tasks, key=lambda task: task["completed"])
-
         show_milestone_card(
             {
                 "id": milestone_data["milestone_id"],
@@ -149,15 +148,23 @@ def show_course_tab(course_tasks, cohort_id, course, user_id, role):
 def show_roadmap_by_course(
     user_id: int, cohort_id: int, cohort_courses: List[Dict], role: str
 ):
-    tabs = st.tabs([course["name"] for course in cohort_courses])
+    course_ids = [course["id"] for course in cohort_courses]
 
-    for tab, course in zip(tabs, cohort_courses):
-        course_tasks = get_tasks_with_completion_status(
-            user_id, cohort_id, course["id"]
-        )
+    default_course_id = int(st.query_params.get("course_id", course_ids[0]))
+    course_id_to_course = {course["id"]: course for course in cohort_courses}
+    selected_course_id = st.segmented_control(
+        "Select course",
+        course_ids,
+        default=default_course_id,
+        format_func=lambda course_id: course_id_to_course[course_id]["name"],
+    )
 
-        with tab:
-            show_course_tab(course_tasks, cohort_id, course, user_id, role)
+    course_tasks = get_tasks_with_completion_status(
+        user_id, cohort_id, selected_course_id
+    )
+    show_course_tab(
+        course_tasks, cohort_id, course_id_to_course[selected_course_id], user_id, role
+    )
 
 
 def update_task_view():

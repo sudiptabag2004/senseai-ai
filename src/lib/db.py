@@ -735,7 +735,7 @@ def get_all_tasks_for_org_or_course(
     select_query_params = ""
     has_milestone = False
     if course_id is not None:
-        select_query_params = ", ct.milestone_id, m.name as milestone_name"
+        select_query_params = f", ct.milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name"
         has_milestone = True
 
     query = f"""
@@ -759,7 +759,7 @@ def get_all_tasks_for_org_or_course(
     elif course_id is not None:
         query += f""" 
         INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
-        INNER JOIN {milestones_table_name} m ON ct.milestone_id = m.id
+        LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id
         WHERE ct.course_id = ? AND t.deleted_at IS NULL
         GROUP BY t.id
         ORDER BY ct.ordering ASC

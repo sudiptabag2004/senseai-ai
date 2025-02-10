@@ -17,7 +17,7 @@ init_app()
 
 from lib.llm import get_formatted_history
 from lib.utils.logging import logger
-from components.buttons import back_to_home_button
+from components.buttons import back_to_home_button, link_button
 from auth import login_or_signup_user, unauthorized_redirect_to_home
 from lib.config import uncategorized_milestone_name
 from lib.db import (
@@ -75,6 +75,7 @@ from components.badge import (
     show_multiple_badges_dialog,
     check_for_badges_unlocked,
 )
+from components.milestone_learner_view import get_task_url
 from views.task import display_milestone_tasks_in_sidebar, show_task_name
 
 # set_verbose(True)
@@ -88,6 +89,9 @@ st.markdown(
             padding-bottom: 2rem;
             padding-left: 5rem;
             padding-right: 5rem;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"]:has(.stChatInput) {
+            height: 60px !important;
         }
 </style>
 """,
@@ -160,11 +164,14 @@ if "mode" in st.query_params and st.query_params["mode"] == "review":
 else:
     st.session_state.is_review_mode = False
 
+prev_task, next_task = None, None
 if (
     not st.session_state.is_review_mode
     and task["milestone_name"] != uncategorized_milestone_name
 ):
-    display_milestone_tasks_in_sidebar(task_user_id, course_id, cohort_id, task)
+    prev_task, next_task = display_milestone_tasks_in_sidebar(
+        task_user_id, course_id, cohort_id, task
+    )
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = get_task_chat_history_for_user(
@@ -243,8 +250,6 @@ if st.session_state.is_solved:
     task_name_container_background_color = "#62B670"
     task_name_container_text_color = "white"
 
-back_to_home_button()
-
 
 def mark_as_read():
     st.balloons()
@@ -264,12 +269,18 @@ if task["type"] == "reading_material":
         disabled=st.session_state.is_solved,
     )
 
-show_task_name(
-    task,
-    task_name_container_background_color,
-    task_name_container_text_color,
-    st.session_state.is_solved,
-)
+header_cols = st.columns([1, 7])
+with header_cols[0]:
+    back_to_home_button(params={"cohort_id": cohort_id, "course_id": course_id})
+
+with header_cols[1]:
+    show_task_name(
+        task,
+        task_name_container_background_color,
+        task_name_container_text_color,
+        st.session_state.is_solved,
+    )
+
 
 if task["type"] == "question":
     if task["response_type"] in ["chat", "exam"]:
@@ -290,6 +301,7 @@ if task["type"] == "question":
             description_container,
             user_input_display_container,
             ai_report_container,
+            chat_input_container,
         ) = get_report_containers(st.session_state.is_review_mode)
 
 else:
@@ -765,11 +777,21 @@ def show_and_handle_report_input():
 
 
 if task["type"] == "question":
-    if task["response_type"] in ["chat", "exam"]:
-        if chat_input_container:
-            with chat_input_container:
-                show_and_handle_chat_input()
-        else:
+    with chat_input_container:
+        if task["response_type"] in ["chat", "exam"]:
             show_and_handle_chat_input()
-    else:
-        show_and_handle_report_input()
+        else:
+            show_and_handle_report_input()
+
+
+nav_cols = st.columns([1, 5, 1])
+
+if prev_task is not None:
+    prev_task_url = get_task_url(prev_task, cohort_id, course_id)
+    with nav_cols[0]:
+        link_button(f"← {prev_task['name']}", prev_task_url)
+
+if next_task is not None:
+    next_task_url = get_task_url(next_task, cohort_id, course_id)
+    with nav_cols[-1]:
+        link_button(f"{next_task['name']} →", next_task_url)
