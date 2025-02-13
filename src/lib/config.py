@@ -101,6 +101,8 @@ task_type_to_label = {
 
 PDF_PAGE_DIMS = [595, 842]
 
+MAX_TASK_NAME_LENGTH = 100
+
 openai_plan_to_model_name = {
     "paid": {
         "4o-text": "gpt-4o-2024-11-20",
