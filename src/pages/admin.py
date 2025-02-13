@@ -38,7 +38,7 @@ from lib.config import (
     group_role_mentor,
     all_ai_response_types,
     all_input_types,
-    all_task_types,
+    MAX_TASK_NAME_LENGTH,
     task_type_mapping,
     allowed_ai_response_types,
     response_type_help_text,
@@ -415,6 +415,9 @@ def check_task_form_errors():
     if not st.session_state.task_name:
         return "Please enter a task name"
 
+    if len(st.session_state.task_name) >= MAX_TASK_NAME_LENGTH:
+        return f"Task name must be less than {MAX_TASK_NAME_LENGTH} characters"
+
     if not st.session_state.task_description:
         return "Please enter a task description"
 
@@ -595,7 +598,7 @@ def edit_task(task_details):
         update_tests_for_task(task_id, task_tests)
 
     refresh_tasks()
-    set_toast("Task updated")
+    set_toast("Task updated", "✅")
     st.rerun()
 
 
@@ -686,7 +689,7 @@ def add_tests_to_task(
             for i in range(num_test_inputs):
                 st.session_state[f"new_test_input_{i}"] = ""
 
-            set_toast("Added test!")
+            set_toast("Added test", "✅")
 
         st.text("Inputs")
         for i in range(num_test_inputs):
@@ -888,6 +891,24 @@ def coding_language_selector():
 
 
 def add_scoring_criterion(scoring_criteria):
+    if not st.session_state.new_scoring_criterion_category:
+        set_toast("Please enter a category", icon="🚫")
+        return
+
+    if not st.session_state.new_scoring_criterion_description:
+        set_toast("Please enter a description", icon="🚫")
+        return
+
+    if (
+        st.session_state.new_scoring_criterion_range_start
+        >= st.session_state.new_scoring_criterion_range_end
+    ):
+        set_toast(
+            "The lowest possible score must be less than the highest possible score",
+            icon="🚫",
+        )
+        return
+
     scoring_criteria.append(
         {
             "category": st.session_state.new_scoring_criterion_category,
@@ -921,6 +942,7 @@ def delete_scoring_criterion(scoring_criteria, index_to_delete: int):
 
 
 def show_scoring_criteria_addition_form(scoring_criteria):
+    show_toast()
     st.subheader("Scoring Criterion")
     for index, scoring_criterion in enumerate(scoring_criteria):
         with st.expander(
@@ -1295,7 +1317,7 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
 
 def complete_bulk_update_tasks():
     refresh_tasks()
-    set_toast("Tasks updated")
+    set_toast("Tasks updated", "✅")
     st.rerun()
 
 
@@ -1452,6 +1474,11 @@ def show_bulk_upload_tasks_form():
             ):
                 error_message = f"Task name missing for row {index + 1}"
                 break
+
+            if len(row["Name"]) >= MAX_TASK_NAME_LENGTH:
+                error_message = f"All task names must be less than {MAX_TASK_NAME_LENGTH} characters"
+                break
+
             if not row["Description"] or (
                 isinstance(row["Description"], float) and math.isnan(row["Description"])
             ):
@@ -1940,7 +1967,7 @@ if st.session_state.selected_section_index == 0:
                 st.session_state.current_cohort_index = (
                     len(st.session_state.cohorts) - 1
                 )
-                set_toast(f"Cohort `{cohort_name}` created successfully!")
+                set_toast(f"Cohort `{cohort_name}` created", "✅")
                 st.rerun()
 
     @st.dialog("Add Members to Cohort")
@@ -1975,7 +2002,7 @@ if st.session_state.selected_section_index == 0:
                             cohort_id, [member_email.normalized], [role]
                         )
                         refresh_cohorts()
-                        set_toast("Member added successfully")
+                        set_toast("Member added", "✅")
                         st.rerun()
                     except EmailNotValidError as e:
                         # The exception message is human-readable explanation of why it's
@@ -2025,7 +2052,7 @@ if st.session_state.selected_section_index == 0:
                     [role] * len(cohort_df),
                 )
                 refresh_cohorts()
-                set_toast(f"Members added to cohort successfully!")
+                set_toast(f"Members added to cohort", "✅")
                 update_cohort_uploader_key()
                 st.rerun()
 
@@ -2119,7 +2146,7 @@ if st.session_state.selected_section_index == 0:
                     for mentor in selected_mentors:
                         clear_cache_for_mentor_groups(mentor["id"], cohort_id)
 
-                    set_toast(f"Cohort group created successfully!")
+                    set_toast(f"Cohort group created", "✅")
                 else:
                     if new_group_name != group_name:
                         update_cohort_group_name(group_id, new_group_name)
@@ -2153,7 +2180,7 @@ if st.session_state.selected_section_index == 0:
 
                             clear_cache_for_mentor_groups(mentor_id, cohort_id)
 
-                    set_toast(f"Cohort group updated successfully!")
+                    set_toast(f"Cohort group updated", "✅")
 
                 refresh_cohorts()
                 st.rerun()
@@ -2201,7 +2228,7 @@ if st.session_state.selected_section_index == 0:
                 clear_cache_for_mentor_groups(mentor_id, cohort_id)
 
             refresh_cohorts()
-            set_toast("Cohort group deleted successfully!")
+            set_toast("Cohort group deleted", "✅")
             st.rerun()
 
         if cancel_col.button("Cancel"):
@@ -2222,7 +2249,7 @@ if st.session_state.selected_section_index == 0:
         if confirm_col.button("Confirm", type="primary"):
             remove_members_from_cohort(cohort_id, [member["id"] for member in members])
             refresh_cohorts()
-            set_toast("Members removed from cohort successfully!")
+            set_toast("Members removed from cohort", "✅")
             st.rerun()
 
         if cancel_col.button("Cancel"):
@@ -2247,7 +2274,7 @@ if st.session_state.selected_section_index == 0:
 
             del st.session_state.current_cohort_index
 
-            set_toast("Cohort deleted successfully!")
+            set_toast("Cohort deleted", "✅")
             st.rerun()
 
         if cancel_col.button("Cancel"):
@@ -2296,7 +2323,7 @@ if st.session_state.selected_section_index == 0:
                 clear_course_cache_for_cohorts([cohort_id])
                 clear_cohort_cache_for_courses(courses_to_add + courses_to_delete)
 
-                set_toast("Cohort updated successfully!")
+                set_toast("Cohort updated", "✅")
                 st.rerun()
 
     def show_cohort_overview(selected_cohort: Dict):
@@ -2504,7 +2531,7 @@ if st.session_state.selected_section_index == 0:
         # invalidate cache
         clear_cohort_cache_for_courses(cohort["courses"])
 
-        set_toast("Cohort name updated successfully!")
+        set_toast("Cohort name updated", "✅")
         st.rerun()
 
     @st.dialog("Edit Cohort")
@@ -2608,7 +2635,7 @@ if st.session_state.selected_section_index == 0:
                 st.session_state.current_course_index = (
                     len(st.session_state.courses) - 1
                 )
-                set_toast(f"Course `{course_name}` created successfully!")
+                set_toast(f"Course `{course_name}` created", "✅")
                 st.rerun()
 
     @st.dialog("Update Course Cohorts")
@@ -2656,7 +2683,7 @@ if st.session_state.selected_section_index == 0:
                     cohorts_to_add_to + cohorts_to_delete_from
                 )
 
-                set_toast("Cohorts updated successfully!")
+                set_toast("Cohorts updated", "✅")
                 st.rerun()
 
     @st.dialog("Delete Course Confirmation")
@@ -2676,7 +2703,7 @@ if st.session_state.selected_section_index == 0:
 
             del st.session_state.current_course_index
 
-            set_toast("Course deleted successfully!")
+            set_toast("Course deleted", "✅")
             st.rerun()
 
         if cancel_col.button("Cancel"):
@@ -2689,7 +2716,7 @@ if st.session_state.selected_section_index == 0:
         # invalidate cache
         clear_course_cache_for_cohorts(course["cohorts"])
 
-        set_toast("Course name updated successfully!")
+        set_toast("Course name updated", "✅")
         st.rerun()
 
     @st.dialog("Edit Course")
@@ -2776,7 +2803,7 @@ if st.session_state.selected_section_index == 0:
                         return
 
                     update_task_order(current_order, updated_order - 1, milestone_tasks)
-                    set_toast("Task order updated successfully!")
+                    set_toast("Task order updated", "✅")
                     st.rerun()
 
         def _show_tasks_tab():
@@ -2921,7 +2948,7 @@ if st.session_state.selected_section_index == 0:
                     update_milestone_order(
                         current_order, updated_order - 1, course_milestones
                     )
-                    set_toast("Milestone order updated successfully!")
+                    set_toast("Milestone order updated", "✅")
                     st.rerun()
 
         def _show_milestones_tab():
@@ -3054,7 +3081,7 @@ if st.session_state.selected_section_index == 0:
 
     def delete_milestone(milestone):
         delete_milestone_from_db(milestone["id"])
-        set_toast("Milestone deleted")
+        set_toast("Milestone deleted", "✅")
         refresh_milestones()
 
     @st.dialog("Delete Milestone")
@@ -3215,7 +3242,7 @@ if st.session_state.selected_section_index == 0:
 
     def delete_tag(tag):
         delete_tag_from_db(tag["id"])
-        set_toast("Tag deleted")
+        set_toast("Tag deleted", "✅")
         refresh_tags()
 
     @st.dialog("Delete Tag")
@@ -3682,7 +3709,7 @@ else:
                     st.error("No changes made")
                 else:
                     update_org(st.session_state.org_id, new_org_name)
-                    set_toast("Organization name updated")
+                    set_toast("Organization name updated", "✅")
                     st.rerun()
 
         with st.form("edit_org_openai_api_key_form", border=False):
@@ -3731,7 +3758,7 @@ else:
                     new_openai_api_key,
                     api_key_validation,
                 )
-                set_toast("OpenAI API key updated")
+                set_toast("OpenAI API key updated", "✅")
                 st.rerun()
 
     with tabs[0]:
@@ -3759,7 +3786,7 @@ else:
                     add_user_to_org_by_email(
                         member_email.normalized, st.session_state.org_id, role
                     )
-                    set_toast("Member added successfully")
+                    set_toast("Member added", "✅")
                     st.rerun()
                 except EmailNotValidError as e:
                     # The exception message is human-readable explanation of why it's

@@ -56,6 +56,6 @@ def show_task_name(task, bg_color, text_color, is_solved):
         kwargs["text_color"] = text_color
 
     st.markdown(
-        f"""<div style='padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: {kwargs["background_color"]}; color: {kwargs["text_color"]};'>{task['name'].strip()}</div>""",
+        f"""<div style='padding: 0.5rem 1rem; border-radius: 0.5rem; background-color: {kwargs["background_color"]}; color: {kwargs["text_color"]}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{task['name'].strip()}</div>""",
         unsafe_allow_html=True,
     )

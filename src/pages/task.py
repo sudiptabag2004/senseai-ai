@@ -77,9 +77,12 @@ from components.badge import (
 )
 from components.milestone_learner_view import get_task_url
 from views.task import display_milestone_tasks_in_sidebar, show_task_name
+from lib.toast import show_toast, set_toast
 
 # set_verbose(True)
 # set_debug(True)
+
+show_toast()
 
 st.markdown(
     """
@@ -308,7 +311,7 @@ if task["type"] == "question":
             user_input_display_container,
             ai_report_container,
             chat_input_container,
-        ) = get_report_containers(st.session_state.is_review_mode)
+        ) = get_report_containers(st.session_state.is_review_mode, task["input_type"])
 
 else:
     user_input_display_container = None
@@ -772,9 +775,12 @@ def show_and_handle_report_input():
             key=f"audio_input_{st.session_state.audio_file_uploader_key}",
         )
         if audio_value:
-            if not validate_audio_input(audio_value):
+            error = validate_audio_input(audio_value)
+            if error:
+                set_toast(error, "🚫")
                 reset_ai_running()
-                st.stop()
+                update_audio_file_uploader_key()
+                st.rerun()
 
             audio_data = audio_value.read()
             get_ai_feedback_report_audio_input(audio_data)

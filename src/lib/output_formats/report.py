@@ -219,9 +219,11 @@ def show_attempt_picker(container):
         )
 
 
-def get_containers(is_review_mode: bool):
+def get_containers(is_review_mode: bool, input_type: Literal["text", "audio"]):
     input_description_col, _, report_col = st.columns([1, 0.1, 1.5])
-    description_container = input_description_col.container(height=475, border=True)
+    description_container = input_description_col.container(
+        height=475 if input_type == "text" else 425, border=True
+    )
 
     navigation_container = report_col.container().empty()
 
@@ -235,7 +237,9 @@ def get_containers(is_review_mode: bool):
     report_col.container(height=1, border=False)
 
     if not is_review_mode:
-        report_height = 325 if st.session_state.current_num_attempts > 1 else 250
+        report_height = 275 if st.session_state.current_num_attempts > 1 else 315
+        if input_type == "audio":
+            report_height -= 40
     else:
         report_height = 525
 
@@ -243,7 +247,9 @@ def get_containers(is_review_mode: bool):
         border=False, height=report_height
     ).empty()
 
-    chat_input_container = st.container(height=50, border=False)
+    chat_input_container = st.container(
+        height=50 if input_type == "text" else 100, border=False
+    )
 
     return (
         navigation_container,
