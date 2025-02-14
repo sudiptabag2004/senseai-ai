@@ -28,10 +28,26 @@ else:
             ]
 
             if not selected_org:
-                error_markdown(
-                    """You are not a part of this organization. Please ask your admin to <a href="https://docs.sensai.hyperverge.org/guides/organizations#add-members-to-an-organization" target="_self">add</a> you to the organization. If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course."""
-                )
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.markdown(
+                        """<h1 style='text-align: center; color: #ff4b4b; font-size: 2rem; margin-bottom: 2rem;'>
+                        🚫 Access Denied
+                        </h1>""",
+                        unsafe_allow_html=True,
+                    )
+                    error_markdown(
+                        """<div style='text-align: center; font-size: 1.1rem;'>
+                        You are not a part of this organization. Please ask your admin to <a href="https://docs.sensai.hyperverge.org/guides/organizations#add-members-to-an-organization" target="_self">add</a> you to the organization.
+                        <br><br>
+                        If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course.
+                        </div>"""
+                    )
                 st.stop()
+                # error_markdown(
+                #     """You are not a part of this organization. Please ask your admin to <a href="https://docs.sensai.hyperverge.org/guides/organizations#add-members-to-an-organization" target="_self">add</a> you to the organization. If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course."""
+                # )
+                # st.stop()
 
             st.session_state.selected_org = selected_org[0]
 
