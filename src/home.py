@@ -8,6 +8,7 @@ init_app()
 
 from auth import login_or_signup_user, login
 from views.home import show_home
+from components.status import error_markdown
 
 if not st.experimental_user.is_authenticated:
     login()
@@ -20,11 +21,19 @@ else:
             # the selected org is the one they came from
             st.session_state.org_id = int(st.query_params["org_id"])
 
-            st.session_state.selected_org = [
+            selected_org = [
                 org
                 for org in st.session_state.user_orgs
                 if org["id"] == st.session_state.org_id
-            ][0]
+            ]
+
+            if not selected_org:
+                error_markdown(
+                    """You are not a part of this organization. Please ask your admin to <a href="https://docs.sensai.hyperverge.org/guides/organizations#add-members-to-an-organization" target="_self">add</a> you to the organization. If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course."""
+                )
+                st.stop()
+
+            st.session_state.selected_org = selected_org[0]
 
             # st.query_params.clear()
 
