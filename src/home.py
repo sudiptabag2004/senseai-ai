@@ -9,6 +9,7 @@ init_app()
 from auth import login_or_signup_user, login
 from views.home import show_home
 from components.status import error_markdown
+from components.buttons import back_to_home_button
 
 if not st.experimental_user.is_authenticated:
     login()
@@ -43,6 +44,12 @@ else:
                         If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course.
                         </div>"""
                     )
+
+                    st.container(height=10, border=False)
+                    sub_cols = st.columns([1.5, 1, 1.5])
+                    with sub_cols[1]:
+                        back_to_home_button()
+
                 st.stop()
                 # error_markdown(
                 #     """You are not a part of this organization. Please ask your admin to <a href="https://docs.sensai.hyperverge.org/guides/organizations#add-members-to-an-organization" target="_self">add</a> you to the organization. If you are the admin and want to share a course with a learner, you need to <a href="https://docs.sensai.hyperverge.org/guides/cohorts#add-members-to-a-cohort" target="_self">add</a> them to a cohort that has been assigned to the course."""

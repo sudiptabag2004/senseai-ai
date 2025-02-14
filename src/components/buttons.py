@@ -3,7 +3,15 @@ from typing import Dict, Literal
 import streamlit as st
 
 
-def back_to_home_button(params: Dict[str, str] = None, text: str = "🏠 Back to Home"):
+def back_to_home_button(
+    params: Dict[str, str] = None,
+    text: str = "🏠 Back to Home",
+):
+    background_color = (
+        "#192D43" if st.session_state.theme["base"] == "dark" else "#E9F2FC"
+    )
+    text_color = "#E9F2FC" if st.session_state.theme["base"] == "dark" else "#004280"
+
     home_page_url = os.environ.get("APP_URL")
 
     if params:
@@ -11,7 +19,7 @@ def back_to_home_button(params: Dict[str, str] = None, text: str = "🏠 Back to
         home_page_url += f"?{query_params}"
 
     st.markdown(
-        f'<a href="{home_page_url}" target="_self" style="color: white; text-decoration: none; background-color: rgba(49, 51, 63, 0.4); padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block;">{text}</a>',
+        f'<a href="{home_page_url}" target="_self" style="color: {text_color}; text-decoration: none; background-color: {background_color}; padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block;">{text}</a>',
         unsafe_allow_html=True,
     )
 

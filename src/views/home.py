@@ -188,30 +188,33 @@ def show_home():
                 return f"{cohort['name']} (by {cohort['org_name']})"
 
         cols = st.columns(2)
-        with cols[0]:
-            cohort_id_to_index = {
-                cohort["id"]: index for index, cohort in enumerate(displayed_cohorts)
-            }
-            if "cohort_id" in st.query_params:
-                default_cohort_index = cohort_id_to_index[
-                    int(st.query_params["cohort_id"])
-                ]
-            else:
-                default_cohort_index = 0
+        cohort_id_to_index = {
+            cohort["id"]: index for index, cohort in enumerate(displayed_cohorts)
+        }
+        if "cohort_id" in st.query_params:
+            cohort_id = int(st.query_params["cohort_id"])
 
-            def update_cohort_id_in_query_params():
-                st.query_params["cohort_id"] = st.session_state["selected_cohort"]["id"]
-                if "course_id" in st.query_params:
-                    del st.query_params["course_id"]
+            if cohort_id not in cohort_id_to_index:
+                del st.query_params["cohort_id"]
+                st.rerun()
 
-            selected_cohort = st.selectbox(
-                "Select a cohort",
-                displayed_cohorts,
-                format_func=get_cohort_display_name,
-                index=default_cohort_index,
-                on_change=update_cohort_id_in_query_params,
-                key="selected_cohort",
-            )
+            default_cohort_index = cohort_id_to_index[cohort_id]
+        else:
+            default_cohort_index = 0
+
+        def update_cohort_id_in_query_params():
+            st.query_params["cohort_id"] = st.session_state["selected_cohort"]["id"]
+            if "course_id" in st.query_params:
+                del st.query_params["course_id"]
+
+        selected_cohort = cols[0].selectbox(
+            "Select a cohort",
+            displayed_cohorts,
+            format_func=get_cohort_display_name,
+            index=default_cohort_index,
+            on_change=update_cohort_id_in_query_params,
+            key="selected_cohort",
+        )
 
         if "role" in selected_cohort:
             role = selected_cohort["role"]

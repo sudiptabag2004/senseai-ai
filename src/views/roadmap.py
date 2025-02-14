@@ -151,6 +151,11 @@ def show_roadmap_by_course(
     course_ids = [course["id"] for course in cohort_courses]
 
     default_course_id = int(st.query_params.get("course_id", course_ids[0]))
+
+    if default_course_id not in course_ids:
+        del st.query_params["course_id"]
+        st.rerun()
+
     course_id_to_course = {course["id"]: course for course in cohort_courses}
 
     def update_course_id_in_query_params():
