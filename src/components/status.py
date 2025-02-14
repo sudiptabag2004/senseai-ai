@@ -6,6 +6,9 @@ def error_markdown(text: str):
     background_color = (
         "#3D2429" if st.session_state.theme["base"] == "dark" else "#F3E1E5"
     )
+    link_text_color = (
+        "#00CC66" if st.session_state.theme["base"] == "dark" else "#338233"
+    )
 
     st.markdown(
         f"""
@@ -21,7 +24,7 @@ def error_markdown(text: str):
         </span>
         <style>
             #status_error_markdown a {{
-                color: #00CC66 !important;
+                color: {link_text_color} !important;
                 text-decoration: none;
             }}
         </style>
