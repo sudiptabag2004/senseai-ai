@@ -3816,26 +3816,26 @@ else:
     def show_account_tab():
         with st.form("edit_org_details_form", border=False):
             cols = st.columns([4, 1])
-            new_org_name = cols[0].text_input(
+            cols[0].text_input(
                 "Organization Name",
                 value=st.session_state.org["name"],
                 autocomplete="off",
+                key="org_name",
             )
 
             cols[1].container(height=10, border=False)
             if cols[1].form_submit_button(
                 "Update",
-                disabled=new_org_name == st.session_state.org["name"],
             ):
-                if not new_org_name:
-                    st.error("Empty name not allowed")
-                    return
-
-                if new_org_name == st.session_state.org["name"]:
-                    st.error("No changes made")
+                if not st.session_state.org_name:
+                    set_toast("Empty name not allowed", "❌")
+                    st.rerun()
+                elif st.session_state.org_name == st.session_state.org["name"]:
+                    set_toast("No changes made", "❌")
+                    st.rerun()
                 else:
-                    update_org(st.session_state.org_id, new_org_name)
-                    set_toast("Organization name updated", "✅")
+                    update_org(st.session_state.org_id, st.session_state.org_name)
+                    set_toast("Organization name updated", icon="✅")
                     st.rerun()
 
         with st.form("edit_org_openai_api_key_form", border=False):
