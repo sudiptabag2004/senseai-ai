@@ -1,6 +1,8 @@
 import streamlit as st
 import html
 import re
+from typing import Dict
+from lib.url import get_home_url
 
 
 def display_waiting_indicator():
@@ -152,3 +154,20 @@ def cleanup_ai_response(response: str):
             correct_newlines_outside_code_blocks(correct_code_blocks(response))
         )
     )
+
+
+def show_logo(include_url: bool = False, params: Dict[str, str] = None):
+    if include_url:
+        home_page_url = get_home_url(params)
+    else:
+        home_page_url = None
+
+    if "theme" not in st.session_state or not st.session_state.theme:
+        st.session_state.theme = {"base": "light"}
+
+    if st.session_state.theme["base"] == "dark":
+        logo_path = "./lib/assets/dark_logo.svg"
+    else:
+        logo_path = "./lib/assets/light_logo.svg"
+
+    st.logo(logo_path, link=home_page_url)

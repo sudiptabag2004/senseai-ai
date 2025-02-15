@@ -1,6 +1,6 @@
-import os
 from typing import Dict, Literal
 import streamlit as st
+from lib.url import get_home_url
 
 
 def back_to_home_button(
@@ -12,11 +12,7 @@ def back_to_home_button(
     )
     text_color = "#E9F2FC" if st.session_state.theme["base"] == "dark" else "#004280"
 
-    home_page_url = os.environ.get("APP_URL")
-
-    if params:
-        query_params = "&".join([f"{key}={value}" for key, value in params.items()])
-        home_page_url += f"?{query_params}"
+    home_page_url = get_home_url(params)
 
     st.markdown(
         f'<a href="{home_page_url}" target="_self" style="color: {text_color}; text-decoration: none; background-color: {background_color}; padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block;">{text}</a>',

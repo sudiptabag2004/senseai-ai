@@ -16,7 +16,10 @@ from components.streak import show_streak
 from components.leaderboard import show_leaderboard
 from menu import menu
 from views.roadmap import show_roadmap
-from components.placeholder import show_no_courses_placeholder
+from components.placeholder import (
+    show_no_cohorts_placeholder_home,
+    show_no_courses_placeholder_home,
+)
 
 
 def learner_view(selected_cohort: Dict, role: str):
@@ -29,7 +32,7 @@ def learner_view(selected_cohort: Dict, role: str):
 
     if not cohort_courses:
         if role == "admin":
-            show_no_courses_placeholder(view="cohort")
+            show_no_courses_placeholder_home()
         else:
             st.error("No courses added yet")
         return
@@ -243,4 +246,4 @@ def show_home():
             learner_view(selected_cohort, role)
     else:
         selected_cohort = None
-        show_no_courses_placeholder(view="home")
+        show_no_cohorts_placeholder_home()

@@ -17,7 +17,7 @@ def show_empty_error_message(role: str):
         show_empty_tasks_placeholder()
     else:
         error_message = "No tasks added yet"
-        st.error(error_message)
+        st.info(error_message)
 
 
 def show_roadmap_as_list(

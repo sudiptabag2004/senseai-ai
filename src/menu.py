@@ -4,21 +4,16 @@ import os
 from lib.organization import show_create_org_dialog
 from lib.toast import set_toast, show_toast
 from lib.db import is_user_hva_learner
+from lib.ui import show_logo
 from components.status import error_markdown
-
-# if not theme:
-#     theme = {"base": "light"}
 
 
 def menu_header():
-    if "theme" not in st.session_state or not st.session_state.theme:
-        st.session_state.theme = {"base": "light"}
+    show_logo()
 
     if st.session_state.theme["base"] == "dark":
-        st.logo("./lib/assets/dark_logo.svg")
         subtitle_color = "#fff"
     else:
-        st.logo("./lib/assets/light_logo.svg")
         subtitle_color = "#1E2F4D"
 
     st.sidebar.markdown(

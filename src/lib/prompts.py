@@ -1,9 +1,12 @@
 import traceback
-from typing import List, Dict
-from pydantic import BaseModel, Field
+from typing import List, Dict, Literal, Optional, Tuple
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 import streamlit as st
+import openai
+import instructor
 from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.messages.utils import convert_to_openai_messages
 from lib.llm import (
     call_llm_and_parse_output,
     call_openai_chat_model,
@@ -11,6 +14,8 @@ from lib.llm import (
     COMMON_INSTRUCTIONS,
     logger,
 )
+from lib.audio import prepare_audio_input_for_ai
+from models import TaskType, TaskInputType, TaskAIResponseType
 from lib.config import openai_plan_to_model_name
 
 
@@ -36,6 +41,8 @@ async def generate_answer_for_task(
 
     output_parser = PydanticOutputParser(pydantic_object=Output)
 
+    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+
     llm_input_messages = get_llm_input_messages(
         system_prompt_template,
         user_prompt_template,
@@ -47,16 +54,26 @@ async def generate_answer_for_task(
         **llm_input_kwargs,
     )
 
+    llm_input_messages = convert_to_openai_messages(llm_input_messages)
+
     try:
-        pred_dict = await call_llm_and_parse_output(
-            llm_input_messages,
+        pred = client.chat.completions.create(
             model=model,
-            output_parser=output_parser,
-            api_key=api_key,
-            max_tokens=2048,
-            verbose=True,
-            labels=["generate_answer"],
+            messages=llm_input_messages,
+            response_model=Output,
+            max_completion_tokens=8096,
+            top_p=1,
+            temperature=0,
+            frequency_penalty=0,
+            presence_penalty=0,
+            store=True,
         )
+
+        pred_dict = pred.model_dump()
+
+        message = f"model: {model} prompt: {llm_input_messages} response: {pred_dict}"
+        logger.info(message)
+
         return pred_dict["solution"]
     except Exception as exception:
         traceback.print_exc()
@@ -332,3 +349,202 @@ async def summarize_learner_insights(
 async def async_index_wrapper(func, index, *args, **kwargs):
     output = await func(*args, **kwargs)
     return index, output
+
+
+async def generate_task_details_from_prompt(
+    task_prompt: str,
+    task_prompt_audio: bytes,
+    api_key: str,
+    free_trial: bool,
+):
+    class ScoringCriterion(BaseModel):
+        category: str = Field(description="The name of the criterion")
+        description: str = Field(description="A description of the criterion")
+        min_score: int = Field(
+            description="The minimum score for the criterion (e.g. 1)"
+        )
+        max_score: int = Field(
+            description="The maximum score for the criterion (e.g. 5)"
+        )
+
+    class TaskConfig(BaseModel):
+        reasoning: str
+        type: Literal[
+            TaskType.READING_MATERIAL, TaskType.QUESTION
+        ]  # either "reading_material" or "question"
+        name: str
+        description: str
+
+        # Fields specific to questions (optional for reading_material tasks)
+        question_type: Optional[Literal["subjective", "objective"]] = None
+        input_type: Optional[
+            Literal[TaskInputType.CODING, TaskInputType.TEXT, TaskInputType.AUDIO]
+        ] = None
+        response_type: Optional[
+            Literal[
+                TaskAIResponseType.CHAT,
+                TaskAIResponseType.EXAM,
+                TaskAIResponseType.REPORT,
+            ]
+        ] = None
+        coding_language: Optional[List[str]] = None
+        scoring_criteria: Optional[List[ScoringCriterion]] = None
+        answer: Optional[str] = None
+
+        @field_validator("type")
+        def validate_type(cls, v):
+            if v not in [TaskType.READING_MATERIAL, TaskType.QUESTION]:
+                raise ValueError(
+                    f"type must be either '{TaskType.READING_MATERIAL}' or '{TaskType.QUESTION}'"
+                )
+            return v
+
+        @field_validator("question_type", mode="after")
+        def validate_question_type(cls, v, info):
+            # Only validate question_type if the task is a question.
+            if info.data.get("type") == TaskType.QUESTION:
+                if v not in ["subjective", "objective"]:
+                    raise ValueError(
+                        'For questions, question_type must be either "subjective" or "objective"'
+                    )
+            return v
+
+        @field_validator("input_type", mode="after")
+        def validate_input_type(cls, v, info):
+            if info.data.get("type") == TaskType.QUESTION:
+                if v not in [
+                    TaskInputType.CODING,
+                    TaskInputType.TEXT,
+                    TaskInputType.AUDIO,
+                ]:
+                    raise ValueError(
+                        f'For questions, input_type must be "{TaskInputType.CODING}", "{TaskInputType.TEXT}", or "{TaskInputType.AUDIO}"'
+                    )
+            return v
+
+        @field_validator("response_type", mode="after")
+        def validate_response_type(cls, v, info):
+            input_type = info.data.get("input_type")
+            question_type = info.data.get("question_type")
+
+            # If input_type is audio, response_type must be "audio".
+            if input_type == TaskInputType.AUDIO and v != TaskAIResponseType.REPORT:
+                raise ValueError(
+                    f'For audio input, response_type must be "{TaskAIResponseType.REPORT}"'
+                )
+            # If input_type is code, response_type can only be "exam" or "chat".
+            if input_type == TaskInputType.CODING and v not in [
+                TaskAIResponseType.EXAM,
+                TaskAIResponseType.CHAT,
+            ]:
+                raise ValueError(
+                    f'For code input, response_type must be "{TaskAIResponseType.EXAM}" or "{TaskAIResponseType.CHAT}"'
+                )
+            # For subjective questions, response_type must always be "report".
+            if question_type == "subjective" and v != TaskAIResponseType.REPORT:
+                raise ValueError(
+                    f'For subjective questions, response_type must be "{TaskAIResponseType.REPORT}"'
+                )
+            # For objective questions, response_type must be either "exam" or "chat".
+            if question_type == "objective" and v not in [
+                TaskAIResponseType.EXAM,
+                TaskAIResponseType.CHAT,
+            ]:
+                raise ValueError(
+                    f'For objective questions, response_type must be "{TaskAIResponseType.EXAM}" or "{TaskAIResponseType.CHAT}"'
+                )
+            return v
+
+        class Config:
+            json_schema_extra = {
+                "example": {
+                    "reasoning": "The user asked to generate a question to calculate a sum of two numbers",
+                    "type": str(TaskType.QUESTION),
+                    "name": "Calculate the Sum",
+                    "description": "What is the sum of 7 and 5?",
+                    "question_type": "objective",
+                    "input_type": str(TaskInputType.TEXT),
+                    "response_type": str(TaskAIResponseType.EXAM),
+                    "programming_languages": [],
+                    "scoring_criteria": None,
+                    "answer": "12",
+                }
+            }
+
+    output_parser = PydanticOutputParser(pydantic_object=TaskConfig)
+    format_instructions = output_parser.get_format_instructions()
+
+    system_prompt = f""""You are an expert assistant for an educational learning platform. An educator has provided a prompt describing a task they want to create. Your job is to extract all relevant task details from the educator\'s prompt and output them as a well-formed JSON object.\n\nFollow these steps:\n\nDetermine Task Type:\n\nIdentify if the task is a "question" or "reading_material".\nNote: "reading_material" refers to content that a learner needs to read and is not an assessment.\nGenerate Task Name and Description:\n\nFor reading material:\nExtract or generate a task name.\nFor task description, if the educator has already provided the reading material, use that directly. If the educator requests modifications or asks for new content, generate the reading material according to their instructions.\nFor a question:\nExtract or generate a task name.\nThe task description must clearly include the question that the learner is supposed to answer. It is possible that the educator asks you to generate the question based on the details they provide. First, analyse if the prompt given by the educator includes the question itself or instructions for generating the question. If the prompt includes instructions to generate the question, you must include the generated question details in the task description. Include all parts of the question in the description including any options provided or anything else that must be considered a part of the question. The task description should have all the details required to answer the question.\nDetermine Question Specifics (if the task is a question):\n\nIdentify whether the question is subjective (open-ended, not a fixed right answer) or objective (has a fixed correct answer). Store this in the key question_type with the value "subjective" or "objective".\nDetermine the Input Type:\n\nIdentify the type of input the learner needs to provide, and set input_type accordingly. Allowed values are:\n"coding"\n"text"\n"audio"\nDetermine the Response Type:\n\nDecide how the educator wants the AI to respond, and set response_type accordingly:\nIf input_type is "audio", then response_type must be "audio".\nIf input_type is "coding", then response_type can only be "exam" or "chat".\nFor subjective questions, response_type must always be "report".\nFor objective questions with a fixed answer, response_type must be either "chat" or "exam", as specified.\nProgramming Languages (if applicable):\n\nIf the task involves code and specific programming languages are mentioned, extract and list them in a key called programming_languages. Only include languages that match exactly one of the following:\n"HTML"\n"CSS"\n"Javascript"\n"NodeJS"\n"Python"\n"React"\n"SQL"\nScoring Criteria (for Subjective Questions):\n\nIf the question is subjective and the educator has provided a scoring criteria, extract it and include it under the key `scoring_criteria` in the output.\nIf no scoring criteria is given, generate a reasonable scoring criteria.\nScoring criteria must always be present for subjective questions and never be present for objective questions. If the educator has given a range of scores for each criterion, use them. Or generate a reasonable value for the range of scores for each criterion.\n\nCorrect Answer (for Objective Questions):\n\nIf the question is objective and a correct answer is provided in the educator\'s prompt, extract it and include it under the key `answer`. If the question is a multiple choice objective question, make sure that the correct answer includes the details for the correct option as well.\n\nAlways analyse the prompt based on the instructions provided first and give your reasoning before giving the final output.\n\n{format_instructions}"""
+
+    if free_trial:
+        plan_type = "free_trial"
+    else:
+        plan_type = "paid"
+
+    llm_input_messages = [
+        {"role": "system", "content": system_prompt},
+    ]
+
+    if task_prompt_audio:
+        model = openai_plan_to_model_name[plan_type]["4o-audio"]
+        user_message_content = [
+            {
+                "type": "text",
+                "text": "```\nTask prompt\n```",
+            },
+            {
+                "type": "input_audio",
+                "input_audio": {
+                    "data": prepare_audio_input_for_ai(task_prompt_audio),
+                    "format": "wav",
+                },
+            },
+        ]
+        if task_prompt:
+            user_message_content.append({"type": "text", "text": task_prompt})
+
+        llm_input_messages.append({"role": "user", "content": user_message_content})
+    else:
+        model = openai_plan_to_model_name[plan_type]["4o-text"]
+
+        user_prompt_template = f"""```\n{task_prompt}\n```"""
+        llm_input_messages.append({"role": "user", "content": user_prompt_template})
+
+    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+
+    try:
+        pred = client.chat.completions.create(
+            model=model,
+            messages=llm_input_messages,
+            response_model=TaskConfig,
+            max_completion_tokens=8096,
+            top_p=1,
+            temperature=0,
+            frequency_penalty=0,
+            presence_penalty=0,
+            store=True,
+        )
+
+        pred_dict = pred.model_dump()
+
+        if pred_dict.get("scoring_criteria"):
+            for criterion in pred_dict["scoring_criteria"]:
+                criterion["range"] = [
+                    criterion.pop("min_score"),
+                    criterion.pop("max_score"),
+                ]
+
+        message = f"model: {model} prompt: {llm_input_messages} response: {pred_dict}"
+        logger.info(message)
+
+        return pred_dict
+    except Exception as exception:
+        traceback.print_exc()
+
+        if "insufficient_quota" in str(exception):
+            st.error(
+                "Your OpenAI account credits have been exhausted. Please recharge your OpenAI account for you to continue using SensAI."
+            )
+            st.stop()
+
+        raise exception

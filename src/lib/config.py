@@ -80,7 +80,6 @@ response_type_help_text = """`chat`: AI provides feedback on the student's respo
 allowed_ai_response_types = {
     str(TaskInputType.CODING): [
         str(TaskAIResponseType.CHAT),
-        str(TaskAIResponseType.REPORT),
         str(TaskAIResponseType.EXAM),
     ],
     str(TaskInputType.TEXT): [
@@ -90,6 +89,8 @@ allowed_ai_response_types = {
     ],
     str(TaskInputType.AUDIO): [str(TaskAIResponseType.REPORT)],
 }
+
+task_input_mode_options = ["Create with AI", "Create manually"]
 
 task_type_mapping = [
     {"label": "Question", "value": str(TaskType.QUESTION)},
