@@ -11,6 +11,16 @@ from views.home import show_home
 from components.status import error_markdown
 from components.buttons import back_to_home_button
 
+st.markdown(
+    """
+        <style>
+            .stMainBlockContainer {
+                padding-top: 3rem;
+                }
+        </style>""",
+    unsafe_allow_html=True,
+)
+
 if not st.experimental_user.is_authenticated:
     login()
 else:

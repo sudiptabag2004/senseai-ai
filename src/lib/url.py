@@ -1,5 +1,7 @@
 import streamlit as st
 import re
+import os
+from typing import Dict
 from unidecode import unidecode
 
 
@@ -25,3 +27,13 @@ def slugify(text: str) -> str:
     text = re.sub(r"[-\s]+", "-", text.strip())
 
     return text
+
+
+def get_home_url(params: Dict[str, str] = None) -> str:
+    home_page_url = os.environ.get("APP_URL")
+
+    if params:
+        query_params = "&".join([f"{key}={value}" for key, value in params.items()])
+        home_page_url += f"?{query_params}"
+
+    return home_page_url

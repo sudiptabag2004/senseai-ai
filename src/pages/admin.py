@@ -8,6 +8,7 @@ from collections import defaultdict
 import numpy as np
 import streamlit as st
 import json
+import io
 from email_validator import validate_email, EmailNotValidError
 
 st.set_page_config(
@@ -27,6 +28,7 @@ from lib.prompts import (
     async_index_wrapper,
     task_level_insights_base_prompt,
     insights_summary_base_prompt,
+    generate_task_details_from_prompt,
 )
 from lib.llm import (
     validate_openai_api_key,
@@ -45,6 +47,7 @@ from lib.config import (
     task_type_to_label,
     coding_languages_supported,
     openai_plan_to_model_name,
+    task_input_mode_options,
 )
 from lib.init import init_app
 from lib.cache import (
@@ -52,6 +55,7 @@ from lib.cache import (
     clear_cohort_cache_for_courses,
     clear_cache_for_mentor_groups,
 )
+from lib.audio import validate_audio_input
 from lib.db import (
     update_milestone_orders,
     get_all_tasks_for_org_or_course,
@@ -136,6 +140,7 @@ from components.placeholder import (
     show_empty_tags_placeholder,
     show_empty_tasks_placeholder,
 )
+from models import TaskAIResponseType, TaskInputType
 
 init_app()
 
@@ -176,7 +181,7 @@ if "is_ai_running" not in st.session_state:
     reset_ai_running()
 
 
-def show_logo():
+def show_org_logo():
     show_placeholder_icon(
         st.session_state.org["name"],
         st.session_state.org["logo_color"],
@@ -190,7 +195,7 @@ def show_profile_header():
     cols = st.columns([1, 4, 3])
 
     with cols[0]:
-        show_logo()
+        show_org_logo()
 
     with cols[1]:
         st.subheader(st.session_state.org["name"])
@@ -286,6 +291,14 @@ def update_cohort_uploader_key():
     st.session_state.cohort_uploader_key += 1
 
 
+if "audio_file_uploader_key" not in st.session_state:
+    st.session_state.audio_file_uploader_key = 0
+
+
+def update_audio_file_uploader_key():
+    st.session_state.audio_file_uploader_key += 1
+
+
 def reset_task_form():
     st.session_state.task_type = None
     st.session_state.task_name = ""
@@ -300,6 +313,12 @@ def reset_task_form():
     st.session_state.final_answer = ""
     st.session_state.ai_answer = ""
     st.session_state.ai_answers = None
+    st.session_state.prefilled = False
+    st.session_state.task_prompt = ""
+    st.session_state.task_details = None
+    st.session_state.task_input_mode = task_input_mode_options[0]
+    st.session_state.task_prompt_audio = None
+    update_audio_file_uploader_key()
     reset_ai_running()
     reset_tests()
     reset_scoring_criteria()
@@ -321,17 +340,18 @@ def get_task_context():
     return None
 
 
-@st.spinner("Generating answer...")
-def generate_answer_for_form_task():
-    st.session_state.ai_answer = asyncio.run(
-        generate_answer_for_task(
-            st.session_state.task_name,
-            st.session_state.task_description,
-            get_task_context(),
-            model["version"],
-            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-        )
-    )
+def generate_answer_for_form_task(container):
+    with container:
+        with st.spinner("Generating answer..."):
+            st.session_state.ai_answer = asyncio.run(
+                generate_answer_for_task(
+                    st.session_state.task_name,
+                    st.session_state.task_description,
+                    get_task_context(),
+                    model["version"],
+                    decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                )
+            )
 
 
 async def generate_tests_for_task(
@@ -1040,7 +1060,98 @@ def show_scoring_criteria_addition_form(scoring_criteria):
         )
 
 
+def generate_task_details(container):
+    if audio_value := st.session_state[
+        f"task_prompt_audio_{st.session_state.audio_file_uploader_key}"
+    ]:
+        error = validate_audio_input(audio_value)
+        if error:
+            set_toast(error, "🚫")
+            update_audio_file_uploader_key()
+            return
+
+        st.session_state.task_prompt_audio = audio_value.read()
+
+    if not st.session_state.task_prompt_audio and not st.session_state.task_prompt:
+        set_toast("Please enter a task prompt", icon="🚫")
+        return
+
+    with container:
+        with st.spinner("Generating task..."):
+            st.session_state.task_details = asyncio.run(
+                generate_task_details_from_prompt(
+                    st.session_state.task_prompt,
+                    st.session_state.task_prompt_audio,
+                    decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                    st.session_state.org["openai_free_trial"],
+                )
+            )
+            st.session_state.prefilled = True
+            st.session_state.task_input_mode = task_input_mode_options[1]
+
+    # st.rerun()
+
+
 def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
+    show_toast()
+
+    if mode == "add":
+        container = st.container(border=False)
+
+        with container:
+            input_mode = st.segmented_control(
+                "Input mode",
+                task_input_mode_options,
+                key="task_input_mode",
+                label_visibility="collapsed",
+            )
+
+        if "task_prompt" in st.session_state:
+            st.session_state.task_prompt = st.session_state.task_prompt
+
+        if input_mode == "Create with AI":
+            with st.form("generate_task_form", border=False):
+                audio_input_key = (
+                    f"task_prompt_audio_{st.session_state.audio_file_uploader_key}"
+                )
+
+                if (
+                    "task_prompt_audio" in st.session_state
+                    and st.session_state["task_prompt_audio"]
+                ):
+                    st.audio(st.session_state["task_prompt_audio"])
+
+                st.audio_input(
+                    "Describe the task you want to create",
+                    key=audio_input_key,
+                )
+
+                st.text_area(
+                    "Describe the task you want to create",
+                    placeholder="1) Is it an assessment or reading material?\n2) If it is reading material, what do you want the learner to read about? How big do you want it to be? How should it be formatted? Any other nuances that you care about?\n3) If the task is a question, is it subjective or objective?\n4) How is the learner expected to respond (e.g. text/audio/code)?\n5) How do you want AI to act (e.g. coach, exam, report)?\n6) If the task is objective, specify the correct answer.\n7) If the task is a subjective question, specify the scoring criteria you want AI to follow for evaluation (e.g. grammar, clarity, confidence)",
+                    key="task_prompt",
+                    height=300,
+                )
+
+                st.form_submit_button(
+                    "Generate",
+                    use_container_width=True,
+                    type="primary",
+                    on_click=generate_task_details,
+                    args=(container,),
+                )
+
+            return
+        else:
+            if "task_details" in st.session_state and st.session_state.task_details:
+                set_task_form_with_task_details(st.session_state.task_details)
+                st.session_state.task_details = st.session_state.task_details
+
+            if st.session_state.prefilled:
+                st.snow()
+
+        st.session_state.prefilled = False
+
     task_type_selector(disabled=mode == "edit")
 
     if not st.session_state.task_type:
@@ -1092,8 +1203,13 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
             is_task_details_missing = (
                 not st.session_state.task_description or not st.session_state.task_name
             )
-            is_generate_answer_disabled = (
-                is_task_details_missing or st.session_state.final_answer != ""
+
+            if not st.session_state.final_answer and st.session_state.ai_answer:
+                st.session_state.final_answer = st.session_state.ai_answer
+
+            is_generate_answer_disabled = is_task_details_missing or (
+                st.session_state.final_answer is not None
+                and st.session_state.final_answer != ""
             )
             generate_help_text = (
                 "Task name or description is missing"
@@ -1104,23 +1220,22 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
                     else "Generate answer using AI"
                 )
             )
-            if cols[-1].button(
+            cols[-1].button(
                 "Generate",
                 disabled=is_generate_answer_disabled,
                 key="generate_answer",
                 help=generate_help_text,
-            ):
-                with cols[0]:
-                    generate_answer_for_form_task()
+                on_click=generate_answer_for_form_task,
+                args=(cols[0],),
+            )
 
             task_answer = cols[0].text_area(
                 "Answer",
                 key="final_answer",
                 placeholder="If your task has a correct answer, write it here",
-                value=st.session_state.ai_answer,
             )
-            if not task_answer and st.session_state.ai_answer:
-                task_answer = st.session_state.ai_answer
+            # if not task_answer and st.session_state.ai_answer:
+            #     task_answer = st.session_state.ai_answer
 
         elif ai_response_type == "report":
             show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
@@ -1632,18 +1747,20 @@ if st.session_state.selected_section_index == 0:
 
     def set_task_form_with_task_details(task_details: dict):
         st.session_state.task_name = task_details["name"]
-        st.session_state.task_description = task_details["description"]
+        st.session_state.task_description = task_details["description"].replace(
+            "\\n", "\n"
+        )
 
         _all_task_types = [task_type["value"] for task_type in task_type_mapping]
         st.session_state["task_type"] = task_type_mapping[
             _all_task_types.index(task_details["type"])
         ]
 
-        st.session_state.task_has_context = bool(task_details["context"])
-        st.session_state.task_context = task_details["context"]
+        st.session_state.task_has_context = bool(task_details.get("context"))
+        st.session_state.task_context = task_details.get("context")
 
         all_tag_ids = [tag["id"] for tag in st.session_state.tags]
-        task_tag_ids = [tag["id"] for tag in task_details["tags"]]
+        task_tag_ids = [tag["id"] for tag in task_details.get("tags", [])]
         selected_tag_indices = [
             index for index, tag_id in enumerate(all_tag_ids) if tag_id in task_tag_ids
         ]
@@ -1651,33 +1768,42 @@ if st.session_state.selected_section_index == 0:
             st.session_state.tags[index] for index in selected_tag_indices
         ]
 
-        st.session_state["selected_task_courses"] = deepcopy(task_details["courses"])
+        st.session_state["selected_task_courses"] = deepcopy(
+            task_details.get("courses", [])
+        )
 
         if task_details["type"] == "reading_material":
             return
 
-        st.session_state["task_ai_response_type"] = task_details["response_type"]
-        st.session_state["task_input_type"] = task_details["input_type"]
+        st.session_state["task_ai_response_type"] = str(task_details["response_type"])
+        st.session_state["task_input_type"] = str(task_details["input_type"])
 
-        if task_details["response_type"] in ["exam", "chat"]:
-            st.session_state.final_answer = task_details["answer"]
-        elif task_details["response_type"] == "report":
+        if task_details["response_type"] in [
+            TaskAIResponseType.EXAM,
+            TaskAIResponseType.CHAT,
+        ]:
+            st.session_state.final_answer = task_details.get("answer")
+        elif task_details["response_type"] == TaskAIResponseType.REPORT:
             # response_type = report
-            task_details["scoring_criteria"] = get_scoring_criteria_for_task(
-                task_details["id"]
-            )
+            if "id" in task_details:
+                task_details["scoring_criteria"] = get_scoring_criteria_for_task(
+                    task_details["id"]
+                )
+
             st.session_state.scoring_criteria = deepcopy(
                 task_details["scoring_criteria"]
             )
-            for scoring_criterion in st.session_state.scoring_criteria:
-                scoring_criterion.pop("id")
+
+            if "id" in task_details:
+                for scoring_criterion in st.session_state.scoring_criteria:
+                    scoring_criterion.pop("id")
         else:
             raise NotImplementedError()
 
-        if task_details["input_type"] == "coding":
+        if task_details["input_type"] == TaskInputType.CODING:
             st.session_state.coding_languages = task_details["coding_language"]
 
-        if task_details["tests"]:
+        if task_details.get("tests"):
             st.session_state.task_has_tests = True
             st.session_state.tests = task_details["tests"]
 

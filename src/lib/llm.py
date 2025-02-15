@@ -100,7 +100,12 @@ def clean_llm_output(response: str):
 
 
 def parse_llm_output(
-    output_parser, response: str, model: str, default={}, verbose: bool = False
+    output_parser,
+    response: str,
+    model: str,
+    api_key: str,
+    default={},
+    verbose: bool = False,
 ):
     try:
         return output_parser.parse(response)
@@ -118,7 +123,7 @@ def parse_llm_output(
 
             output_fixing_parser = OutputFixingParser.from_llm(
                 parser=output_parser,
-                llm=ChatOpenAI(model_name=model, temperature=0),
+                llm=ChatOpenAI(model_name=model, api_key=api_key, temperature=0),
             )
             try:
                 return output_fixing_parser.parse(response)
@@ -130,10 +135,12 @@ def parse_llm_output(
 
 
 def get_parsed_output_dict(
-    output_parser, llm_output, model: str, verbose: bool = False
+    output_parser, llm_output, model: str, api_key: str, verbose: bool = False
 ) -> Dict:
     """Use the output parser to parse the LLM output and return the parsed output as a dictionary"""
-    pred = parse_llm_output(output_parser, llm_output, model=model, verbose=verbose)
+    pred = parse_llm_output(
+        output_parser, llm_output, model=model, api_key=api_key, verbose=verbose
+    )
 
     if isinstance(pred, BaseModel):
         pred_dict = pred.model_dump()
@@ -213,6 +220,7 @@ async def call_llm_and_parse_output(
         output_parser,
         llm_output,
         model=model,
+        api_key=api_key,
         verbose=verbose,
     )
 

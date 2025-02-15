@@ -1,15 +1,18 @@
 import streamlit as st
 from views.roadmap import get_tasks_with_completion_status
 from components.milestone_learner_view import get_task_url
+from menu import show_logo
 
 
 def display_milestone_tasks_in_sidebar(user_id, course_id, cohort_id, task):
+    show_logo()
+
     course_tasks = get_tasks_with_completion_status(
         user_id, cohort_id, course_id, task["milestone_id"]
     )
 
-    with st.sidebar.container(border=True):
-        st.subheader(task["milestone_name"])
+    with st.sidebar.container(border=False):
+        st.header(task["milestone_name"])
 
     for index, course_task in enumerate(course_tasks):
         course_text_to_display = course_task["name"].strip()
@@ -22,12 +25,12 @@ def display_milestone_tasks_in_sidebar(user_id, course_id, cohort_id, task):
         if course_task["id"] == task["id"]:
             current_task_index = index
             st.sidebar.markdown(
-                f"""<div style='background-color: #ADADB2; padding: 8px 12px; border-radius: 0.5rem; margin: 0 0 16px 0;'>{course_text_to_display}</div>""",
+                f"""<div style='background-color: #474747; color: white; padding: 8px 12px; border-radius: 0.5rem; margin: 0 0 16px 0;'>{course_text_to_display}</div>""",
                 unsafe_allow_html=True,
             )
         else:
             st.sidebar.markdown(
-                f'<a href="{task_url}" target="_self" style="text-decoration: none; background-color: #dfe3eb; padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block;">{course_text_to_display}</a>',
+                f'<a href="{task_url}" target="_self" style="text-decoration: none; background-color: #dfe3eb; padding: 0.5rem 1rem; border-radius: 0.5rem; display: inline-block; width: 100%; color: black">{course_text_to_display}</a>',
                 unsafe_allow_html=True,
             )
 
