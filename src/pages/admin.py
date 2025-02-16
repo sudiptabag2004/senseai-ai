@@ -963,7 +963,7 @@ def delete_scoring_criterion(scoring_criteria, index_to_delete: int):
 
 def show_scoring_criteria_addition_form(scoring_criteria):
     show_toast()
-    st.subheader("Scoring Criterion")
+    st.subheader("Scoring Criteria")
     for index, scoring_criterion in enumerate(scoring_criteria):
         with st.expander(
             f"{scoring_criterion['category']} ({scoring_criterion['range'][0]} - {scoring_criterion['range'][1]})"
