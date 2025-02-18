@@ -6,6 +6,7 @@ from lib.db import (
     insert_or_return_user,
     get_user_organizations,
 )
+from lib.config import pitch
 from lib.utils.encryption import decrypt_openai_api_key
 
 
@@ -89,11 +90,11 @@ def login():
     sub_cols = cols[2].columns([1, 2, 1])
     sub_cols[1].image(logo_path)
 
-    sub_cols = cols[2].columns([1, 3.5, 1])
+    sub_cols = cols[2].columns([1, 5, 1])
     sub_cols[1].markdown(
         f"""
-        <p style='margin-top: 10px; font-size: 1.5rem; color: {subtitle_color}'>
-        Give every learner a personal AI coach
+        <p style='margin-top: 10px; font-size: 1.25rem; color: {subtitle_color}'>
+        {pitch}
         </p>
         """,
         unsafe_allow_html=True,

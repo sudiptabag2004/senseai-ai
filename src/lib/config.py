@@ -114,3 +114,5 @@ openai_plan_to_model_name = {
         "4o-audio": "gpt-4o-mini-audio-preview-2024-12-17",
     },
 }
+
+pitch = "Scale your teaching with an AI Teaching Assistant"

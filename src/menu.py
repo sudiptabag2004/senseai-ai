@@ -11,19 +11,19 @@ from components.status import error_markdown
 def menu_header():
     show_logo()
 
-    if st.session_state.theme["base"] == "dark":
-        subtitle_color = "#fff"
-    else:
-        subtitle_color = "#1E2F4D"
+    # if st.session_state.theme["base"] == "dark":
+    #     subtitle_color = "#fff"
+    # else:
+    #     subtitle_color = "#1E2F4D"
 
-    st.sidebar.markdown(
-        f"""
-        <p style='margin-top: -25px; margin-bottom: 15px; color: {subtitle_color}'>
-        Give every learner a personal AI coach
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+    # st.sidebar.markdown(
+    #     f"""
+    #     <p style='margin-top: -25px; margin-bottom: 15px; color: {subtitle_color}'>
+    #     Give every learner a personal AI coach
+    #     </p>
+    #     """,
+    #     unsafe_allow_html=True,
+    # )
 
     st.sidebar.page_link(
         "home.py",
