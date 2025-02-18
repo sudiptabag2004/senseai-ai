@@ -307,7 +307,6 @@ def reset_task_form():
     st.session_state.task_ai_response_type = None
     st.session_state.task_input_type = None
     st.session_state.task_tags = []
-    st.session_state.task_courses = []
     st.session_state.task_answer = ""
     st.session_state.coding_languages = None
     st.session_state.final_answer = ""
@@ -1126,6 +1125,41 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
                     key=audio_input_key,
                 )
 
+                if st.session_state.theme["base"] == "light":
+                    separator_color = "#D6D6D8"
+                    separator_text_color = "#84858B"
+                else:
+                    separator_color = "#31333F"
+                    separator_text_color = "#D6D6D8"
+
+                st.markdown(
+                    f"""
+                    <div class="separator">
+                        <span>AND/OR</span>
+                    </div>
+                    <style>
+                        .separator {{
+                            display: flex;
+                            align-items: center;
+                            text-align: center;
+                            margin: 15px 0;
+                        }}
+                        .separator::before,
+                        .separator::after {{
+                            content: '';
+                            flex: 1;
+                            border-bottom: 1px solid {separator_color};
+                        }}
+                        .separator span {{
+                            padding: 0 10px;
+                            color: {separator_text_color};
+                            font-size: 14px;
+                        }}
+                    </style>
+                """,
+                    unsafe_allow_html=True,
+                )
+
                 st.text_area(
                     "Describe the task you want to create",
                     placeholder="1) Is it an assessment or reading material?\n2) If it is reading material, what do you want the learner to read about? How big do you want it to be? How should it be formatted? Any other nuances that you care about?\n3) If the task is a question, is it subjective or objective?\n4) How is the learner expected to respond (e.g. text/audio/code)?\n5) How do you want AI to act (e.g. coach, exam, report)?\n6) If the task is objective, specify the correct answer.\n7) If the task is a subjective question, specify the scoring criteria you want AI to follow for evaluation (e.g. grammar, clarity, confidence)",
@@ -1245,7 +1279,6 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
         "Tags",
         st.session_state.tags,
         key="task_tags",
-        default=None,
         format_func=lambda tag: tag["name"],
         help="If you don't see the tag you want, you can create a new one from the `Tags` tab",
     )
@@ -1760,7 +1793,13 @@ if st.session_state.selected_section_index == 0:
         st.session_state.task_context = task_details.get("context")
 
         all_tag_ids = [tag["id"] for tag in st.session_state.tags]
-        task_tag_ids = [tag["id"] for tag in task_details.get("tags", [])]
+
+        task_tags = (
+            st.session_state.task_tags
+            if st.session_state.get("task_tags")
+            else task_details.get("tags", [])
+        )
+        task_tag_ids = [tag["id"] for tag in task_tags]
         selected_tag_indices = [
             index for index, tag_id in enumerate(all_tag_ids) if tag_id in task_tag_ids
         ]
@@ -1769,7 +1808,9 @@ if st.session_state.selected_section_index == 0:
         ]
 
         st.session_state["selected_task_courses"] = deepcopy(
-            task_details.get("courses", [])
+            st.session_state.selected_task_courses
+            if st.session_state.get("selected_task_courses")
+            else task_details.get("courses", [])
         )
 
         if task_details["type"] == "reading_material":
@@ -1782,7 +1823,11 @@ if st.session_state.selected_section_index == 0:
             TaskAIResponseType.EXAM,
             TaskAIResponseType.CHAT,
         ]:
-            st.session_state.final_answer = task_details.get("answer")
+            st.session_state.final_answer = (
+                st.session_state.final_answer
+                if st.session_state.get("final_answer")
+                else task_details.get("answer")
+            )
         elif task_details["response_type"] == TaskAIResponseType.REPORT:
             # response_type = report
             if "id" in task_details:
