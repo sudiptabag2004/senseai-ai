@@ -1,4 +1,5 @@
-from lib.db import init_db
+from api.db import init_db
+import asyncio
 
 if __name__ == "__main__":
-    init_db()
+    asyncio.run(init_db())

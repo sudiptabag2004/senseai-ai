@@ -43,13 +43,13 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   ```
 - Running the app locally
     ```
-    cd src; streamlit run home.py
+    cd src/frontend; streamlit run home.py
     ```
 
     The app will be hosted on http://localhost:8501.
 - Running the API locally
     ```
-    cd src; uvicorn api:app --reload --port 8001
+    cd src; uvicorn api.main:app --reload --port 8001
     ```
 
     The api will be hosted on http://localhost:8001.

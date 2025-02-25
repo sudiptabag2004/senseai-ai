@@ -45,14 +45,15 @@ RUN pip install -r requirements.txt
 
 COPY src /src
 
-COPY src/.streamlit/config.prod.toml /src/.streamlit/config.toml
+COPY src/frontend/.streamlit/config.prod.toml /src/frontend/.streamlit/config.toml
 
 # Remove the /src/lib/.env and .env.aws file if it exists
-RUN test -f /src/lib/.env && rm -f /src/lib/.env || true
-RUN test -f /src/lib/.env.aws && rm -f /src/lib/.env.aws || true
+RUN test -f /src/frontend/lib/.env && rm -f /src/frontend/lib/.env || true
+RUN test -f /src/frontend/lib/.env.aws && rm -f /src/frontend/lib/.env.aws || true
 
 # Expose the port on which your FastAPI app listens
-EXPOSE 8001
+# EXPOSE 8001
+EXPOSE 8002
 
 # Only expose one port where everything is hosted
 EXPOSE 8501
@@ -67,15 +68,18 @@ ARG ENV
 
 ARG OPENAI_API_KEY_ENCRYPTION_KEY
 
-COPY src/.streamlit/secrets.${ENV}.toml /src/.streamlit/secrets.toml
+ARG BACKEND_URL
 
-RUN test -f /src/.streamlit/secrets.dev.toml && rm -f /src/.streamlit/secrets.dev.toml || true
-RUN test -f /src/.streamlit/secrets.prod.toml && rm -f /src/.streamlit/secrets.prod.toml || true
+COPY src/frontend/.streamlit/secrets.${ENV}.toml /src/frontend/.streamlit/secrets.toml
 
-RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/lib/.env
+RUN test -f /src/frontend/.streamlit/secrets.dev.toml && rm -f /src/frontend/.streamlit/secrets.dev.toml || true
+RUN test -f /src/frontend/.streamlit/secrets.prod.toml && rm -f /src/frontend/.streamlit/secrets.prod.toml || true
+
+# Use ARG value in ENV to make it available at runtime
+RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY\nBACKEND_URL=$BACKEND_URL" >> /src/frontend/lib/.env
+
+
+RUN printf "OPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/api/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Command to run on container startup
-CMD ["python", "/src/startup.py"]
