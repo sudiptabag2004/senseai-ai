@@ -25,7 +25,6 @@ from api.models import (
     UpdateTaskRequest,
     TaskTagsRequest,
     AddScoringCriteriaToTasksRequest,
-    RemoveScoringCriteriaFromTaskRequest,
     UpdateTaskTestsRequest,
     TaskCourseResponse,
 )
@@ -74,6 +73,20 @@ async def get_courses_for_tasks(
 @router.get("/scoring_criteria")
 async def get_scoring_criteria_for_tasks(task_ids: List[int] = Query(...)):
     return await get_scoring_criteria_for_tasks_from_db(task_ids)
+
+
+@router.delete("/scoring_criteria")
+async def remove_scoring_criteria_from_task(ids: List[int] = Query(...)):
+    await remove_scoring_criteria_from_task_in_db(ids)
+    return {"success": True}
+
+
+@router.post("/scoring_criteria")
+async def add_scoring_criteria_to_tasks(request: AddScoringCriteriaToTasksRequest):
+    await add_scoring_criteria_to_tasks_in_db(
+        request.task_ids, request.scoring_criteria
+    )
+    return {"success": True}
 
 
 @router.put("/{task_id}")
@@ -134,22 +147,6 @@ async def add_tags_to_task(task_id: int, request: TaskTagsRequest):
 @router.delete("/{task_id}/tags")
 async def remove_tags_from_task(task_id: int, request: TaskTagsRequest):
     await remove_tags_from_task_in_db(task_id, request.tag_ids)
-    return {"success": True}
-
-
-@router.delete("/scoring_criteria")
-async def remove_scoring_criteria_from_task(
-    request: RemoveScoringCriteriaFromTaskRequest,
-):
-    await remove_scoring_criteria_from_task_in_db(request.ids)
-    return {"success": True}
-
-
-@router.post("/scoring_criteria")
-async def add_scoring_criteria_to_tasks(request: AddScoringCriteriaToTasksRequest):
-    await add_scoring_criteria_to_tasks_in_db(
-        request.task_ids, request.scoring_criteria
-    )
     return {"success": True}
 
 

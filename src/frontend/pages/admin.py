@@ -530,13 +530,19 @@ def update_task_courses(task_details: Dict):
 
 
 def is_scoring_criteria_changed(new_task_scoring_criteria, old_task_scoring_criteria):
-    for index, criterion in enumerate(new_task_scoring_criteria):
+    index = 0
+    for criterion in new_task_scoring_criteria:
         if index >= len(old_task_scoring_criteria):
             return True
 
-        for key in new_task_scoring_criteria[0].keys():
-            if criterion[key] != old_task_scoring_criteria[index][key]:
+        for key, value in criterion.items():
+            if old_task_scoring_criteria[index][key] != value:
                 return True
+
+        index += 1
+
+    if index < len(old_task_scoring_criteria):
+        return True
 
     return False
 
@@ -552,14 +558,49 @@ def update_task_scoring_criteria(task_details: Dict):
         scoring_criteria_to_add = [
             criterion
             for criterion in new_task_scoring_criteria
-            if criterion not in old_task_scoring_criteria
+            if "id" not in criterion
         ]
 
-        scoring_criteria_to_remove = [
-            criterion["id"]
-            for criterion in old_task_scoring_criteria
-            if criterion not in new_task_scoring_criteria
-        ]
+        for criterion in new_task_scoring_criteria:
+            if "id" not in criterion:
+                continue
+
+            has_criterion_changed = False
+
+            for old_criterion in old_task_scoring_criteria:
+                if old_criterion["id"] != criterion["id"]:
+                    continue
+
+                if old_criterion != criterion:
+                    has_criterion_changed = True
+
+                break
+
+            if has_criterion_changed:
+                criterion_to_add = {
+                    key: value for key, value in criterion.items() if key != "id"
+                }
+                scoring_criteria_to_add.append(criterion_to_add)
+
+        scoring_criteria_to_remove = []
+
+        for criterion in old_task_scoring_criteria:
+            is_criterion_same = False
+
+            for new_criterion in new_task_scoring_criteria:
+                if "id" not in new_criterion:
+                    continue
+
+                if new_criterion["id"] != criterion["id"]:
+                    continue
+
+                if new_criterion == criterion:
+                    is_criterion_same = True
+
+                break
+
+            if not is_criterion_same:
+                scoring_criteria_to_remove.append(criterion["id"])
 
         if scoring_criteria_to_add:
             add_scoring_criteria_to_tasks([task_id], scoring_criteria_to_add)
@@ -1835,10 +1876,6 @@ if st.session_state.selected_section_index == 0:
             st.session_state.scoring_criteria = deepcopy(
                 task_details["scoring_criteria"]
             )
-
-            if "id" in task_details:
-                for scoring_criterion in st.session_state.scoring_criteria:
-                    scoring_criterion.pop("id")
         else:
             raise NotImplementedError()
 

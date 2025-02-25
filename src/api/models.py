@@ -325,10 +325,6 @@ class AddScoringCriteriaToTasksRequest(BaseModel):
     scoring_criteria: List[Dict]
 
 
-class RemoveScoringCriteriaFromTaskRequest(BaseModel):
-    ids: List[int]
-
-
 class AddTasksToCoursesRequest(BaseModel):
     course_tasks: List[Tuple[int, int, int | None]]
 

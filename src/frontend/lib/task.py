@@ -215,11 +215,10 @@ def add_scoring_criteria_to_tasks(
 
 def remove_scoring_criteria(scoring_criteria_ids: List[int]) -> Dict:
     """Remove scoring criteria from a task"""
-    payload = json.dumps({"ids": scoring_criteria_ids})
     response = requests.delete(
         f"{os.getenv('BACKEND_URL')}/tasks/scoring_criteria",
         headers={"Content-Type": "application/json"},
-        data=payload,
+        params={"ids": scoring_criteria_ids},
     )
     if response.status_code != 200:
         raise Exception("Failed to remove scoring criteria from task")
