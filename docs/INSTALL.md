@@ -42,12 +42,6 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   ```
   python src/startup.py
   ```
-- Running the app locally
-    ```
-    cd src/frontend; streamlit run home.py
-    ```
-
-    The app will be hosted on http://localhost:8501.
 - Running the API locally
     ```
     cd src; uvicorn api.main:app --reload --port 8001
@@ -55,7 +49,12 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
 
     The api will be hosted on http://localhost:8001.
     The docs will be available on http://localhost:8001/docs
+- Running the app locally
+    ```
+    cd src/frontend; streamlit run home.py
+    ```
 
+    The app will be hosted on http://localhost:8501.
 
 ### Additional steps for contributors
 - Set up `pre-commit` hooks. `pre-commit` should already be installed while installing requirements from the `requirements-dev.txt` file.
