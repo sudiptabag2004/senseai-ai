@@ -12,7 +12,7 @@ import requests
 from email_validator import validate_email, EmailNotValidError
 
 st.set_page_config(
-    page_title="Admin | SensAI", layout="wide", initial_sidebar_state="collapsed"
+    page_title="Admin Panel | SensAI", layout="wide", initial_sidebar_state="collapsed"
 )
 
 from copy import deepcopy

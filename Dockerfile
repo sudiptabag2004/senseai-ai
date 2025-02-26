@@ -66,7 +66,8 @@ ARG S3_FOLDER_NAME
 
 ARG ENV
 
-ARG OPENAI_API_KEY_ENCRYPTION_KEY
+# ARG OPENAI_API_KEY_ENCRYPTION_KEY
+ARG OPENAI_API_KEY
 
 ARG BACKEND_URL
 
@@ -76,10 +77,10 @@ RUN test -f /src/frontend/.streamlit/secrets.dev.toml && rm -f /src/frontend/.st
 RUN test -f /src/frontend/.streamlit/secrets.prod.toml && rm -f /src/frontend/.streamlit/secrets.prod.toml || true
 
 # Use ARG value in ENV to make it available at runtime
-RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY\nBACKEND_URL=$BACKEND_URL" >> /src/frontend/lib/.env
+RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY=$OPENAI_API_KEY\nBACKEND_URL=$BACKEND_URL" >> /src/frontend/lib/.env
 
 
-RUN printf "OPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/api/.env
+# RUN printf "OPENAI_API_KEY_ENCRYPTION_KEY=$OPENAI_API_KEY_ENCRYPTION_KEY" >> /src/api/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
