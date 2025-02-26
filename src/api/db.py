@@ -1206,7 +1206,7 @@ async def get_streaks(
         u.first_name,
         u.middle_name,
         u.last_name,
-        GROUP_CONCAT(t.timestamp ORDER BY t.timestamp DESC) as timestamps
+        GROUP_CONCAT(t.timestamp) as timestamps
     FROM {users_table_name} u
     LEFT JOIN (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
@@ -1245,11 +1245,13 @@ async def get_streaks(
         user_last_name,
         user_usage_dates_str,
     ) in usage_per_user:
-        streak_count = (
-            len(get_user_streak_from_usage_dates(user_usage_dates_str.split(",")))
-            if user_usage_dates_str
-            else 0
-        )
+
+        if user_usage_dates_str:
+            user_usage_dates = user_usage_dates_str.split(",")
+            user_usage_dates = sorted(user_usage_dates, reverse=True)
+            streak_count = len(get_user_streak_from_usage_dates(user_usage_dates))
+        else:
+            streak_count = 0
 
         streaks.append(
             {
