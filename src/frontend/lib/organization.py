@@ -126,9 +126,14 @@ def update_org_by_id(org_id: int, org: Dict):
     return response.json()
 
 
-def update_org_openai_api_key(org_id: int, openai_api_key: str, is_free_trial: bool):
+def update_org_openai_api_key(
+    org_id: int, encrypted_openai_api_key: str, is_free_trial: bool
+):
     payload = json.dumps(
-        {"openai_api_key": openai_api_key, "is_free_trial": is_free_trial}
+        {
+            "encrypted_openai_api_key": encrypted_openai_api_key,
+            "is_free_trial": is_free_trial,
+        }
     )
     headers = {"Content-Type": "application/json"}
 

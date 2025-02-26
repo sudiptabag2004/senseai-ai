@@ -6,8 +6,6 @@ from typing import List
 st.set_page_config(page_title="Interview Practice | SensAI", layout="wide")
 
 from openai import OpenAI
-from dotenv import load_dotenv
-import instructor
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 import pandas as pd
@@ -18,18 +16,20 @@ init_app()
 
 from auth import unauthorized_redirect_to_home, login_or_signup_user
 from lib.ui import display_waiting_indicator
-from lib.llm import get_formatted_history
+from lib.llm import get_formatted_history, stream_llm_with_instructor
 from lib.utils.logging import logger
 from lib.hva import is_user_hva_learner, get_hva_openai_api_key
-from lib.utils.encryption import decrypt_openai_api_key
 from lib.audio import validate_audio_input, prepare_audio_input_for_ai
 from components.buttons import back_to_home_button
 from components.selectors import select_role, get_selected_role
+from lib.toast import set_toast, show_toast
 
 login_or_signup_user()
 
 if not is_user_hva_learner(st.session_state.user["id"]):
     unauthorized_redirect_to_home()
+
+show_toast()
 
 questions = [
     "Tell me about yourself",
@@ -199,10 +199,6 @@ def give_feedback_on_audio_input():
 
     system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach who is helping your mentee improve their interviewing skills for the role of {selected_role}.\n\nYou will be given an interview question and the conversation history between you and the mentee.\n\nYou need to give feedback on the mentee's response on what part of their answer stood out, what pieces were missing, what they did well, and what could they have done differently, in light of best practices for interviews, including tense consistency, clarity, precision, sentence structure, clarity of speech and confidence.\n\nImportant Instructions:\n- Make sure to categorize the different aspects of feedback into individual topics so that it is easy to process for the mentee.\n- You must be very specific about exactly what part of the mentee's response you are suggesting any improvement for by quoting directly from their response along with a clear example of how it could be improved. The example for the improvement must be given as if the mentee had said it themselves.\n\nAvoid demotivating the mentee. Only provide critique where it is clearly necessary and praise them for the parts of their response that are good.\n- Some mandatory topics for the feedback are: tense consistency, clarity, precision, sentence structure, clarity of speech and confidence. Add more topics as you deem fit.\n- Give any feedback as needed on how their response to the question can be made more suited to the role of a {selected_role}.\n\n{format_instructions}"""
 
-    client = instructor.from_openai(
-        OpenAI(api_key=decrypt_openai_api_key(get_hva_openai_api_key()))
-    )
-
     ai_chat_history = [
         {
             "role": "system",
@@ -222,17 +218,12 @@ def give_feedback_on_audio_input():
             ],
         },
     ]
-    stream = client.chat.completions.create_partial(
+    stream = stream_llm_with_instructor(
+        api_key=os.environ["OPENAI_API_KEY"],
         model=model,
         messages=ai_chat_history,
         response_model=Output,
         max_completion_tokens=2048,
-        stream=True,
-        temperature=0,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0,
-        store=True,
     )
 
     # TODO: what about if student just wants to ask something instead of answering prompt, using text?
@@ -335,8 +326,11 @@ else:
 
     if audio_value:
         if is_recording:
-            if not validate_audio_input(audio_value):
-                st.stop()
+            error = validate_audio_input(audio_value)
+            if error:
+                set_toast(error, "🚫")
+                update_file_uploader_key()
+                st.rerun()
 
             # st.session_state.audio_data = audio_value.export(format="wav").read()
             st.session_state.audio_data = audio_value.read()

@@ -5,16 +5,18 @@ from typing import Dict
 from lib.url import get_home_url
 
 
-def display_waiting_indicator():
+def display_waiting_indicator(padding_left: int = 0, padding_top: int = 0):
     st.markdown(
-        """
+        f"""
         <style>
-        .typing-indicator {
+        .typing-indicator {{
             display: flex;
             align-items: center;
             height: 20px;
-        }
-        .typing-indicator span {
+            padding-left: {padding_left}px;
+            padding-top: {padding_top}px;
+        }}  
+        .typing-indicator span {{
             display: inline-block;
             width: 5px;
             height: 5px;
@@ -22,17 +24,17 @@ def display_waiting_indicator():
             background: #999;
             border-radius: 50%;
             animation: bounce 1s infinite alternate;
-        }
-        .typing-indicator span:nth-child(2) {
+        }}
+        .typing-indicator span:nth-child(2) {{
             animation-delay: 0.2s;
-        }
-        .typing-indicator span:nth-child(3) {
+        }}
+        .typing-indicator span:nth-child(3) {{
             animation-delay: 0.4s;
-        }
-        @keyframes bounce {
-            from { transform: translateY(0); }
-            to { transform: translateY(-15px); }
-        }
+        }}
+        @keyframes bounce {{
+            from {{ transform: translateY(0); }}
+            to {{ transform: translateY(-15px); }}
+        }}
         </style>
         <div class="typing-indicator">
             <span></span><span></span><span></span>

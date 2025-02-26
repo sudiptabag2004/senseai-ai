@@ -5,7 +5,6 @@ import os
 import json
 from typing import Dict
 from lib.config import pitch
-from lib.utils.encryption import decrypt_openai_api_key
 from lib.auth import login_or_signup_user as login_or_signup_user_in_db
 
 

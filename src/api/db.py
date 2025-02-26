@@ -41,7 +41,6 @@ from api.utils import (
     generate_random_color,
     convert_utc_to_ist,
 )
-from api.utils.encryption import encrypt_openai_api_key
 from api.utils.url import slugify
 from api.utils.db import (
     execute_db_operation,
@@ -2324,10 +2323,8 @@ async def update_org(org_id: int, org_name: str):
 
 
 async def update_org_openai_api_key(
-    org_id: int, openai_api_key: str, is_free_trial: bool
+    org_id: int, encrypted_openai_api_key: str, is_free_trial: bool
 ):
-    encrypted_openai_api_key = encrypt_openai_api_key(openai_api_key)
-
     await execute_db_operation(
         f"UPDATE {organizations_table_name} SET openai_api_key = ?, openai_free_trial = ? WHERE id = ?",
         (encrypted_openai_api_key, is_free_trial, org_id),

@@ -63,7 +63,7 @@ async def update_org(org_id: int, request: UpdateOrgRequest):
 @router.put("/{org_id}/openai_api_key")
 async def update_org_openai_api_key(org_id: int, request: UpdateOrgOpenaiApiKeyRequest):
     await update_org_openai_api_key_in_db(
-        org_id, request.openai_api_key, request.is_free_trial
+        org_id, request.encrypted_openai_api_key, request.is_free_trial
     )
     return {"success": True}
 

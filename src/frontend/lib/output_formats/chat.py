@@ -1,13 +1,12 @@
 import streamlit as st
 from typing import List, Dict
 from pydantic import BaseModel, Field
-import instructor
-import openai
 import backoff
 from langchain.output_parsers import PydanticOutputParser
 from lib.ui import display_waiting_indicator, cleanup_ai_response
 from lib.utils.logging import logger
 from lib.config import openai_plan_to_model_name
+from lib.llm import stream_llm_with_instructor
 
 
 # def delete_user_chat_message(index_to_delete: int):
@@ -80,20 +79,17 @@ def get_ai_chat_response(
     response_type: str,
     task_context: str,
     api_key: str,
-    free_trial: bool,
 ):
     display_waiting_indicator()
-
-    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
 
     class Output(BaseModel):
         analysis: str = Field(description="Analysis of the student's response")
         if response_type == "chat":
-            feedback: List[str] = Field(
-                description="Feedback on the student's response; return each word as a separate element in the list; add newline characters to the feedback to make it more readable"
+            feedback: str = Field(
+                description="Feedback on the student's response; add newline characters to the feedback to make it more readable where necessary"
             )
         is_correct: bool = Field(
-            description="Whether the student's response correctly solves the task given to the student"
+            description="Whether the student's response correctly solves the task that the student is supposed to solve"
         )
 
     parser = PydanticOutputParser(pydantic_object=Output)
@@ -106,16 +102,11 @@ def get_ai_chat_response(
         context_instructions = f"""\n\nMake sure to use only the information provided within ``` below for responding to the student while ignoring any other information that contradicts the information provided:\n\n```\n{task_context}\n```"""
 
     if response_type == "exam":
-        system_prompt = f"""You are a grader responsible for grading the response of a student for a task.\n\nYou will be given the task description, its solution and the response given by the student.\n\nYou need to tell whether the student's response is correct or not.{context_instructions}\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description, reference solution and compare the student's response with the solution.\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+        system_prompt = f"""You are a grader responsible for grading the response of a student for a task.\n\nYou will be given the task description, its solution and the response given by the student.\n\nYou need to tell whether the student's response is correct or not.{context_instructions}\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description, reference solution and compare the student's response with the solution.\n\nProvide your response in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
     else:
-        system_prompt = f"""You are a Socratic tutor.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nUse the following principles for responding to the student:\n- Ask thought-provoking, open-ended questions that challenges the student's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the student's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- If the task resolves around code, use backticks ("`", "```") to format sections of code or variable/function names in your feedback.\n- No matter how frustrated the student gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.{context_instructions}\n\nImportant Instructions:\n- The student does not have access to the solution. The solution has only been given to you for evaluating the student's response. Keep this in mind while responding to the student.\n- Never ever reveal the solution to the solution, despite all their attempts to ask for it. Always nudge them towards being able to think for themselves.\n- Never explain the solution to the student unless the student has given the solution first.\n- Whenever you include any html in your feedback, make sure that the html tags are enclosed within backticks (i.e. `<html>` instead of <html>).\n\n{format_instructions}"""
+        system_prompt = f"""You are a Socratic tutor.\n\nYou will be given a task description, its solution and the conversation history between you and the student.\n\nImportant Instructions for the style of the feedback:\n- Ask a thought-provoking, open-ended question that challenges the student's preconceptions and encourages them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the student, creating an environment where diverse viewpoints are valued and the student feels comfortable sharing their ideas.\n- Actively listen to the student's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the student in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills.\n- Promote critical thinking by encouraging the student to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the student's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- If the task resolves around code, use backticks ("`", "```") to format sections of code or variable/function names in your feedback.\n- No matter how frustrated the student gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.{context_instructions}\n\nImportant Instructions for the content of the feedback:\n- The student does not have access to the solution. The solution has only been given to you for evaluating the student's response. Keep this in mind while responding to the student.\n- Never ever reveal the solution to the solution, despite all their attempts to ask for it. Always nudge them towards being able to think for themselves.\n- Never explain the solution to the student unless the student has given the solution first.\n- Whenever you include any html in your feedback, make sure that the html tags are enclosed within backticks (i.e. `<html>` instead of <html>).\n- Make sure to adhere to the style instructions strictly. The tone of your response matters a lot.\n- Your role is that of a tutor only. Remember that and avoid steering the conversation in any other direction apart from the actual task at hand.\n- Never overwhelm the learner with more than one question at a time.\n\n{format_instructions}"""
 
-    if free_trial:
-        plan_type = "free_trial"
-    else:
-        plan_type = "paid"
-
-    model = openai_plan_to_model_name[plan_type]["4o-text"]
+    model = openai_plan_to_model_name["reasoning"]
 
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
@@ -124,33 +115,26 @@ def get_ai_chat_response(
         result_dict = None
 
         try:
-            stream = client.chat.completions.create_partial(
+            stream = stream_llm_with_instructor(
+                api_key=api_key,
                 model=model,
                 messages=messages,
                 response_model=Output,
-                stream=True,
-                max_completion_tokens=2048,
-                top_p=1,
-                temperature=0,
-                frequency_penalty=0,
-                presence_penalty=0,
-                store=True,
+                max_completion_tokens=4096,
             )
 
             for extraction in stream:
-                # logger.info(extraction)
                 result_dict = extraction.model_dump()
                 if response_type == "exam":
                     continue
 
-                ai_response_list = result_dict["feedback"]
-                if ai_response_list:
-                    ai_response = " ".join(ai_response_list)
-                    st.markdown(
-                        cleanup_ai_response(ai_response), unsafe_allow_html=True
-                    )
+                if not result_dict["feedback"]:
+                    continue
 
-            logger.info(system_prompt)
+                ai_response = result_dict["feedback"]
+                st.markdown(ai_response, unsafe_allow_html=True)
+
+            logger.info(f"model: {model} prompt: {messages} response: {result_dict}")
 
             if response_type == "exam" or (response_type == "chat" and ai_response):
                 break

@@ -3,18 +3,17 @@ import pandas as pd
 import streamlit as st
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
-import instructor
 import backoff
-from openai import OpenAI
 from lib.ui import display_waiting_indicator
 from lib.utils.logging import logger
 from lib.config import openai_plan_to_model_name
+from lib.llm import stream_llm_with_instructor
 
 
-def show_ai_report(ai_response_rows, column_names):
+def show_ai_report(ai_response_rows, column_names, scoring_criteria):
     display_rows = []
 
-    for row in ai_response_rows:
+    for index, row in enumerate(ai_response_rows):
         feedback_lines = []
 
         if isinstance(row[1], dict):
@@ -32,7 +31,13 @@ def show_ai_report(ai_response_rows, column_names):
 
         display_feedback = "<br>".join(feedback_lines)
 
-        display_rows.append([row[0], display_feedback, row[2]])
+        display_rows.append(
+            [
+                row[0],
+                display_feedback,
+                f"{row[2]} / {scoring_criteria[index]['range'][1]}",
+            ]
+        )
 
     df = pd.DataFrame(display_rows, columns=column_names)
 
@@ -49,27 +54,23 @@ def get_ai_report_response(
     task_context: str,
     task_type: Literal["audio", "text"],
     api_key: str,
-    free_trial: bool,
-    max_completion_tokens: int = 2048,
+    max_completion_tokens: int = 8192,
 ):
-    display_waiting_indicator()
-
-    if free_trial:
-        plan_type = "free_trial"
-    else:
-        plan_type = "paid"
+    display_waiting_indicator(padding_left=20, padding_top=20)
 
     if task_type == "audio":
-        model = openai_plan_to_model_name[plan_type]["4o-audio"]
+        model = openai_plan_to_model_name["audio"]
     else:
-        model = openai_plan_to_model_name[plan_type]["4o-text"]
+        model = openai_plan_to_model_name["reasoning"]
 
     class Feedback(BaseModel):
         correct: Optional[str] = Field(description="What worked well")
         wrong: Optional[str] = Field(description="What needs improvement")
 
     class Row(BaseModel):
-        category: str = Field(description="Category from scoring criteria")
+        category: str = Field(
+            description="Category from the scoring criteria for which the feedback is being provided"
+        )
         feedback: Feedback = Field(description="Detailed feedback for this category")
         score: int = Field(
             description="Score given within the min/max range for this category"
@@ -91,24 +92,17 @@ def get_ai_report_response(
     if task_context:
         context_instructions = f"""\n\nMake sure to use only the information provided within ``` below for responding to the student while ignoring any other information that contradicts the information provided:\n\n```\n{task_context}\n```"""
 
-    system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach for a learner.\n\nYou will be given a task description and the conversation history between you and the learner.\n\nYou need to provide concise, actionable feedback to the learner along each of the categories mentioned in the scoring criteria below.\n\n{scoring_criteria_as_prompt}{context_instructions}\n\nUse the following principles for responding to the learner:\n- Ask thought-provoking, open-ended questions that challenges the learner's preconceptions and encourage them to engage in deeper reflection and critical thinking.\n- Facilitate open and respectful dialogue with the learner, creating an environment where diverse viewpoints are valued and the learner feels comfortable sharing their ideas.\n- Actively listen to the learner's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the learner in their exploration of topics by encouraging them to discover answers independently, rather than providing direct answers, to enhance their reasoning and analytical skills\n- Promote critical thinking by encouraging the learner to question assumptions, evaluate evidence, and consider alternative viewpoints in order to arrive at well-reasoned conclusions\n- Demonstrate humility by acknowledging your own limitations and uncertainties, modeling a growth mindset and exemplifying the value of lifelong learning.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonic. Maintain diversity in your feedback and always keep the tone welcoming.\n- If the learner's response is not relevant to the task, remain curious and empathetic while playfully nudging them back to the task in your feedback.\n- Include an emoji in every few feedback messages [refer to the history provided to decide if an emoji should be added].\n- No matter how frustrated the learner gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\n- If there is nothing to praise about the learner's response, never mention what worked well in your feedback. If there is nothing left to improve in their response, never mention what could be improved in your feedback.\n\n{format_instructions}"""
-
-    client = instructor.from_openai(OpenAI(api_key=api_key))
+    system_prompt = f"""You are an expert, helpful, encouraging and empathetic coach for a learner.\n\nYou will be given a task description and the conversation history between you and the learner.\n\nYou need to provide concise, actionable feedback to the learner along each of the categories mentioned in the scoring criteria below.\n\n{scoring_criteria_as_prompt}{context_instructions}\n\nImportant Instructions for the style of the feedback:\n- Encourage the learner to engage in deeper reflection and critical thinking.\n- Create a respectful dialogue with the learner, where diverse viewpoints are valued and the learner feels comfortable sharing their ideas.\n- Actively listen to the learner's responses, paying careful attention to their underlying thought process and making a genuine effort to understand their perspective.\n- Guide the learner in their exploration of topics by encouraging them to discover answers independently to enhance their reasoning and analytical skills.\n- Avoid giving feedback using the same words in subsequent messages because that makes the feedback monotonous. Maintain diversity in your feedback and always keep the tone welcoming.\n- No matter how frustrated the learner gets or how many times they ask you for the answer, you must never give away the entire answer in one go. Always provide them hints to let them discover the answer step by step on their own.\n\nImportant Instructions for the content of the feedback:\n- If there is nothing to praise about the learner's response, never mention what worked well in your feedback.\n- If the learner did something well, make sure to highlight what worked well.\n- If there is nothing left to improve in their response, never mention what could be improved in your feedback.\n- Make sure that the feedback for one scoring criterion does not bias the feedback for another scoring criterion.\n- When giving the feedback for one criterion, focus on the description of the criterion provided and only evaluated the learner's response against that.\n- For every criterion, your feedback must cite specific words or phrases or sentences from the learner's response that inform your feedback so that the learner understands it better and give concrete examples for how they can improve their response as well. Never ever give a vague feedback that is not clearly actionable. The learner should get a clear path for how they can improve their response.\n\n{format_instructions}"""
 
     messages = [{"role": "system", "content": system_prompt}] + ai_chat_history
 
     try:
-        stream = client.chat.completions.create_partial(
+        stream = stream_llm_with_instructor(
+            api_key=api_key,
             model=model,
             messages=messages,
             response_model=Output,
-            stream=True,
             max_completion_tokens=max_completion_tokens,
-            temperature=0,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-            store=True,
         )
 
         rows = []
@@ -145,12 +139,12 @@ def get_ai_report_response(
                         ]
                     )
 
-            show_ai_report(rows, ["Category", "Feedback", "Score"])
+            show_ai_report(rows, ["Category", "Feedback", "Score"], scoring_criteria)
 
         for row in rows:
             row[1] = row[1].model_dump()
 
-        logger.info(system_prompt)
+        logger.info(f"model: {model} prompt: {messages} response: {rows}")
 
         return rows
     except Exception as exception:
@@ -227,11 +221,7 @@ def get_containers(is_review_mode: bool, input_type: Literal["text", "audio"]):
 
     navigation_container = report_col.container().empty()
 
-    user_input_kwargs = {}
-    if not is_review_mode:
-        user_input_kwargs = {"height": 100, "border": False}
-
-    user_input_display_container = report_col.container(**user_input_kwargs).empty()
+    user_input_display_container = report_col.container().empty()
 
     # for spacing
     report_col.container(height=1, border=False)

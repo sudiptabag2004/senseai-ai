@@ -23,8 +23,6 @@ def show_no_cohorts_placeholder_home():
         admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state["selected_org"]['id']}"
 
         title = "You don't have any cohorts yet!"
-        description = "On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Learners are grouped under a cohort and courses are assigned to one or more cohorts. Start by creating your first cohort today!"
-        button_text = "✨ Create Your First Cohort"
 
         # Create a styled container with centered content
         st.markdown(
@@ -58,8 +56,31 @@ def show_no_cohorts_placeholder_home():
                     line-height: 1.5;
                     font-family: "Source Sans Pro", sans-serif;
                 '>
-                    {description}
+                    On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Learners are grouped under a cohort and courses are assigned to one or more cohorts. Start by creating your first cohort today!
                 </p>
+                <!-- Try SensAI button with blue color -->
+                <a href='https://bit.ly/try_sensai' 
+                    style='
+                        text-decoration: none;
+                        color: #fff;
+                        background-color: #4B89FF;
+                        padding: 0.75rem 1.5rem;
+                        border-radius: 8px;
+                        display: inline-block;
+                        font-weight: 500;
+                        font-family: "Source Sans Pro", sans-serif;
+                        transition: all 0.2s ease;
+                        box-shadow: 0 2px 4px rgba(75, 137, 255, 0.1);
+                        width: 250px;
+                        margin-bottom: 1rem;
+                    '
+                    onmouseover="this.style.backgroundColor='#3370ff'; this.style.transform='translateY(-1px)'"
+                    onmouseout="this.style.backgroundColor='#4B89FF'; this.style.transform='translateY(0)'"
+                    role="button"
+                    aria-label="Try SensAI features"
+                >
+                    🚀 Try SensAI
+                </a>
                 <a href='{admin_panel_url}' 
                     style='
                         text-decoration: none;
@@ -79,7 +100,7 @@ def show_no_cohorts_placeholder_home():
                     role="button"
                     aria-label="Create a new course"
                 >
-                    {button_text}
+                    ✨ Create Your First Cohort
                 </a>
                 <a href='https://docs.sensai.hyperverge.org/quickstart/' 
                     style='

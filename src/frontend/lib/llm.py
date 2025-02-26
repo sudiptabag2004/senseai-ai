@@ -1,7 +1,8 @@
 from typing import Dict, List
 import traceback
 import backoff
-
+import openai
+import instructor
 
 from langchain.prompts import (
     SystemMessagePromptTemplate,
@@ -154,45 +155,68 @@ def get_parsed_output_dict(
     return pred_dict
 
 
+def is_reasoning_model(model: str) -> bool:
+    return model in [
+        "o3-mini-2025-01-31",
+        "o3-mini",
+        "o1-preview-2024-09-12",
+        "o1-preview",
+        "o1-mini",
+        "o1-mini-2024-09-12",
+        "o1",
+        "o1-2024-12-17",
+    ]
+
+
 @backoff.on_exception(backoff.expo, Exception, max_tries=5, factor=2)
 async def call_openai_chat_model(
     messages: List,
     model: str,
     api_key: str,
-    max_tokens: int,
+    max_completion_tokens: int,
     verbose: bool = True,
     **kwargs,
 ):
-    common_model_args = {
-        "temperature": 0,
-        "max_tokens": max_tokens,
+    openai_model_kwargs = {
+        "max_completion_tokens": max_completion_tokens,
     }
+
+    if not is_reasoning_model(model):
+        openai_model_kwargs.update(
+            {
+                "temperature": 0,
+                "top_p": 1,
+                "frequency_penalty": 0,
+                "presence_penalty": 0,
+            }
+        )
 
     input_tokens = 0
     output_tokens = 0
     total_cost = 0
 
-    openai_model_kwargs = {
-        "top_p": 1,
-        "frequency_penalty": 0,
-        "presence_penalty": 0,
-        "store": True,
-    }
-    llm = ChatOpenAI(
-        model=model, api_key=api_key, **common_model_args, **openai_model_kwargs
-    )
+    try:
+        llm = ChatOpenAI(
+            model=model,
+            api_key=api_key,
+            **openai_model_kwargs,
+            model_kwargs={"store": True},
+        )
 
-    with get_openai_callback() as llm_callback:
-        ai_response = await llm.ainvoke(messages)
-        input_tokens = llm_callback.prompt_tokens
-        output_tokens = llm_callback.completion_tokens
-        total_cost = llm_callback.total_cost
+        with get_openai_callback() as llm_callback:
+            ai_response = await llm.ainvoke(messages)
+            input_tokens = llm_callback.prompt_tokens
+            output_tokens = llm_callback.completion_tokens
+            total_cost = llm_callback.total_cost
 
-    ai_response = ai_response.content
+        ai_response = ai_response.content
 
-    if verbose:
-        message = f"model: {model} prompt: {messages} response: {ai_response} input tokens: {input_tokens} output tokens: {output_tokens}"
-        logger.info(message)
+        if verbose:
+            message = f"model: {model} prompt: {messages} response: {ai_response} input tokens: {input_tokens} output tokens: {output_tokens}"
+            logger.info(message)
+    except Exception as e:
+        traceback.print_exc()
+        raise e
 
     return ai_response
 
@@ -202,7 +226,7 @@ async def call_llm_and_parse_output(
     model,
     output_parser,
     api_key: str,
-    max_tokens,
+    max_completion_tokens,
     # labels,
     verbose: bool = True,
     **kwargs,
@@ -211,7 +235,7 @@ async def call_llm_and_parse_output(
         messages,
         model=model,
         api_key=api_key,
-        max_tokens=max_tokens,
+        max_completion_tokens=max_completion_tokens,
         # labels=labels,
         verbose=verbose,
         **kwargs,
@@ -237,3 +261,75 @@ def validate_openai_api_key(openai_api_key: str) -> bool:
             return True  # free trial account
     except Exception:
         return None
+
+
+def run_llm_with_instructor(
+    api_key: str,
+    model: str,
+    messages: List,
+    response_model: BaseModel,
+    max_completion_tokens: int,
+):
+    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+
+    model_kwargs = {}
+
+    if not is_reasoning_model(model):
+        model_kwargs["temperature"] = 0
+
+    return client.chat.completions.create(
+        model=model,
+        messages=messages,
+        response_model=response_model,
+        max_completion_tokens=max_completion_tokens,
+        store=True,
+        **model_kwargs,
+    )
+
+
+def stream_llm_with_instructor(
+    api_key: str,
+    model: str,
+    messages: List,
+    response_model: BaseModel,
+    max_completion_tokens: int,
+):
+    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+
+    model_kwargs = {}
+
+    if not is_reasoning_model(model):
+        model_kwargs["temperature"] = 0
+
+    return client.chat.completions.create_partial(
+        model=model,
+        messages=messages,
+        response_model=response_model,
+        stream=True,
+        max_completion_tokens=max_completion_tokens,
+        store=True,
+        **model_kwargs,
+    )
+
+
+def stream_llm_with_openai(
+    api_key: str,
+    model: str,
+    messages: List,
+    max_completion_tokens: int,
+):
+    client = openai.OpenAI(api_key=api_key)
+
+    model_kwargs = {}
+
+    if not is_reasoning_model(model):
+        model_kwargs["temperature"] = 0
+
+    return client.chat.completions.create(
+        model=model,
+        messages=messages,
+        stream=True,
+        max_completion_tokens=max_completion_tokens,
+        store=True,
+        **model_kwargs,
+    )

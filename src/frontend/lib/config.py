@@ -103,15 +103,21 @@ PDF_PAGE_DIMS = [595, 842]
 
 MAX_TASK_NAME_LENGTH = 100
 
+# openai_plan_to_model_name = {
+#     "paid": {
+#         "text": "gpt-4o-2024-11-20",
+#         "4o-audio": "gpt-4o-audio-preview-2024-12-17",
+#     },
+#     "free_trial": {
+#         "text": "gpt-4o-mini-2024-07-18",
+#         "4o-audio": "gpt-4o-mini-audio-preview-2024-12-17",
+#     },
+# }
+
 openai_plan_to_model_name = {
-    "paid": {
-        "4o-text": "gpt-4o-2024-11-20",
-        "4o-audio": "gpt-4o-audio-preview-2024-12-17",
-    },
-    "free_trial": {
-        "4o-text": "gpt-4o-mini-2024-07-18",
-        "4o-audio": "gpt-4o-mini-audio-preview-2024-12-17",
-    },
+    "reasoning": "o3-mini-2025-01-31",
+    "text": "gpt-4o-2024-11-20",
+    "audio": "gpt-4o-audio-preview-2024-12-17",
 }
 
 pitch = "Scale your teaching with an AI Teaching Assistant"

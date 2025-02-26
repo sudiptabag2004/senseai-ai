@@ -70,11 +70,18 @@ def menu_footer():
         show_links()
         st.sidebar.divider()
 
-    st.sidebar.page_link(
-        "https://docs.sensai.hyperverge.org/",
-        label="Product Guide",
-        icon="📚",
-    )
+    else:
+        st.sidebar.page_link(
+            "https://docs.sensai.hyperverge.org/",
+            label="Product Guide",
+            icon="📚",
+        )
+
+        st.sidebar.page_link(
+            "https://bit.ly/try_sensai",
+            label="Try SensAI",
+            icon="🚀",
+        )
 
     st.sidebar.text("Built with ❤️ by HyperVerge Academy")
 
@@ -121,19 +128,19 @@ def authenticated_menu():
                 f'`{st.session_state["email"]}`',
                 st.session_state.user_orgs,
                 key="selected_org",
-                format_func=lambda val: f"{val['name']} ({val['role']})",
+                format_func=lambda val: f"{val['name']}",
                 on_change=selected_org_changed,
             )
 
-            if not selected_org["openai_api_key"]:
-                with st.sidebar:
-                    error_markdown(
-                        f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.selected_org['id']}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of."""
-                    )
-            elif selected_org["openai_free_trial"]:
-                st.sidebar.warning(
-                    "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."
-                )
+            # if not selected_org["openai_api_key"]:
+            #     with st.sidebar:
+            #         error_markdown(
+            #             f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.selected_org['id']}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of."""
+            #         )
+            # elif selected_org["openai_free_trial"]:
+            #     st.sidebar.warning(
+            #         "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."
+            #     )
 
             cols[1].container(height=10, border=False)
             cols[1].button(
@@ -144,12 +151,13 @@ def authenticated_menu():
                 args=(st.session_state.user["id"],),
             )
 
-            # print(selected_org["id"])
-            st.page_link(
+            st.link_button(
+                "Manage Your Courses",
                 f"{os.environ.get('APP_URL')}/admin?org_id={selected_org['id']}",
-                label="Admin Panel",
-                icon="⚙️",
                 disabled=not st.session_state.is_org_change_complete,
+                use_container_width=True,
+                icon="⚙️",
+                type="primary",
             )
 
             if not st.session_state.is_org_change_complete:
