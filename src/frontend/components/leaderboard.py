@@ -56,7 +56,7 @@ def show_user_info(
 
             st.markdown(
                 f'<div style="display: flex; justify-content: center; align-items: center; height: 100%;">'
-                f'<div style="width: 30px; height: 30px; border-radius: 50%; {border_style} {background_color_style} display: flex; justify-content: center; align-items: center;">'
+                f'<div style="width: 50px; height: 50px; border-radius: 50%; {border_style} {background_color_style} display: flex; justify-content: center; align-items: center;">'
                 f'<span style="color: {text_color};">{rank}</span>'
                 f"</div>"
                 f"</div>",
@@ -73,6 +73,7 @@ def show_user_info(
         )
 
 
+@st.cache_data(ttl=60 * 60, show_spinner=False)
 def get_leaderboard(view_type: LeaderboardViewType, cohort_id: int):
     if view_type not in leaderboard_view_types:
         raise ValueError(f"Invalid view type: {view_type}")
@@ -134,12 +135,24 @@ def _show_leaderboard(cohort_id: int, view_type: Literal["top", "full"] = "top")
             "border": False,
         }
 
-    for tab_index, tab in enumerate(tabs):
-        with tab:
-            with st.container(**container_kwargs):
+    tab_data = {}
+    with tabs[0]:
+        with st.spinner(" "):
+            for tab_index, tab in enumerate(tabs):
                 top_performers, other_performers = get_leaderboard(
                     leaderboard_view_types[tab_index], cohort_id
                 )
+                tab_data[tab_index] = {
+                    "top_performers": top_performers,
+                    "other_performers": other_performers,
+                }
+
+    for tab_index, tab in enumerate(tabs):
+        with tab:
+            with st.container(**container_kwargs):
+                top_performers = tab_data[tab_index]["top_performers"]
+                other_performers = tab_data[tab_index]["other_performers"]
+
                 is_logged_in_user_performer = False
 
                 performers_to_show = (
