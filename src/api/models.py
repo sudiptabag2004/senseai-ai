@@ -35,7 +35,7 @@ class UpdateOrgRequest(BaseModel):
 
 
 class UpdateOrgOpenaiApiKeyRequest(BaseModel):
-    openai_api_key: str
+    encrypted_openai_api_key: str
     is_free_trial: bool
 
 

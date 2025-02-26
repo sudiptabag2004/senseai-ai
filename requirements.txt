@@ -1,8 +1,9 @@
-langchain==0.3.13
-langchain-community==0.3.13
-langchain-core==0.3.28
-langchain-openai==0.2.14
-openai==1.58.1
+langchain==0.3.19
+langchain-core==0.3.40
+langchain-text-splitters==0.3.6
+langchain-community==0.3.18
+langchain-openai==0.3.7
+openai==1.64.0 
 # streamlit==1.41.1
 email_validator==2.2.0
 python-dotenv==1.0.1
@@ -17,7 +18,7 @@ boto3==1.35.70
 botocore==1.35.70
 httpx==0.27.0
 st-theme==1.2.3
-instructor==1.6.4
+instructor==1.7.2
 imgkit==1.2.3
 pydub==0.25.1
 pypdf==5.1.0

@@ -4,13 +4,14 @@ from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 import streamlit as st
 import openai
-import instructor
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.messages.utils import convert_to_openai_messages
 from lib.llm import (
     call_llm_and_parse_output,
     call_openai_chat_model,
     get_llm_input_messages,
+    run_llm_with_instructor,
+    stream_llm_with_openai,
     COMMON_INSTRUCTIONS,
     logger,
 )
@@ -22,7 +23,7 @@ from lib.config import openai_plan_to_model_name
 async def generate_answer_for_task(
     task_name: str, task_description: str, task_context: str, model: str, api_key: str
 ) -> str:
-    system_prompt_template = """You are a helpful and encouraging tutor.\n\n{input_description}\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description and completely adhere to the requirements without making up anything on your own that is not already present in the description.{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+    system_prompt_template = """You are a helpful and encouraging tutor.\n\n{input_description}\n\nYou need to work out your own solution to the task. You will use this solution later to evaluate the student's solution.\n\nImportant Instructions:\n- Give some reasoning before arriving at the answer but keep it concise.\n- Make sure to carefully read the task description and completely adhere to the requirements without making up anything on your own that is not already present in the description.\n- Directly give the solution without any preamble or explanation.{common_instructions}\n\n{format_instructions}"""
 
     user_prompt_template = """Task name:\n```\n{task_name}\n```\n\nTask description:\n```\n{task_description}\n```"""
     llm_input_kwargs = {}
@@ -41,8 +42,6 @@ async def generate_answer_for_task(
 
     output_parser = PydanticOutputParser(pydantic_object=Output)
 
-    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
-
     llm_input_messages = get_llm_input_messages(
         system_prompt_template,
         user_prompt_template,
@@ -57,16 +56,12 @@ async def generate_answer_for_task(
     llm_input_messages = convert_to_openai_messages(llm_input_messages)
 
     try:
-        pred = client.chat.completions.create(
+        pred = run_llm_with_instructor(
+            api_key=api_key,
             model=model,
             messages=llm_input_messages,
             response_model=Output,
-            max_completion_tokens=8096,
-            top_p=1,
-            temperature=0,
-            frequency_penalty=0,
-            presence_penalty=0,
-            store=True,
+            max_completion_tokens=8192,
         )
 
         pred_dict = pred.model_dump()
@@ -105,7 +100,7 @@ async def generate_tests_for_task_from_llm(
     model: str,
     api_key: str,
 ):
-    system_prompt_template = """You are a test case generator for programming tasks.\n\n{input_description}\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n{common_instructions}\n\nProvide the answer in the following format:\nLet's work this out in a step by step way to be sure we have the right answer\nAre you sure that's your final answer? Believe in your abilities and strive for excellence. Your hard work will yield remarkable results.\n<concise explanation>\n\n{format_instructions}"""
+    system_prompt_template = """You are a test case generator for programming tasks.\n\n{input_description}\n\nYou need to generate a list of test cases in the form of input/output pairs.\n\n- Give some reasoning before arriving at the answer but keep it concise.\n- Create diverse test cases that cover various scenarios, including edge cases.\n- Ensure the test cases are relevant to the task description.\n- Provide at least 3 test cases, but no more than 5.\n- Ensure that every test case is unique.\n- If you are given a list of test cases, you need to ensure that the new test cases you generate are not duplicates of the ones in the list.\n- Directly give the solution without any preamble or explanation.\n{common_instructions}\n\n{format_instructions}"""
 
     user_prompt_template = """Task name:\n```\n{task_name}\n```\n\nTask description:\n```\n{task_description}\n```\n\nNumber of inputs: {num_test_inputs}\n\nTest cases:\n```\n{tests}\n```"""
     llm_input_kwargs = {}
@@ -153,7 +148,7 @@ async def generate_tests_for_task_from_llm(
             model=model,
             output_parser=output_parser,
             api_key=api_key,
-            max_tokens=2048,
+            max_completion_tokens=8192,
             verbose=True,
         )
         return [
@@ -249,7 +244,6 @@ async def generate_learner_insights_for_task(
     learner_task_chat_history: List[Dict],
     system_prompt_template: str,
     api_key: str,
-    free_trial: bool,
 ) -> str:
     user_prompt_template = """Task name:\n```\n{task_name}\n```\n\nTask description:\n```\n{task_description}\n```\n\nChat history:\n```\n{chat_history}\n```"""
 
@@ -270,19 +264,14 @@ async def generate_learner_insights_for_task(
         chat_history=chat_history,
     )
 
-    if free_trial:
-        plan_type = "free_trial"
-    else:
-        plan_type = "paid"
-
-    model = openai_plan_to_model_name[plan_type]["4o-text"]
+    model = openai_plan_to_model_name["reasoning"]
 
     try:
         response = await call_openai_chat_model(
             llm_input_messages,
             model=model,
             api_key=api_key,
-            max_tokens=10000,
+            max_completion_tokens=8192,
             verbose=True,
         )
         return response
@@ -302,7 +291,6 @@ async def summarize_learner_insights(
     task_level_insights: List[str],
     system_prompt_template: str,
     api_key: str,
-    free_trial: bool,
 ) -> str:
     user_prompt_template = """Task level insights:\n```\n{task_level_insights}\n```"""
 
@@ -314,28 +302,16 @@ async def summarize_learner_insights(
         task_level_insights=task_level_insights_str,
     )
 
-    if free_trial:
-        plan_type = "free_trial"
-    else:
-        plan_type = "paid"
-
-    model = openai_plan_to_model_name[plan_type]["4o-text"]
-
-    client = openai.OpenAI(api_key=api_key)
+    model = openai_plan_to_model_name["reasoning"]
 
     messages = convert_to_openai_messages(llm_input_messages)
 
     try:
-        stream = client.chat.completions.create(
+        stream = stream_llm_with_openai(
+            api_key=api_key,
             model=model,
             messages=messages,
-            stream=True,
             max_completion_tokens=8192,
-            top_p=1,
-            temperature=0,
-            frequency_penalty=0,
-            presence_penalty=0,
-            store=True,
         )
 
         summary = ""
@@ -369,7 +345,6 @@ async def generate_task_details_from_prompt(
     task_prompt: str,
     task_prompt_audio: bytes,
     api_key: str,
-    free_trial: bool,
 ):
     class ScoringCriterion(BaseModel):
         category: str = Field(description="The name of the criterion")
@@ -490,17 +465,12 @@ async def generate_task_details_from_prompt(
 
     system_prompt = f""""You are an expert assistant for an educational learning platform. An educator has provided a prompt describing a task they want to create. Your job is to extract all relevant task details from the educator\'s prompt and output them as a well-formed JSON object.\n\nFollow these steps:\n\nDetermine Task Type:\n\nIdentify if the task is a "question" or "reading_material".\nNote: "reading_material" refers to content that a learner needs to read and is not an assessment.\nGenerate Task Name and Description:\n\nFor reading material:\nExtract or generate a task name.\nFor task description, if the educator has already provided the reading material, use that directly. If the educator requests modifications or asks for new content, generate the reading material according to their instructions.\nFor a question:\nExtract or generate a task name.\nThe task description must clearly include the question that the learner is supposed to answer. It is possible that the educator asks you to generate the question based on the details they provide. First, analyse if the prompt given by the educator includes the question itself or instructions for generating the question. If the prompt includes instructions to generate the question, you must include the generated question details in the task description. Include all parts of the question in the description including any options provided or anything else that must be considered a part of the question. The task description should have all the details required to answer the question.\nDetermine Question Specifics (if the task is a question):\n\nIdentify whether the question is subjective (open-ended, not a fixed right answer) or objective (has a fixed correct answer). Store this in the key question_type with the value "subjective" or "objective".\nDetermine the Input Type:\n\nIdentify the type of input the learner needs to provide, and set input_type accordingly. Allowed values are:\n"coding"\n"text"\n"audio"\nDetermine the Response Type:\n\nDecide how the educator wants the AI to respond, and set response_type accordingly:\nIf input_type is "audio", then response_type must be "audio".\nIf input_type is "coding", then response_type can only be "exam" or "chat".\nFor subjective questions, response_type must always be "report".\nFor objective questions with a fixed answer, response_type must be either "chat" or "exam", as specified.\nProgramming Languages (if applicable):\n\nIf the task involves code and specific programming languages are mentioned, extract and list them in a key called programming_languages. Only include languages that match exactly one of the following:\n"HTML"\n"CSS"\n"Javascript"\n"NodeJS"\n"Python"\n"React"\n"SQL"\nScoring Criteria (for Subjective Questions):\n\nIf the question is subjective and the educator has provided a scoring criteria, extract it and include it under the key `scoring_criteria` in the output.\nIf no scoring criteria is given, generate a reasonable scoring criteria.\nScoring criteria must always be present for subjective questions and never be present for objective questions. If the educator has given a range of scores for each criterion, use them. Or generate a reasonable value for the range of scores for each criterion.\n\nCorrect Answer (for Objective Questions):\n\nIf the question is objective and a correct answer is provided in the educator\'s prompt, extract it and include it under the key `answer`. If the question is a multiple choice objective question, make sure that the correct answer includes the details for the correct option as well.\n\nAlways analyse the prompt based on the instructions provided first and give your reasoning before giving the final output.\n\n{format_instructions}"""
 
-    if free_trial:
-        plan_type = "free_trial"
-    else:
-        plan_type = "paid"
-
     llm_input_messages = [
         {"role": "system", "content": system_prompt},
     ]
 
     if task_prompt_audio:
-        model = openai_plan_to_model_name[plan_type]["4o-audio"]
+        model = openai_plan_to_model_name["audio"]
         user_message_content = [
             {
                 "type": "text",
@@ -519,24 +489,18 @@ async def generate_task_details_from_prompt(
 
         llm_input_messages.append({"role": "user", "content": user_message_content})
     else:
-        model = openai_plan_to_model_name[plan_type]["4o-text"]
+        model = openai_plan_to_model_name["reasoning"]
 
         user_prompt_template = f"""```\n{task_prompt}\n```"""
         llm_input_messages.append({"role": "user", "content": user_prompt_template})
 
-    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
-
     try:
-        pred = client.chat.completions.create(
+        pred = run_llm_with_instructor(
+            api_key=api_key,
             model=model,
             messages=llm_input_messages,
             response_model=TaskConfig,
-            max_completion_tokens=8096,
-            top_p=1,
-            temperature=0,
-            frequency_penalty=0,
-            presence_penalty=0,
-            store=True,
+            max_completion_tokens=8192,
         )
 
         pred_dict = pred.model_dump()

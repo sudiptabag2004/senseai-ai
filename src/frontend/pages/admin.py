@@ -123,14 +123,12 @@ from lib.course import (
 )
 from lib.utils import generate_random_color
 from lib.utils.concurrency import async_batch_gather
-from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
 from lib.profile import show_placeholder_icon
 from lib.toast import set_toast, show_toast
 from auth import (
     unauthorized_redirect_to_home,
     login_or_signup_user,
     is_empty_openai_api_key,
-    is_free_trial_openai_api_key,
 )
 from components.buttons import back_to_home_button
 from components.status import error_markdown
@@ -159,13 +157,6 @@ if "section" in st.query_params:
 
 st.session_state.org_id = int(st.query_params["org_id"])
 st.session_state.org = get_org_by_id(st.session_state.org_id)
-
-model = {
-    "label": "gpt-4o",
-    "version": openai_plan_to_model_name[
-        "paid" if not st.session_state.org["openai_free_trial"] else "free_trial"
-    ]["4o-text"],
-}
 
 back_to_home_button(params={"org_id": st.session_state.org_id})
 
@@ -201,14 +192,14 @@ def show_profile_header():
     with cols[1]:
         st.subheader(st.session_state.org["name"])
 
-        if is_empty_openai_api_key():
-            error_markdown(
-                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of.""",
-            )
-        elif is_free_trial_openai_api_key():
-            st.warning(
-                "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."
-            )
+        # if is_empty_openai_api_key():
+        #     error_markdown(
+        #         f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>. Otherwise, AI will not work, neither for generating tasks nor for providing feedback for the courses you create. You can still receive AI feedback for the courses created by others that you are a part of.""",
+        #     )
+        # elif is_free_trial_openai_api_key():
+        #     st.warning(
+        #         "You are using a free trial OpenAI API key which only allows smaller models to be used. Please add an API key with billing enabled to access the best models."
+        #     )
 
 
 show_profile_header()
@@ -348,8 +339,8 @@ def generate_answer_for_form_task(container):
                     st.session_state.task_name,
                     st.session_state.task_description,
                     get_task_context(),
-                    model["version"],
-                    decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+                    openai_plan_to_model_name["reasoning"],
+                    os.environ["OPENAI_API_KEY"],
                 )
             )
 
@@ -364,8 +355,8 @@ async def generate_tests_for_task(
             get_task_context(),
             num_test_inputs,
             tests,
-            model["version"],
-            decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+            openai_plan_to_model_name["reasoning"],
+            os.environ["OPENAI_API_KEY"],
         )
 
     st.session_state.tests.extend(generated_tests)
@@ -398,7 +389,11 @@ def get_task_tests():
 
 
 def get_model_version():
-    return None if st.session_state.is_task_type_reading else model["version"]
+    return (
+        None
+        if st.session_state.is_task_type_reading
+        else openai_plan_to_model_name["reasoning"]
+    )
 
 
 def get_task_scoring_criteria():
@@ -1134,8 +1129,7 @@ def generate_task_details(container):
                 generate_task_details_from_prompt(
                     st.session_state.task_prompt,
                     st.session_state.task_prompt_audio,
-                    decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                    st.session_state.org["openai_free_trial"],
+                    os.environ["OPENAI_API_KEY"],
                 )
             )
             st.session_state.prefilled = True
@@ -1372,8 +1366,8 @@ async def generate_answer_for_bulk_task(task_row_index, task_name, task_descript
         task_name,
         task_description,
         get_task_context(),
-        model["version"],
-        decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
+        openai_plan_to_model_name["reasoning"],
+        os.environ["OPENAI_API_KEY"],
     )
     return task_row_index, answer
 
@@ -1484,7 +1478,7 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
             st.session_state.task_input_type,
             st.session_state.task_ai_response_type,
             st.session_state.coding_languages,
-            model["version"],
+            openai_plan_to_model_name["reasoning"],
             True,
             [],
             st.session_state.org_id,
@@ -1974,11 +1968,11 @@ if st.session_state.selected_section_index == 0:
             show_empty_tasks_placeholder(align="left")
             st.container(height=5, border=False)
 
-        if is_empty_openai_api_key():
-            error_markdown(
-                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
-            )
-            return
+        # if is_empty_openai_api_key():
+        #     error_markdown(
+        #         f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
+        #     )
+        #     return
 
         cols = st.columns([1, 6])
 
@@ -3512,7 +3506,7 @@ elif st.session_state.selected_section_index == 1:
 
         if not course_tasks:
             st.info(
-                "No tasks found. The course must have at least one task added to it!"
+                "No tasks found. The course must have at least one task added to it"
             )
             return
 
@@ -3557,8 +3551,7 @@ elif st.session_state.selected_section_index == 1:
                 index,
                 task_chat_history,
                 task_level_insights_prompt,
-                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                st.session_state.org["openai_free_trial"],
+                os.environ["OPENAI_API_KEY"],
             )
             for index, task_chat_history in enumerate(
                 chat_history_grouped_by_task.values()
@@ -3575,18 +3568,17 @@ elif st.session_state.selected_section_index == 1:
                 insights_summary = await summarize_learner_insights(
                     task_level_insights,
                     insights_summary_prompt,
-                    decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                    st.session_state.org["openai_free_trial"],
+                    os.environ["OPENAI_API_KEY"],
                 )
 
         return insights_summary, task_level_insights
 
     def show_insights_tab():
-        if is_empty_openai_api_key():
-            error_markdown(
-                f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
-            )
-            return
+        # if is_empty_openai_api_key():
+        #     error_markdown(
+        #         f"""No OpenAI API key found. Please set an API key in the <a href="/admin?org_id={st.session_state.org_id}&section=2" target="_self">settings</a>."""
+        #     )
+        #     return
 
         usage_data = _get_usage_data("insights")
 
@@ -3596,8 +3588,7 @@ elif st.session_state.selected_section_index == 1:
         filtered_tasks, selected_cohort, _ = usage_data
 
         if any(task["input_type"] == "audio" for task in filtered_tasks):
-            st.info("We currently do not support generating insights for audio tasks.")
-            return
+            st.info("We currently do not support generating insights for audio tasks")
 
         filtered_questions = [
             task
@@ -3610,7 +3601,7 @@ elif st.session_state.selected_section_index == 1:
         )
 
         if not metrics:
-            st.error("No usage data yet!")
+            st.info("No usage data yet")
             return
 
         metrics = [metric for metric in metrics if metric["num_attempted"]]
@@ -3750,7 +3741,7 @@ elif st.session_state.selected_section_index == 1:
         )
 
         if not metrics:
-            st.error("No usage data yet!")
+            st.info("No usage data yet")
             return
 
         num_tasks = len(filtered_tasks)
@@ -3818,7 +3809,7 @@ elif st.session_state.selected_section_index == 1:
         df = pd.DataFrame(all_cv_review_usage)
 
         if not len(df):
-            st.info("No usage data yet!")
+            st.info("No usage data yet")
             return
 
         # Get unique emails for filtering
@@ -3896,55 +3887,55 @@ else:
                     set_toast("Organization name updated", icon="✅")
                     st.rerun()
 
-        with st.form("edit_org_openai_api_key_form", border=False):
-            st.markdown("#### Link your OpenAI account")
-            st.write(
-                """We use AI models from [OpenAI](https://platform.openai.com/) which costs money for each use. To make sure that you are charged proportional to your usage of SensAI, we need to connect with your OpenAI account and all your usage will be billed to your OpenAI account. You can find your OpenAI API keys [here](https://platform.openai.com/api-keys). Create a new API key from the same page if you don't have one. Make sure to add credits to your account from the [billing page](https://platform.openai.com/settings/organization/billing/overview) before adding the API key to SensAI."""
-            )
+        # with st.form("edit_org_openai_api_key_form", border=False):
+        #     st.markdown("#### Link your OpenAI account")
+        #     st.write(
+        #         """We use AI models from [OpenAI](https://platform.openai.com/) which costs money for each use. To make sure that you are charged proportional to your usage of SensAI, we need to connect with your OpenAI account and all your usage will be billed to your OpenAI account. You can find your OpenAI API keys [here](https://platform.openai.com/api-keys). Create a new API key from the same page if you don't have one. Make sure to add credits to your account from the [billing page](https://platform.openai.com/settings/organization/billing/overview) before adding the API key to SensAI."""
+        #     )
 
-            cols = st.columns([4, 1])
-            if not is_empty_openai_api_key():
-                api_key_to_display = decrypt_openai_api_key(
-                    st.session_state.org["openai_api_key"]
-                )
-            else:
-                api_key_to_display = ""
+        #     cols = st.columns([4, 1])
+        #     if not is_empty_openai_api_key():
+        #         api_key_to_display = decrypt_openai_api_key(
+        #             st.session_state.org["openai_api_key"]
+        #         )
+        #     else:
+        #         api_key_to_display = ""
 
-            new_openai_api_key = cols[0].text_input(
-                "OpenAI API Key",
-                value=api_key_to_display,
-                type="password",
-                autocomplete="off",
-            )
+        #     new_openai_api_key = cols[0].text_input(
+        #         "OpenAI API Key",
+        #         value=api_key_to_display,
+        #         type="password",
+        #         autocomplete="off",
+        #     )
 
-            cols[1].container(height=10, border=False)
+        #     cols[1].container(height=10, border=False)
 
-            if cols[1].form_submit_button(
-                "Update",
-            ):
-                if not new_openai_api_key:
-                    st.error("API key cannot be empty")
-                    return
+        #     if cols[1].form_submit_button(
+        #         "Update",
+        #     ):
+        #         if not new_openai_api_key:
+        #             st.error("API key cannot be empty")
+        #             return
 
-                if api_key_to_display and new_openai_api_key == api_key_to_display:
-                    st.error("No changes made")
-                    return
+        #         if api_key_to_display and new_openai_api_key == api_key_to_display:
+        #             st.error("No changes made")
+        #             return
 
-                with st.spinner("Validating API key..."):
-                    api_key_validation = validate_openai_api_key(new_openai_api_key)
+        #         with st.spinner("Validating API key..."):
+        #             api_key_validation = validate_openai_api_key(new_openai_api_key)
 
-                if api_key_validation is None:
-                    st.error("Invalid key")
-                    return
+        #         if api_key_validation is None:
+        #             st.error("Invalid key")
+        #             return
 
-                update_org_openai_api_key(
-                    st.session_state.org_id,
-                    new_openai_api_key,
-                    api_key_validation,
-                )
+        #         update_org_openai_api_key(
+        #             st.session_state.org_id,
+        #             encrypt_openai_api_key(new_openai_api_key),
+        #             api_key_validation,
+        #         )
 
-                set_toast("OpenAI API key updated", "✅")
-                st.rerun()
+        #         set_toast("OpenAI API key updated", "✅")
+        #         st.rerun()
 
     with tabs[0]:
         show_account_tab()

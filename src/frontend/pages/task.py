@@ -54,7 +54,6 @@ from lib.output_formats.reading import (
 from lib.ui import (
     cleanup_ai_response,
 )
-from lib.utils.encryption import decrypt_openai_api_key, encrypt_openai_api_key
 from lib.s3 import (
     upload_audio_data_to_s3,
     generate_s3_uuid,
@@ -441,6 +440,7 @@ if task["type"] == "question":
                         ]
                     ),
                     ["Category", "Feedback", "Score"],
+                    st.session_state.scoring_criteria,
                 )
 
 
@@ -471,8 +471,7 @@ def get_ai_feedback_chat(
                 st.session_state.ai_chat_history.messages,
                 task["response_type"],
                 task["context"],
-                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                st.session_state.org["openai_free_trial"],
+                os.environ["OPENAI_API_KEY"],
             )
         except Exception:
             traceback.print_exc()
@@ -557,8 +556,7 @@ def get_ai_feedback_report_text_input(user_response: str):
                 st.session_state.scoring_criteria,
                 task["context"],
                 task["input_type"],
-                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                st.session_state.org["openai_free_trial"],
+                os.environ["OPENAI_API_KEY"],
             )
         except:
             st.markdown(
@@ -648,8 +646,7 @@ def get_ai_feedback_report_audio_input(audio_data: bytes):
                 st.session_state.scoring_criteria,
                 task["context"],
                 task["input_type"],
-                decrypt_openai_api_key(st.session_state.org["openai_api_key"]),
-                st.session_state.org["openai_free_trial"],
+                os.environ["OPENAI_API_KEY"],
             )
         except:
             st.markdown(
