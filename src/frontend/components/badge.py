@@ -519,9 +519,7 @@ def check_for_badges_unlocked(user_id: int, user_streak: List, cohort_id: int):
     # no need to do anything in this case
     # but if the longest streak badge exists, then, we need to compare the current streak with the longest streak
     # if the current streak is greater than the longest streak, then, we need to update the longest streak badge
-    if longest_streak_badge is not None and current_streak > int(
-        longest_streak_badge["value"]
-    ):
+    if longest_streak_badge and current_streak > int(longest_streak_badge["value"]):
 
         longest_streak_badge_id = create_new_badge_with_updates_to_existing_badges(
             user_id, str(current_streak), "longest_streak", cohort_id
