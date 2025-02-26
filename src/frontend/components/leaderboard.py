@@ -81,9 +81,6 @@ def get_leaderboard(view_type: LeaderboardViewType, cohort_id: int):
 
     users_data = []
     for streak_data in streaks:
-        if not streak_data["count"]:
-            continue
-
         solved_tasks = get_solved_tasks_for_user(
             streak_data["user"]["id"], cohort_id, view_type
         )

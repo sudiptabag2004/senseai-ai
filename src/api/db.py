@@ -1206,18 +1206,32 @@ async def get_streaks(
         u.first_name,
         u.middle_name,
         u.last_name,
-        GROUP_CONCAT(t.timestamp) as timestamps
-    FROM (
+        GROUP_CONCAT(t.timestamp ORDER BY t.timestamp DESC) as timestamps
+    FROM {users_table_name} u
+    LEFT JOIN (
         SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
         FROM {chat_history_table_name}
         WHERE 1=1 {date_filter} AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
         GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
-        ORDER BY user_id, timestamp DESC
-    ) t
-    JOIN users u ON u.id = t.user_id
-    GROUP BY u.email, u.first_name, u.middle_name, u.last_name
+        ORDER BY timestamp DESC, user_id
+    ) t ON u.id = t.user_id
+    WHERE u.id IN (
+        -- Users who are in the cohort as learners
+        SELECT user_id FROM {user_cohorts_table_name} WHERE cohort_id = ? and role = 'learner'
+        UNION
+        -- Users who have any chat history for the cohort tasks
+        SELECT DISTINCT user_id FROM {chat_history_table_name} 
+        WHERE task_id IN (
+            SELECT task_id FROM {course_tasks_table_name} 
+            WHERE course_id IN (
+                SELECT course_id FROM {course_cohorts_table_name} 
+                WHERE cohort_id = ?
+            )
+        )
+    )
+    GROUP BY u.id, u.email, u.first_name, u.middle_name, u.last_name
     """,
-        (cohort_id,),
+        (cohort_id, cohort_id, cohort_id),
         fetch_all=True,
     )
 
@@ -1231,7 +1245,12 @@ async def get_streaks(
         user_last_name,
         user_usage_dates_str,
     ) in usage_per_user:
-        user_usage_dates = user_usage_dates_str.split(",")
+        streak_count = (
+            len(get_user_streak_from_usage_dates(user_usage_dates_str.split(",")))
+            if user_usage_dates_str
+            else 0
+        )
+
         streaks.append(
             {
                 "user": {
@@ -1241,7 +1260,7 @@ async def get_streaks(
                     "middle_name": user_middle_name,
                     "last_name": user_last_name,
                 },
-                "count": len(get_user_streak_from_usage_dates(user_usage_dates)),
+                "count": streak_count,
             }
         )
 

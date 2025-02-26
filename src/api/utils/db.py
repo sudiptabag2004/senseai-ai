@@ -51,27 +51,25 @@ async def execute_db_operation(
 ):
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
-        try:
-            if params:
-                await cursor.execute(operation, params)
-            else:
-                await cursor.execute(operation)
 
-            if fetch_one:
-                result = await cursor.fetchone()
-            elif fetch_all:
-                result = await cursor.fetchall()
-            else:
-                result = None
+        if params:
+            await cursor.execute(operation, params)
+        else:
+            await cursor.execute(operation)
 
-            await conn.commit()
+        if fetch_one:
+            result = await cursor.fetchone()
+        elif fetch_all:
+            result = await cursor.fetchall()
+        else:
+            result = None
 
-            if get_last_row_id:
-                return cursor.lastrowid
+        await conn.commit()
 
-            return result
-        finally:
-            await conn.close()
+        if get_last_row_id:
+            return cursor.lastrowid
+
+        return result
 
 
 async def execute_many_db_operation(operation, params_list):
