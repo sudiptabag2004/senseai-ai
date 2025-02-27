@@ -79,7 +79,7 @@ def menu_footer():
 
         st.sidebar.page_link(
             "https://bit.ly/try_sensai",
-            label="Try SensAI",
+            label="Join a demo course",
             icon="🚀",
         )
 

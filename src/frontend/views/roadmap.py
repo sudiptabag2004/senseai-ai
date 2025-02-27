@@ -167,6 +167,7 @@ def show_roadmap_by_course(
         format_func=lambda course_id: course_id_to_course[course_id]["name"],
         on_change=update_course_id_in_query_params,
     )
+    st.query_params["course_id"] = str(selected_course_id)
 
     course_tasks = get_tasks_with_completion_status(
         user_id, cohort_id, selected_course_id
