@@ -227,6 +227,9 @@ def remove_scoring_criteria(scoring_criteria_ids: List[int]) -> Dict:
 
 def get_courses_for_tasks(task_ids: List[int]) -> List[Dict]:
     """Get courses for multiple tasks"""
+    if not task_ids:
+        return []
+
     response = requests.get(
         f"{os.getenv('BACKEND_URL')}/tasks/courses",
         params={"task_ids": task_ids},

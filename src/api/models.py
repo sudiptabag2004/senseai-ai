@@ -297,8 +297,8 @@ class UpdateTaskRequest(BaseModel):
     name: str
     description: str
     answer: str | None
-    input_type: str
-    response_type: str
+    input_type: str | None
+    response_type: str | None
     coding_languages: List[str] | None
     context: str | None
 

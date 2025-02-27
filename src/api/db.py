@@ -2643,6 +2643,9 @@ def drop_user_cohorts_table():
 
 
 async def get_courses_for_tasks(task_ids: List[int]):
+    if not task_ids:
+        return []
+
     results = await execute_db_operation(
         f"SELECT ct.task_id, c.id, c.name, ct.milestone_id, m.name FROM {course_tasks_table_name} ct JOIN {courses_table_name} c ON ct.course_id = c.id LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})",
         fetch_all=True,
