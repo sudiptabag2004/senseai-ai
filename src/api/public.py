@@ -1,11 +1,12 @@
-from typing import List, Optional, Tuple
-from fastapi import FastAPI
+from typing import Annotated, Dict, List, Optional, Tuple
+from fastapi import FastAPI, Body
 from api.models import ChatMessage, Task, LeaderboardViewType
 from api.db import (
     get_all_chat_history as get_all_chat_history_from_db,
     get_all_tasks_for_org_or_course as get_all_tasks_for_org_or_course_from_db,
     get_streaks as get_streaks_from_db,
     get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
+    add_members_to_cohort as add_members_to_cohort_in_db,
 )
 
 app = FastAPI()
@@ -54,3 +55,15 @@ async def get_tasks_completed_for_user(
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> List[int]:
     return await get_solved_tasks_for_user_from_db(user_id, cohort_id, view)
+
+
+@app.post(
+    "/cohorts/{cohort_id}/add_learners",
+)
+async def add_learners_to_cohort(
+    cohort_id: int,
+    emails: Annotated[List[str], Body(embed=True)],
+) -> Dict:
+    roles = ["learner" for _ in range(len(emails))]
+    await add_members_to_cohort_in_db(cohort_id, emails, roles)
+    return {"message": "Learners added to cohort"}
