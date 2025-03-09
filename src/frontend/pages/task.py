@@ -12,6 +12,7 @@ st.set_page_config(
     page_title="Task | SensAI", layout="wide", initial_sidebar_state="collapsed"
 )
 
+from models import TaskType
 from lib.init import init_app
 
 init_app()
@@ -46,6 +47,9 @@ from lib.output_formats.chat import (
     get_containers as get_chat_containers,
     display_user_chat_message,
     get_ai_chat_response,
+    is_response_limit_exceeded,
+    show_attempts_status,
+    show_response_limit_exceeded_message,
 )
 from lib.output_formats.reading import (
     get_containers as get_reading_containers,
@@ -145,6 +149,7 @@ if not task["verified"]:
         "Task not verified. Please ask your mentor/teacher to verify the task so that you can solve it."
     )
     st.stop()
+
 
 st.session_state.scoring_criteria = None
 if task["response_type"] == "report":
@@ -487,14 +492,22 @@ def get_ai_feedback_chat(
     )
 
     if task["response_type"] == "exam":
-        if is_solved:
-            ai_response = "✅ Your response is correct!"
+        if not task["is_feedback_shown"]:
+            ai_response = "Thank you for your submission! We'll review it shortly."
         else:
-            ai_response = "Not quite right. Try again!"
+            if is_solved:
+                ai_response = "✅ Your response is correct!"
+            else:
+                ai_response = "Not quite right. Try again!"
 
     if not st.session_state.is_solved and is_solved:
-        st.balloons()
         st.session_state.is_solved = True
+
+        if task["type"] == TaskType.READING_MATERIAL or (
+            task["type"] == TaskType.QUESTION and task["is_feedback_shown"]
+        ):
+            st.balloons()
+
         time.sleep(2)
 
     if task["response_type"] == "exam":
@@ -747,7 +760,7 @@ def show_and_handle_chat_input():
     is_disabled = st.session_state.is_ai_running
 
     if task["response_type"] == "exam":
-        is_disabled = is_disabled or st.session_state.is_solved
+        is_disabled = is_disabled or is_response_limit_exceeded(task)
 
     if user_response := st.chat_input(
         user_response_placeholder,
@@ -815,6 +828,15 @@ if prev_task is not None:
             icon="←",
             icon_position="left",
         )
+
+with nav_cols[1]:
+    if task["max_attempts"] is not None and task["is_feedback_shown"]:
+        unsolved = not st.session_state.is_solved
+        user_attempts = len(st.session_state.chat_history) // 2
+        if user_attempts < task["max_attempts"] and unsolved:
+            show_attempts_status(user_attempts, task["max_attempts"])
+        elif user_attempts >= task["max_attempts"] and unsolved:
+            show_response_limit_exceeded_message()
 
 if next_task is not None:
     next_task_url = get_task_url(next_task, cohort_id, course_id)

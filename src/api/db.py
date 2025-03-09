@@ -370,6 +370,8 @@ async def create_tasks_table(cursor):
                     context TEXT,
                     deleted_at DATETIME,
                     type TEXT,
+                    max_attempts INTEGER,
+                    is_feedback_shown BOOLEAN,
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
                 )"""
     )
@@ -577,14 +579,15 @@ async def store_task(
     org_id: int,
     context: str,
     task_type: str,
+    max_attempts: int,
+    is_feedback_shown: bool,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
-    # Insert main task
     insert_task_query = f"""
     INSERT INTO {tasks_table_name} 
-    (name, description, answer, input_type, coding_language, generation_model, verified, org_id, response_type, context, type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (name, description, answer, input_type, coding_language, generation_model, verified, org_id, response_type, context, type, max_attempts, is_feedback_shown)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     task_params = (
         name,
@@ -598,6 +601,8 @@ async def store_task(
         response_type,
         context,
         task_type,
+        max_attempts,
+        is_feedback_shown,
     )
 
     async with get_new_db_connection() as conn:
@@ -644,13 +649,15 @@ async def update_task(
     response_type: str,
     coding_languages: List[str],
     context: str,
+    max_attempts: int,
+    is_feedback_shown: bool,
 ):
     coding_language_str = serialise_list_to_str(coding_languages)
 
     await execute_db_operation(
         f"""
     UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, context = ?
+    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, context = ?, max_attempts = ?, is_feedback_shown = ?
     WHERE id = ?
     """,
         (
@@ -661,6 +668,8 @@ async def update_task(
             coding_language_str,
             response_type,
             context,
+            max_attempts,
+            is_feedback_shown,
             task_id,
         ),
     )
@@ -674,7 +683,11 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
 
 
 def convert_task_db_to_dict(task, tests=None, has_milestone=False):
-    tag_ids = list(map(int, deserialise_list_from_str(task[15])))
+    task_table_attr_max_index = 16
+
+    tag_ids = list(
+        map(int, deserialise_list_from_str(task[task_table_attr_max_index + 1]))
+    )
     tag_names = deserialise_list_from_str(task[4])
 
     tags = [{"id": tag_ids[i], "name": tag_names[i]} for i in range(len(tag_ids))]
@@ -695,11 +708,13 @@ def convert_task_db_to_dict(task, tests=None, has_milestone=False):
         "response_type": task[12],
         "context": task[13],
         "type": task[14],
+        "max_attempts": task[15],
+        "is_feedback_shown": bool(task[16]),
     }
 
     if has_milestone:
-        task_dict["milestone_id"] = task[16]
-        task_dict["milestone_name"] = task[17]
+        task_dict["milestone_id"] = task[task_table_attr_max_index + 2]
+        task_dict["milestone_name"] = task[task_table_attr_max_index + 3]
 
     if tests is not None:
         task_dict["tests"] = tests
@@ -725,7 +740,7 @@ async def get_all_tasks_for_org_or_course(
     SELECT t.id, t.name, t.description, t.answer,
         GROUP_CONCAT(tg.name) as tag_names,
         t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, o.id, o.name as org_name,
-        t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids{select_query_params}
+        t.response_type, t.context, t.type, t.max_attempts, t.is_feedback_shown, GROUP_CONCAT(tg.id) as tag_ids{select_query_params}
     FROM {tasks_table_name} t
     LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
     LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
@@ -790,7 +805,8 @@ async def get_course_task(task_id: int, course_id: int):
         f"""
     SELECT t.id, t.name, t.description, t.answer, 
         GROUP_CONCAT(tg.name) as tag_names,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, t.org_id, o.name as org_name, t.response_type, t.context, t.type, GROUP_CONCAT(tg.id) as tag_ids,
+        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, t.org_id, o.name as org_name, t.response_type, t.context, 
+        t.type, t.max_attempts, t.is_feedback_shown, GROUP_CONCAT(tg.id) as tag_ids,
         ct.milestone_id,
         COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
     FROM {tasks_table_name} t
@@ -2647,7 +2663,8 @@ async def get_courses_for_tasks(task_ids: List[int]):
         return []
 
     results = await execute_db_operation(
-        f"SELECT ct.task_id, c.id, c.name, ct.milestone_id, m.name FROM {course_tasks_table_name} ct JOIN {courses_table_name} c ON ct.course_id = c.id LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})",
+        f"""SELECT ct.task_id, c.id, c.name, ct.milestone_id, m.name FROM {course_tasks_table_name} ct 
+        JOIN {courses_table_name} c ON ct.course_id = c.id LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id WHERE ct.task_id IN ({', '.join(map(str, task_ids))})""",
         fetch_all=True,
     )
 
@@ -2699,7 +2716,7 @@ async def get_courses_for_tasks(task_ids: List[int]):
 
 
 async def check_and_insert_missing_course_milestones(
-    course_tasks_to_add: List[Tuple[int, int, int]]
+    course_tasks_to_add: List[Tuple[int, int, int]],
 ):
     # Find unique course, milestone pairs to validate they exist
     unique_course_milestone_pairs = {
@@ -3044,3 +3061,66 @@ async def get_milestones_for_course(course_id: int):
         }
         for milestone in milestones
     ]
+
+
+async def migrate_tasks_table():
+    await execute_db_operation(
+        f"DROP TABLE IF EXISTS temp_tasks",
+        (),
+    )
+
+    await execute_db_operation(
+        f"""CREATE TABLE temp_tasks AS 
+            SELECT id, name, description, answer, input_type, coding_language, 
+            generation_model, verified, timestamp, org_id, response_type, context, 
+            deleted_at, type
+            FROM {tasks_table_name}""",
+        (),
+    )
+
+    await execute_db_operation(
+        f"DROP TABLE {tasks_table_name}",
+        (),
+    )
+
+    await execute_db_operation(
+        f"""CREATE TABLE {tasks_table_name} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            answer TEXT,
+            input_type TEXT,
+            coding_language TEXT,
+            generation_model TEXT,
+            verified BOOLEAN NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            org_id INTEGER NOT NULL,
+            response_type TEXT,
+            context TEXT,
+            deleted_at DATETIME,
+            type TEXT,
+            max_attempts INTEGER,
+            is_feedback_shown BOOLEAN,
+            FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+        )""",
+        (),
+    )
+
+    await execute_db_operation(
+        f"""INSERT INTO {tasks_table_name} 
+            (id, name, description, answer, input_type, coding_language, generation_model, verified, timestamp, org_id, response_type, context, 
+            deleted_at, type, max_attempts, is_feedback_shown)
+            SELECT id, name, description, answer, input_type, coding_language, generation_model, verified, timestamp, org_id, response_type, context, 
+            deleted_at, type, NULL, CASE WHEN type = 'question' THEN true ELSE NULL END FROM temp_tasks""",
+        (),
+    )
+
+    await execute_db_operation(
+        f"DROP TABLE temp_tasks",
+        (),
+    )
+
+    await execute_db_operation(
+        f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)",
+        (),
+    )

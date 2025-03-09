@@ -10,6 +10,7 @@ import sqlite3
 import pandas as pd
 from streamlit_ace import st_ace, THEMES
 from lib.config import coding_languages_supported
+from lib.output_formats.chat import is_response_limit_exceeded
 
 supported_language_keys = [
     "html_code",
@@ -429,6 +430,8 @@ def retain_code():
 def show_code_editor(
     task: Dict, code_editor_container, set_ai_running, get_ai_feedback_on_code
 ):
+
+    is_disabled = is_response_limit_exceeded(task) or st.session_state.is_ai_running
     restored_code_snippets = restore_code_snippets(st.session_state.chat_history)
 
     for lang, code in restored_code_snippets.items():
@@ -474,9 +477,7 @@ def show_code_editor(
 
             with st.form("Code"):
                 st.form_submit_button(
-                    "Run Code",
-                    on_click=toggle_show_code_output,
-                    disabled=st.session_state.is_ai_running,
+                    "Run Code", on_click=toggle_show_code_output, disabled=is_disabled
                 )
 
                 tabs = st.tabs(tab_names)
@@ -629,7 +630,7 @@ def show_code_editor(
             if submit_button_col.button(
                 "Submit Code",
                 type="primary",
-                disabled=st.session_state.is_ai_running,
+                disabled=is_disabled,
                 on_click=set_ai_running,
             ):
                 get_ai_feedback_on_code()

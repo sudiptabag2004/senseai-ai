@@ -139,7 +139,7 @@ from components.placeholder import (
     show_empty_tags_placeholder,
     show_empty_tasks_placeholder,
 )
-from models import TaskAIResponseType, TaskInputType
+from models import TaskAIResponseType, TaskInputType, TaskType
 
 init_app()
 
@@ -301,6 +301,8 @@ def reset_task_form():
     st.session_state.task_tags = []
     st.session_state.task_answer = ""
     st.session_state.coding_languages = None
+    st.session_state.max_attempts = None
+    st.session_state.is_feedback_shown = True
     st.session_state.final_answer = ""
     st.session_state.ai_answer = ""
     st.session_state.ai_answers = None
@@ -466,6 +468,8 @@ def add_new_task():
         st.session_state.org_id,
         get_task_context(),
         st.session_state["task_type"]["value"],
+        st.session_state.get("max_attempts", None),
+        st.session_state.get("is_feedback_shown", None),
     )
 
     if st.session_state.selected_task_courses:
@@ -618,11 +622,14 @@ def edit_task(task_details):
         st.session_state.task_name != task_details["name"]
         or st.session_state.task_description != task_details["description"]
         or st.session_state.task_answer != task_details["answer"]
+        or st.session_state.get("max_attempts", None) != task_details["max_attempts"]
         or st.session_state.task_input_type != task_details["input_type"]
         or st.session_state.task_ai_response_type != task_details["response_type"]
         or bool(st.session_state.coding_languages)
         != bool(task_details["coding_language"])
         or task_context != task_details["context"]
+        or st.session_state.get("is_feedback_shown", None)
+        != task_details["is_feedback_shown"]
     ):
         update_task(
             task_id,
@@ -633,6 +640,8 @@ def edit_task(task_details):
             st.session_state.task_ai_response_type,
             st.session_state.coding_languages,
             task_context,
+            st.session_state.get("max_attempts", None),
+            st.session_state.get("is_feedback_shown", None),
         )
 
     update_task_courses(task_details)
@@ -901,14 +910,26 @@ def task_input_type_selector():
     )
 
 
-def clear_task_input_type():
+def handle_task_type_changed():
     if "task_input_type" in st.session_state:
         st.session_state.task_input_type = None
+
+    if st.session_state.task_type["value"] == TaskType.READING_MATERIAL:
+        st.session_state.is_feedback_shown = None
+    else:
+        st.session_state.is_feedback_shown = True
 
 
 def clear_task_ai_response_type():
     if "task_ai_response_type" in st.session_state:
         st.session_state.task_ai_response_type = None
+
+
+def handle_ai_response_type_changed():
+    if st.session_state.task_ai_response_type == TaskAIResponseType.EXAM:
+        st.session_state.is_feedback_shown = False
+    else:
+        st.session_state.is_feedback_shown = True
 
 
 def ai_response_type_selector():
@@ -927,6 +948,7 @@ def ai_response_type_selector():
         options,
         key="task_ai_response_type",
         help=response_type_help_text,
+        on_change=handle_ai_response_type_changed,
         disabled=disabled,
     )
 
@@ -937,8 +959,29 @@ def task_type_selector(disabled: bool = False):
         task_type_mapping,
         key="task_type",
         format_func=lambda value: value["label"],
-        on_change=clear_task_input_type,
+        on_change=handle_task_type_changed,
         disabled=disabled,
+    )
+
+
+def max_attempts_selector():
+    if st.session_state.task_ai_response_type != "exam":
+        return
+
+    return st.number_input(
+        "Enter maximum number of attempts allowed",
+        key="max_attempts",
+        step=1,
+        min_value=1,
+        value=None,
+    )
+
+
+def is_feedback_shown_selector():
+    return st.checkbox(
+        "Give result (correct/wrong) after each attempt",
+        key="is_feedback_shown",
+        value=False,
     )
 
 
@@ -1278,6 +1321,14 @@ def task_add_edit_form(mode: Literal["add", "edit"], **kwargs):
                 )
 
         if ai_response_type in ["chat", "exam"]:
+            if st.session_state.task_ai_response_type == "exam":
+                is_feedback_shown_selector()
+
+                if st.session_state.is_feedback_shown:
+                    max_attempts_selector()
+                else:
+                    st.session_state.max_attempts = 1
+
             cols = st.columns([3.5, 1])
 
             cols[-1].container(height=10, border=False)
@@ -1484,6 +1535,8 @@ def bulk_upload_tasks_to_db(tasks_df: pd.DataFrame):
             st.session_state.org_id,
             context,
             st.session_state.task_type["value"],
+            st.session_state.get("max_attempts", None),
+            st.session_state.get("is_feedback_shown", None),
         )
         new_task_ids.append(task_id)
 
@@ -1606,6 +1659,14 @@ def show_bulk_upload_tasks_form():
         if ai_response_type == "report":
             show_scoring_criteria_addition_form(st.session_state.scoring_criteria)
             st.divider()
+
+        elif ai_response_type == "exam":
+            is_feedback_shown_selector()
+
+            if st.session_state.is_feedback_shown:
+                max_attempts_selector()
+            else:
+                st.session_state.max_attempts = 1
 
     show_task_course_addition_form(st.session_state.selected_task_courses)
 
@@ -1823,6 +1884,20 @@ if st.session_state.selected_section_index == 0:
 
         st.session_state.task_has_context = bool(task_details.get("context"))
         st.session_state.task_context = task_details.get("context")
+
+        st.session_state.is_feedback_shown = task_details.get(
+            "is_feedback_shown",
+            (
+                None
+                if task_details["type"] == TaskType.READING_MATERIAL
+                else (
+                    False
+                    if task_details["response_type"] == TaskAIResponseType.EXAM
+                    else True
+                )
+            ),
+        )
+        st.session_state.max_attempts = task_details.get("max_attempts")
 
         all_tag_ids = [tag["id"] for tag in st.session_state.tags]
 

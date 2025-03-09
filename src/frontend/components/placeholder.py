@@ -20,7 +20,7 @@ def show_no_cohorts_placeholder_home():
         secondary_btn_bg = "#338233" if is_dark else "#00CC66"
         secondary_btn_hover = "#00b359"
 
-        admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state["selected_org"]['id']}"
+        admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state['selected_org']['id']}"
 
         title = "You don't have any cohorts yet!"
 
@@ -160,7 +160,7 @@ def show_no_courses_placeholder_home():
         secondary_btn_bg = "#338233" if is_dark else "#00CC66"
         secondary_btn_hover = "#00b359"
 
-        admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state["selected_org"]['id']}"
+        admin_panel_url = f"{os.environ.get('APP_URL')}/admin?org_id={st.session_state[selected_org]['id']}"
 
         title = "No courses in this cohort!"
         description = "On SensAI, learning happens through tasks. Learners receive feedback and questions from AI to nudge them in the right direction. Tasks are organized into courses. Start by creating a course and adding it to this cohort!"

@@ -45,6 +45,8 @@ def store_task(
     org_id: int,
     context: str,
     task_type: str,
+    max_attempts: int,
+    is_feedback_shown: bool,
 ) -> int:
     """Store a new task"""
     payload = json.dumps(
@@ -62,6 +64,8 @@ def store_task(
             "org_id": org_id,
             "context": context,
             "task_type": task_type,
+            "max_attempts": max_attempts,
+            "is_feedback_shown": is_feedback_shown,
         }
     )
     response = requests.post(
@@ -83,6 +87,8 @@ def update_task(
     response_type: str,
     coding_languages: List[str],
     context: str,
+    max_attempts: int,
+    is_feedback_shown: bool,
 ) -> Dict:
     """Update an existing task"""
     payload = json.dumps(
@@ -94,6 +100,8 @@ def update_task(
             "response_type": response_type,
             "coding_languages": coding_languages,
             "context": context,
+            "max_attempts": max_attempts,
+            "is_feedback_shown": is_feedback_shown,
         }
     )
     response = requests.put(
