@@ -60,6 +60,8 @@ async def store_task(request: StoreTaskRequest) -> int:
         org_id=request.org_id,
         context=request.context,
         task_type=request.task_type,
+        max_attempts=request.max_attempts,
+        is_feedback_shown=request.is_feedback_shown,
     )
 
 
@@ -100,6 +102,8 @@ async def update_task(task_id: int, request: UpdateTaskRequest):
         response_type=request.response_type,
         coding_languages=request.coding_languages,
         context=request.context,
+        max_attempts=request.max_attempts,
+        is_feedback_shown=request.is_feedback_shown,
     )
     return {"success": True}
 

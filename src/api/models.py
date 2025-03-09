@@ -239,6 +239,8 @@ class Task(BaseModel):
     org_name: str
     context: str | None
     type: TaskType
+    max_attempts: int | None
+    is_feedback_shown: bool | None
     tests: Optional[List[dict]] = None
     milestone_id: Optional[int] = None
     milestone_name: Optional[str] = None
@@ -291,6 +293,8 @@ class StoreTaskRequest(BaseModel):
     org_id: int
     context: str | None
     task_type: str
+    max_attempts: int | None
+    is_feedback_shown: bool | None
 
 
 class UpdateTaskRequest(BaseModel):
@@ -301,6 +305,8 @@ class UpdateTaskRequest(BaseModel):
     response_type: str | None
     coding_languages: List[str] | None
     context: str | None
+    max_attempts: int | None
+    is_feedback_shown: bool | None
 
 
 class StoreMessageRequest(BaseModel):
