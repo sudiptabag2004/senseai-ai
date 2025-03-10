@@ -8,6 +8,7 @@ class UserLoginData(BaseModel):
     email: str
     given_name: str
     family_name: str | None = None
+    id_token: str  # Google authentication token
 
 
 class CreateOrganizationRequest(BaseModel):

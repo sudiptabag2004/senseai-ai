@@ -101,3 +101,16 @@ def is_user_in_cohort(user_id: int, cohort_id: int) -> bool:
         raise Exception("Failed to check if user is in cohort")
 
     return response.json()
+
+
+def get_user_courses(user_id: int) -> List[Dict]:
+    """
+    Get all courses for a user, including:
+    - Courses where user is a learner or mentor
+    - All courses from organizations where user is admin or owner
+    """
+    response = requests.get(f"{os.getenv('BACKEND_URL')}/users/{user_id}/courses")
+    if response.status_code != 200:
+        raise Exception("Failed to get user courses")
+
+    return response.json()

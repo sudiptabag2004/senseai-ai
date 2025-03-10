@@ -1462,12 +1462,12 @@ async def insert_or_return_user(
 
     user = convert_user_db_to_dict(await cursor.fetchone())
 
-    # create a new organization for the user (Personal Workspace)
-    await create_organization_with_user(
-        cursor,
-        org_name="Personal Workspace",
-        user_id=user["id"],
-    )
+    # # create a new organization for the user (Personal Workspace)
+    # await create_organization_with_user(
+    #     cursor,
+    #     org_name="Personal Workspace",
+    #     user_id=user["id"],
+    # )
 
     return user
 
@@ -3124,3 +3124,61 @@ async def migrate_tasks_table():
         f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)",
         (),
     )
+
+
+async def get_user_courses_from_db(user_id: int) -> List[Dict]:
+    """
+    Get all courses for a user based on different roles:
+    1. Courses where the user is a learner or mentor through cohorts
+    2. All courses from organizations where the user is an admin or owner
+
+    Args:
+        user_id: The ID of the user
+
+    Returns:
+        List of course dictionaries with their details
+    """
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Get all courses where the user is a learner or mentor through cohorts
+        user_cohorts = await get_user_cohorts(user_id)
+        cohort_ids = [cohort["id"] for cohort in user_cohorts]
+
+        # Start with an empty set to store unique course IDs
+        course_ids = set()
+
+        # Add courses from user's cohorts
+        for cohort_id in cohort_ids:
+            cohort_courses = await get_courses_for_cohort(cohort_id)
+            for course in cohort_courses:
+                course_ids.add(course["id"])
+
+        # Get organizations where the user is an admin or owner
+        user_orgs = await get_user_organizations(user_id)
+        admin_owner_org_ids = [
+            org["id"] for org in user_orgs if org["role"] in ["admin", "owner"]
+        ]
+
+        # Add all courses from organizations where user is admin or owner
+        for org_id in admin_owner_org_ids:
+            org_courses = await get_all_courses_for_org(org_id)
+            for course in org_courses:
+                course_ids.add(course["id"])
+
+        # If no courses found, return empty list
+        if not course_ids:
+            return []
+
+        # Fetch detailed information for all course IDs
+        courses = []
+        for course_id in course_ids:
+            # Fetch course from DB
+            await cursor.execute(
+                f"SELECT * FROM {courses_table_name} WHERE id = ?", (course_id,)
+            )
+            course_row = await cursor.fetchone()
+            if course_row:
+                courses.append(convert_course_db_to_dict(course_row))
+
+        return courses
