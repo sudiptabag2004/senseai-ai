@@ -13,22 +13,20 @@ class UserLoginData(BaseModel):
 
 class CreateOrganizationRequest(BaseModel):
     name: str
-    color: str | None = None
+    slug: str
     user_id: int
 
 
 class CreateOrganizationResponse(BaseModel):
-    org_id: int
-    user_orgs: List[Dict]
+    id: int
 
 
 class RemoveMembersFromOrgRequest(BaseModel):
     user_ids: List[int]
 
 
-class AddUserToOrgRequest(BaseModel):
-    email: str
-    role: Literal["owner", "admin"]
+class AddUsersToOrgRequest(BaseModel):
+    emails: List[str]
 
 
 class UpdateOrgRequest(BaseModel):
@@ -80,6 +78,10 @@ class UpdateBadgeRequest(BaseModel):
 class CreateCohortRequest(BaseModel):
     name: str
     org_id: int
+
+
+class CreateCohortResponse(BaseModel):
+    id: int
 
 
 class AddMembersToCohortRequest(BaseModel):

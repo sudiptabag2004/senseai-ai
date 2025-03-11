@@ -33,6 +33,7 @@ from api.models import (
     UpdateCohortRequest,
     UpdateCohortGroupRequest,
     AddCoursesToCohortRequest,
+    CreateCohortResponse,
     RemoveCoursesFromCohortRequest,
     Streaks,
     LeaderboardViewType,
@@ -47,9 +48,9 @@ async def get_all_cohorts_for_org(org_id: int) -> List[Dict]:
     return await get_all_cohorts_for_org_from_db(org_id)
 
 
-@router.post("/")
-async def create_cohort(request: CreateCohortRequest) -> int:
-    return await create_cohort_in_db(request.name, request.org_id)
+@router.post("/", response_model=CreateCohortResponse)
+async def create_cohort(request: CreateCohortRequest) -> CreateCohortResponse:
+    return {"id": await create_cohort_in_db(request.name, request.org_id)}
 
 
 @router.get("/{cohort_id}")

@@ -1462,13 +1462,6 @@ async def insert_or_return_user(
 
     user = convert_user_db_to_dict(await cursor.fetchone())
 
-    # # create a new organization for the user (Personal Workspace)
-    # await create_organization_with_user(
-    #     cursor,
-    #     org_name="Personal Workspace",
-    #     user_id=user["id"],
-    # )
-
     return user
 
 
@@ -2338,20 +2331,6 @@ def drop_organizations_table():
     )
 
 
-async def create_organization(cursor, name: str, color: str = None):
-    slug = slugify(name) + "-" + str(uuid.uuid4())
-    default_logo_color = color or generate_random_color()
-
-    await cursor.execute(
-        f"""INSERT INTO {organizations_table_name} 
-            (slug, name, default_logo_color)
-            VALUES (?, ?, ?)""",
-        (slug, name, default_logo_color),
-    )
-
-    return cursor.lastrowid
-
-
 async def update_org(org_id: int, org_name: str):
     await execute_db_operation(
         f"UPDATE {organizations_table_name} SET name = ? WHERE id = ?",
@@ -2391,11 +2370,23 @@ async def add_user_to_org_by_user_id(
     return cursor.lastrowid
 
 
-async def create_organization_with_user(
-    cursor, org_name: str, user_id: int, color: str = None
-):
-    org_id = await create_organization(cursor, org_name, color)
-    await add_user_to_org_by_user_id(cursor, user_id, org_id, "owner")
+async def create_organization_with_user(org_name: str, slug: str, user_id: int):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"""INSERT INTO {organizations_table_name} 
+                (slug, name)
+                VALUES (?, ?)""",
+            (slug, org_name),
+        )
+
+        org_id = cursor.lastrowid
+
+        await add_user_to_org_by_user_id(cursor, user_id, org_id, "owner")
+
+        await conn.commit()
+
     return org_id
 
 
@@ -2473,31 +2464,38 @@ async def get_hva_openai_api_key() -> str:
     return org_details["openai_api_key"]
 
 
-async def add_user_to_org_by_email(
-    email: str,
+async def add_users_to_org_by_email(
     org_id: int,
-    role: Literal["owner", "admin"],
+    emails: List[str],
 ):
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
-        user = await insert_or_return_user(cursor, email)
+
+        user_ids = []
+        for email in emails:
+            user = await insert_or_return_user(cursor, email)
+            user_ids.append(user["id"])
+
+        # Check if any of the users are already in the organization
+        placeholders = ", ".join(["?" for _ in user_ids])
 
         await cursor.execute(
-            f"""SELECT 1 FROM {user_organizations_table_name} WHERE user_id = ? AND org_id = ?
+            f"""SELECT user_id FROM {user_organizations_table_name} 
+            WHERE org_id = ? AND user_id IN ({placeholders})
             """,
-            (user["id"], org_id),
+            (org_id, *user_ids),
         )
 
-        is_user_in_org = await cursor.fetchone()
+        existing_user_ids = await cursor.fetchall()
 
-        if is_user_in_org:
-            raise Exception("User already exists in organization")
+        if existing_user_ids:
+            raise Exception(f"Some users already exist in organization")
 
-        await cursor.execute(
+        await cursor.executemany(
             f"""INSERT INTO {user_organizations_table_name}
                 (user_id, org_id, role)
                 VALUES (?, ?, ?)""",
-            (user["id"], org_id, role),
+            [(user_id, org_id, "admin") for user_id in user_ids],
         )
         await conn.commit()
 
