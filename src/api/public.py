@@ -1,6 +1,6 @@
 from typing import Annotated, Dict, List, Optional, Tuple
 from fastapi import FastAPI, Body
-from api.models import ChatMessage, Task, LeaderboardViewType
+from api.models import ChatMessage, LeaderboardViewType
 from api.db import (
     get_all_chat_history as get_all_chat_history_from_db,
     get_all_tasks_for_org_or_course as get_all_tasks_for_org_or_course_from_db,
@@ -22,9 +22,9 @@ async def get_all_chat_history(org_id: int) -> List[ChatMessage]:
 
 @app.get(
     "/tasks",
-    response_model=List[Task],
+    response_model=List,
 )
-async def get_tasks_for_org(org_id: int, return_tests: bool = False) -> List[Task]:
+async def get_tasks_for_org(org_id: int, return_tests: bool = False) -> List:
     return await get_all_tasks_for_org_or_course_from_db(
         org_id=org_id, return_tests=return_tests
     )

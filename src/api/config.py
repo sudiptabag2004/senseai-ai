@@ -22,6 +22,8 @@ log_file_path = f"{log_dir}/backend.log"
 
 chat_history_table_name = "chat_history"
 tasks_table_name = "tasks"
+questions_table_name = "questions"
+blocks_table_name = "blocks"
 tests_table_name = "tests"
 cohorts_table_name = "cohorts"
 course_tasks_table_name = "course_tasks"

@@ -46,7 +46,6 @@ class AddMilestoneRequest(BaseModel):
 
 class UpdateMilestoneRequest(BaseModel):
     name: str
-    color: str
 
 
 class CreateTagRequest(BaseModel):
@@ -131,6 +130,98 @@ class CreateCourseRequest(BaseModel):
     org_id: int
 
 
+class CreateCourseResponse(BaseModel):
+    id: int
+
+
+class Course(BaseModel):
+    id: int
+    name: str
+
+
+class Milestone(BaseModel):
+    id: int
+    name: str | None
+    color: Optional[str] = None
+    ordering: Optional[int] = None
+
+
+class TaskType(Enum):
+    EXAM = "exam"
+    QUIZ = "quiz"
+    LEARNING_MATERIAL = "learning_material"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskType):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class TaskStatus(Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskStatus):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class Task(BaseModel):
+    id: int
+    title: str
+    type: TaskType
+    status: TaskStatus
+
+
+class Block(BaseModel):
+    id: str
+    type: str
+    props: Dict
+    content: str | List
+    position: int
+    children: List
+
+
+class TaskWithBlocks(Task):
+    blocks: List[Block]
+
+
+class MilestoneTask(Task):
+    ordering: int
+
+
+class MilestoneWithTasks(Milestone):
+    tasks: List[MilestoneTask]
+
+
+class CourseWithMilestonesAndTasks(Course):
+    milestones: List[MilestoneWithTasks]
+
+
+class UserCourseRole(str, Enum):
+    ADMIN = "admin"
+    LEARNER = "learner"
+    MENTOR = "mentor"
+
+
+class UserCourse(Course):
+    role: UserCourseRole
+    org_id: int
+
+
 class AddCourseToCohortsRequest(BaseModel):
     cohort_ids: List[int]
 
@@ -210,45 +301,6 @@ class TaskAIResponseType(Enum):
         raise NotImplementedError()
 
 
-class TaskType(Enum):
-    QUESTION = "question"
-    READING_MATERIAL = "reading_material"
-
-    def __str__(self):
-        return self.value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        elif isinstance(other, TaskType):
-            return self.value == other.value
-
-        raise NotImplementedError()
-
-
-class Task(BaseModel):
-    id: int
-    name: str
-    description: str
-    answer: str | None
-    tags: List[Tag]
-    input_type: TaskInputType | None
-    response_type: TaskAIResponseType | None
-    coding_language: List[str]
-    generation_model: str | None
-    verified: bool
-    timestamp: str
-    org_id: int
-    org_name: str
-    context: str | None
-    type: TaskType
-    max_attempts: int | None
-    is_feedback_shown: bool | None
-    tests: Optional[List[dict]] = None
-    milestone_id: Optional[int] = None
-    milestone_name: Optional[str] = None
-
-
 class User(BaseModel):
     id: int
     email: str
@@ -280,6 +332,22 @@ class LeaderboardViewType(Enum):
             return self.value == other.value
 
         raise NotImplementedError()
+
+
+class CreateDraftTaskRequest(BaseModel):
+    org_id: int
+    course_id: int
+    milestone_id: int
+    type: TaskType
+    title: str
+
+
+class CreateDraftTaskResponse(BaseModel):
+    id: int
+
+
+class PublishLearningMaterialTaskRequest(BaseModel):
+    blocks: List[dict]
 
 
 class StoreTaskRequest(BaseModel):
@@ -346,22 +414,22 @@ class UpdateTaskOrdersRequest(BaseModel):
     task_orders: List[Tuple[int, int]]
 
 
+class AddMilestoneToCourseRequest(BaseModel):
+    name: str
+    color: str
+    org_id: int
+
+
+class AddMilestoneToCourseResponse(BaseModel):
+    id: int
+
+
 class UpdateMilestoneOrdersRequest(BaseModel):
     milestone_orders: List[Tuple[int, int]]
 
 
 class UpdateTaskTestsRequest(BaseModel):
     tests: List[dict]
-
-
-class Milestone(BaseModel):
-    id: int
-    name: str | None
-
-
-class Course(BaseModel):
-    id: int
-    name: str
 
 
 class TaskCourse(Course):

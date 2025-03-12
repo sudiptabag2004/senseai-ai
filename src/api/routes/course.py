@@ -13,7 +13,9 @@ from api.db import (
     add_tasks_to_courses as add_tasks_to_courses_in_db,
     remove_tasks_from_courses as remove_tasks_from_courses_in_db,
     update_task_orders as update_task_orders_in_db,
+    add_milestone_to_course as add_milestone_to_course_in_db,
     update_milestone_orders as update_milestone_orders_in_db,
+    get_course as get_course_from_db,
 )
 from api.models import (
     CreateCourseRequest,
@@ -24,19 +26,29 @@ from api.models import (
     RemoveTasksFromCoursesRequest,
     UpdateTaskOrdersRequest,
     UpdateMilestoneOrdersRequest,
+    CreateCourseResponse,
+    Course,
+    CourseWithMilestonesAndTasks,
+    AddMilestoneToCourseRequest,
+    AddMilestoneToCourseResponse,
 )
 
 router = APIRouter()
 
 
-@router.post("/")
-async def create_course(request: CreateCourseRequest) -> int:
-    return await create_course_in_db(request.name, request.org_id)
+@router.post("/", response_model=CreateCourseResponse)
+async def create_course(request: CreateCourseRequest) -> CreateCourseResponse:
+    return {"id": await create_course_in_db(request.name, request.org_id)}
 
 
 @router.get("/")
-async def get_all_courses_for_org(org_id: int) -> List[Dict]:
+async def get_all_courses_for_org(org_id: int) -> List[Course]:
     return await get_all_courses_for_org_from_db(org_id)
+
+
+@router.get("/{course_id}", response_model=CourseWithMilestonesAndTasks)
+async def get_course(course_id: int) -> CourseWithMilestonesAndTasks:
+    return await get_course_from_db(course_id)
 
 
 @router.post("/tasks")
@@ -55,6 +67,19 @@ async def remove_tasks_from_courses(request: RemoveTasksFromCoursesRequest):
 async def update_task_orders(request: UpdateTaskOrdersRequest):
     await update_task_orders_in_db(request.task_orders)
     return {"success": True}
+
+
+@router.post("/{course_id}/milestones")
+async def add_milestone_to_course(
+    course_id: int, request: AddMilestoneToCourseRequest
+) -> AddMilestoneToCourseResponse:
+    milestone_id = await add_milestone_to_course_in_db(
+        course_id,
+        request.name,
+        request.color,
+        request.org_id,
+    )
+    return {"id": milestone_id}
 
 
 @router.put("/milestones/order")

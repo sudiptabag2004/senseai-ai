@@ -12,6 +12,8 @@ from api.config import (
     sqlite_db_path,
     chat_history_table_name,
     tasks_table_name,
+    questions_table_name,
+    blocks_table_name,
     tests_table_name,
     cohorts_table_name,
     groups_table_name,
@@ -35,7 +37,7 @@ from api.config import (
     group_role_mentor,
     uncategorized_milestone_color,
 )
-from api.models import LeaderboardViewType
+from api.models import LeaderboardViewType, TaskWithBlocks, TaskStatus
 from api.utils import (
     get_date_from_str,
     generate_random_color,
@@ -63,7 +65,7 @@ async def create_tests_table(cursor):
                 input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
                 output TEXT NOT NULL,
                 description TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )
             """
     )
@@ -110,8 +112,8 @@ async def create_user_organizations_table(cursor):
                 role TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, org_id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -134,8 +136,8 @@ async def create_badges_table(cursor):
                 image_path TEXT NOT NULL,
                 bg_color TEXT NOT NULL,
                 cohort_id INTEGER NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -151,7 +153,7 @@ async def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 org_id INTEGER NOT NULL,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -167,8 +169,8 @@ async def create_cohort_tables(cursor):
                 cohort_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 UNIQUE(user_id, cohort_id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -186,7 +188,7 @@ async def create_cohort_tables(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cohort_id INTEGER NOT NULL,
                 name TEXT,
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -201,8 +203,8 @@ async def create_cohort_tables(cursor):
                 user_id INTEGER NOT NULL,
                 group_id INTEGER NOT NULL,
                 UNIQUE(user_id, group_id),
-                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -225,9 +227,9 @@ async def create_course_tasks_table(cursor):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 milestone_id INTEGER,
                 UNIQUE(task_id, course_id),
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -253,8 +255,8 @@ async def create_course_milestones_table(cursor):
                 ordering INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(course_id, milestone_id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (milestone_id) REFERENCES {milestones_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -274,7 +276,7 @@ async def create_milestones_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -290,7 +292,7 @@ async def create_tag_tables(cursor):
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 org_id INTEGER NOT NULL,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -305,8 +307,8 @@ async def create_tag_tables(cursor):
                 tag_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(task_id, tag_id),
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -322,7 +324,7 @@ async def create_courses_table(cursor):
                 org_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -339,8 +341,8 @@ async def create_course_cohorts_table(cursor):
                 cohort_id INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(course_id, cohort_id),
-                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id),
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id)
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -357,27 +359,63 @@ async def create_tasks_table(cursor):
     await cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    answer TEXT,
-                    input_type TEXT,
-                    coding_language TEXT,
-                    generation_model TEXT,
-                    verified BOOLEAN NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     org_id INTEGER NOT NULL,
-                    response_type TEXT,
+                    type TEXT NOT NULL CHECK (type IN ('learning_material', 'quiz', 'exam')),
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
                     context TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     deleted_at DATETIME,
-                    type TEXT,
-                    max_attempts INTEGER,
-                    is_feedback_shown BOOLEAN,
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
                 )"""
     )
 
     await cursor.execute(
         f"""CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)"""
+    )
+
+
+async def create_blocks_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {blocks_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER,
+                question_id INTEGER,
+                parent_id INTEGER,
+                type TEXT NOT NULL,
+                properties TEXT NOT NULL DEFAULT '{{}}',
+                content TEXT,
+                position INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES {blocks_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                CHECK (
+                    (task_id IS NULL AND question_id IS NOT NULL) OR
+                    (task_id IS NOT NULL AND question_id IS NULL)
+                )
+            )"""
+    )
+
+
+async def create_questions_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {questions_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                type TEXT NOT NULL CHECK (type IN ('objective', 'subjective')),
+                answer TEXT,
+                input_type TEXT CHECK (input_type IN ('audio', 'text', 'coding')),
+                coding_language TEXT,
+                generation_model TEXT,
+                response_type TEXT,
+                position INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME,
+                max_attempts INTEGER,
+                is_feedback_shown BOOLEAN,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
+            )"""
     )
 
 
@@ -390,7 +428,7 @@ async def create_task_scoring_criteria_table(cursor):
                 description TEXT NOT NULL,
                 min_score INTEGER NOT NULL,
                 max_score INTEGER NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id)
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )"""
     )
 
@@ -412,7 +450,7 @@ async def create_chat_history_table(cursor):
                     response_type TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
-                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
                 )"""
     )
 
@@ -433,7 +471,7 @@ async def create_cv_review_usage_table(cursor):
                 role TEXT NOT NULL,
                 ai_review TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id)
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
             )
             """
     )
@@ -483,6 +521,12 @@ async def init_db():
             if not await check_table_exists(tasks_table_name, cursor):
                 await create_tasks_table(cursor)
 
+            if not await check_table_exists(questions_table_name, cursor):
+                await create_questions_table(cursor)
+
+            if not await check_table_exists(blocks_table_name, cursor):
+                await create_blocks_table(cursor)
+
             if not await check_table_exists(task_scoring_criteria_table_name, cursor):
                 await create_task_scoring_criteria_table(cursor)
 
@@ -525,6 +569,10 @@ async def init_db():
 
             await create_tasks_table(cursor)
 
+            await create_questions_table(cursor)
+
+            await create_blocks_table(cursor)
+
             await create_task_scoring_criteria_table(cursor)
 
             await create_chat_history_table(cursor)
@@ -563,6 +611,39 @@ async def remove_tags_from_task(task_id: int, tag_ids_to_remove: List):
         f"DELETE FROM {task_tags_table_name} WHERE task_id = ? AND tag_id IN ({','.join(map(str, tag_ids_to_remove))})",
         (task_id,),
     )
+
+
+async def create_draft_task_for_course(
+    title: str, type: str, org_id: int, course_id: int, milestone_id: int
+):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"INSERT INTO {tasks_table_name} (org_id, type, title, status) VALUES (?, ?, ?, ?)",
+            (org_id, type, title, "draft"),
+        )
+
+        task_id = cursor.lastrowid
+
+        # Get the maximum ordering value for this milestone
+        await cursor.execute(
+            f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ? AND milestone_id = ?",
+            (course_id, milestone_id),
+        )
+        max_ordering = await cursor.fetchone()
+
+        # Set the new milestone's order to be the next value
+        next_ordering = max_ordering[0] + 1 if max_ordering else 0
+
+        await cursor.execute(
+            f"INSERT INTO {course_tasks_table_name} (course_id, task_id, milestone_id, ordering) VALUES (?, ?, ?, ?)",
+            (course_id, task_id, milestone_id, next_ordering),
+        )
+
+        await conn.commit()
+
+        return task_id
 
 
 async def store_task(
@@ -800,43 +881,242 @@ async def get_all_verified_tasks_for_course(course_id: int, milestone_id: int = 
     return verified_tasks
 
 
-async def get_course_task(task_id: int, course_id: int):
+async def get_task(task_id: int):
     task = await execute_db_operation(
         f"""
-    SELECT t.id, t.name, t.description, t.answer, 
-        GROUP_CONCAT(tg.name) as tag_names,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, t.org_id, o.name as org_name, t.response_type, t.context, 
-        t.type, t.max_attempts, t.is_feedback_shown, GROUP_CONCAT(tg.id) as tag_ids,
-        ct.milestone_id,
-        COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name
-    FROM {tasks_table_name} t
-    LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id 
-    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
-    LEFT JOIN {organizations_table_name} o ON t.org_id = o.id
-    LEFT JOIN {course_tasks_table_name} ct ON t.id = ct.task_id AND ct.course_id = ?
-    LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id
-    WHERE t.id = ? AND t.deleted_at IS NULL
-    GROUP BY t.id
-    """,
-        (course_id, task_id),
+        SELECT id, title, type, status
+        FROM {tasks_table_name}
+        WHERE id = ? AND deleted_at IS NULL
+        """,
+        (task_id,),
         fetch_one=True,
     )
 
     if not task:
         return None
 
-    # Fetch associated tests
-    tests = await execute_db_operation(
+    task_data = {"id": task[0], "title": task[1], "type": task[2], "status": task[3]}
+
+    # Fetch blocks for this task
+    blocks_data = await execute_db_operation(
         f"""
-    SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
-    """,
+        SELECT id, parent_id, type, properties, content, position
+        FROM {blocks_table_name}
+        WHERE task_id = ?
+        ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, position
+        """,
         (task_id,),
         fetch_all=True,
     )
 
-    tests = return_test_rows_as_dict(tests)
+    # Convert blocks to a tree structure
+    block_tree = []
+    block_dict = {}
 
-    return convert_task_db_to_dict(task, tests, has_milestone=True)
+    if blocks_data:
+        # Create a dictionary of all blocks
+        for block_row in blocks_data:
+            block_id, parent_id, block_type, properties_json, content, position = (
+                block_row
+            )
+
+            # Parse properties from JSON
+            try:
+                properties = json.loads(properties_json) if properties_json else {}
+            except:
+                properties = {}
+
+            # Extract client ID if it exists
+            client_id = properties.pop("client_id", None)
+
+            # Parse content based on block type
+            block_content = content
+            if content:
+                try:
+                    # Try to parse as JSON first
+                    parsed_content = json.loads(content)
+                    block_content = parsed_content
+                except (json.JSONDecodeError, TypeError):
+                    # If not valid JSON, keep as is
+                    pass
+
+            block = {
+                "id": client_id
+                or str(block_id),  # Use client ID if available, otherwise use DB ID
+                "type": block_type,
+                "props": properties,
+                "content": block_content,
+                "position": position,
+                "children": [],
+            }
+
+            block_dict[block_id] = block
+
+            # Add to tree if it's a root block
+            if parent_id is None:
+                block_tree.append(block)
+
+        # Link children to parents
+        for block_row in blocks_data:
+            block_id, parent_id, _, _, _, _ = block_row
+            if parent_id is not None and parent_id in block_dict:
+                block_dict[parent_id]["children"].append(block_dict[block_id])
+
+    # Add blocks to the task data
+    task_data["blocks"] = block_tree
+
+    return task_data
+
+
+async def publish_learning_material_task(task_id: int, blocks: List) -> TaskWithBlocks:
+    task = await execute_db_operation(
+        f"""
+        SELECT id, title, type, status
+        FROM {tasks_table_name}
+        WHERE id = ? AND deleted_at IS NULL
+        """,
+        (task_id,),
+        fetch_one=True,
+    )
+
+    if not task:
+        return False
+
+    # Delete any existing blocks for this task to avoid duplicates
+    await execute_db_operation(
+        f"""
+        DELETE FROM {blocks_table_name}
+        WHERE task_id = ?
+        """,
+        (task_id,),
+    )
+
+    # Prepare all blocks in advance with a flattened structure
+    all_block_operations = []
+    client_id_to_temp_id = {}
+    next_temp_id = 1  # Start with 1 as temporary IDs
+
+    # First pass: generate temporary IDs for all blocks to establish parent-child relationships
+    def generate_temp_ids(blocks_list, parent_temp_id=None):
+        nonlocal next_temp_id
+
+        for block in blocks_list:
+            client_id = block.get("id")
+            temp_id = next_temp_id
+            next_temp_id += 1
+
+            if client_id:
+                client_id_to_temp_id[client_id] = temp_id
+
+            # Store mapping of temp_id -> (block data, parent_temp_id)
+            yield (temp_id, block, parent_temp_id)
+
+            # Process children
+            if "children" in block and block["children"]:
+                yield from generate_temp_ids(block["children"], temp_id)
+
+    # Generate temp IDs and collect all blocks
+    flattened_blocks = list(generate_temp_ids(blocks))
+
+    # Group blocks by parent to calculate correct position within each parent's children
+    blocks_by_parent = defaultdict(list)
+    for temp_id, _, parent_temp_id in flattened_blocks:
+        blocks_by_parent[parent_temp_id].append(temp_id)
+
+    # Second pass: prepare all insert operations
+    for temp_id, block, parent_temp_id in flattened_blocks:
+        block_type = block.get("type", "paragraph")
+
+        # Handle block properties
+        props = block.get("props", {})
+        if not props and "properties" in block:
+            props = block.get("properties", {})
+
+        # Store client ID in properties
+        client_id = block.get("id")
+        if client_id:
+            props_with_id = props.copy() if props else {}
+            props_with_id["client_id"] = client_id
+            properties_json = json.dumps(props_with_id)
+        else:
+            properties_json = json.dumps(props)
+
+        # Handle content based on type
+        content = None
+        if isinstance(block.get("content"), str):
+            content = block.get("content")
+        elif isinstance(block.get("content"), list):
+            content = json.dumps(block.get("content"))
+        elif block.get("content") is not None:
+            content = json.dumps(block.get("content"))
+
+        # Child blocks - position is relative to siblings with the same parent
+        position = blocks_by_parent.get(parent_temp_id, []).index(temp_id)
+
+        # Create insert operation
+        insert_query = f"""INSERT INTO {blocks_table_name} (task_id, parent_id, type, properties, content, position) VALUES (?, ?, ?, ?, ?, ?)"""
+
+        # For parent_id, we'll use NULL for root blocks
+        parent_id_param = (
+            None if parent_temp_id is None else f"TEMP_ID_{parent_temp_id}"
+        )
+
+        # Add operation with temp ID as tag
+        all_block_operations.append(
+            (
+                insert_query,
+                (
+                    task_id,
+                    parent_id_param,
+                    block_type,
+                    properties_json,
+                    content,
+                    position,
+                ),
+                f"TEMP_ID_{temp_id}",
+            )
+        )
+
+    # If we have no blocks to insert, just return success
+    if not all_block_operations:
+        return await get_task(task_id)
+
+    # Execute all operations in a single transaction
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Execute each insert and keep track of the real DB IDs
+        temp_id_to_db_id = {}
+
+        for query, params, temp_id_tag in all_block_operations:
+            # Replace parent_id parameter with real DB ID if it's a reference
+            final_params = list(params)
+            if (
+                params[1]
+                and isinstance(params[1], str)
+                and params[1].startswith("TEMP_ID_")
+            ):
+                parent_temp_id = int(params[1].replace("TEMP_ID_", ""))
+                parent_db_id = temp_id_to_db_id.get(parent_temp_id)
+                final_params[1] = parent_db_id
+
+            # Execute the insert
+            await cursor.execute(query, tuple(final_params))
+
+            # Get the inserted ID and map it to the temp ID
+            db_id = cursor.lastrowid
+            temp_id = int(temp_id_tag.replace("TEMP_ID_", ""))
+            temp_id_to_db_id[temp_id] = db_id
+
+        # Update task status to published
+        await cursor.execute(
+            f"UPDATE {tasks_table_name} SET status = ? WHERE id = ?",
+            (str(TaskStatus.PUBLISHED), task_id),
+        )
+
+        await conn.commit()
+
+        return await get_task(task_id)
 
 
 async def get_scoring_criteria_for_task(task_id: int):
@@ -1829,17 +2109,10 @@ async def get_all_milestones_for_org(org_id: int):
     return [convert_milestone_db_to_dict(milestone) for milestone in milestones]
 
 
-async def insert_milestone(name: str, color: str, org_id: int):
+async def update_milestone(milestone_id: int, name: str):
     await execute_db_operation(
-        f"INSERT INTO {milestones_table_name} (name, color, org_id) VALUES (?, ?, ?)",
-        (name, color, org_id),
-    )
-
-
-async def update_milestone(milestone_id: int, name: str, color: str):
-    await execute_db_operation(
-        f"UPDATE {milestones_table_name} SET name = ?, color = ? WHERE id = ?",
-        (name, color, milestone_id),
+        f"UPDATE {milestones_table_name} SET name = ? WHERE id = ?",
+        (name, milestone_id),
     )
 
 
@@ -2804,6 +3077,40 @@ async def update_task_orders(task_orders: List[Tuple[int, int]]):
     )
 
 
+async def add_milestone_to_course(
+    course_id: int, milestone_name: str, milestone_color: str, org_id: int
+):
+    # Wrap the entire operation in a transaction
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Get the max ordering value for this course
+        await cursor.execute(
+            f"INSERT INTO {milestones_table_name} (name, color, org_id) VALUES (?, ?, ?)",
+            (milestone_name, milestone_color, org_id),
+        )
+
+        milestone_id = cursor.lastrowid
+
+        await cursor.execute(
+            f"SELECT COALESCE(MAX(ordering), -1) FROM {course_milestones_table_name} WHERE course_id = ?",
+            (course_id,),
+        )
+        max_ordering = await cursor.fetchone()
+
+        # Set the new milestone's order to be the next value
+        next_order = max_ordering[0] + 1 if max_ordering else 0
+
+        await cursor.execute(
+            f"INSERT INTO {course_milestones_table_name} (course_id, milestone_id, ordering) VALUES (?, ?, ?)",
+            (course_id, milestone_id, next_order),
+        )
+
+        await conn.commit()
+
+        return milestone_id
+
+
 async def update_milestone_orders(milestone_orders: List[Tuple[int, int]]):
     await execute_many_db_operation(
         f"UPDATE {course_milestones_table_name} SET ordering = ? WHERE id = ?",
@@ -2865,6 +3172,78 @@ async def create_course(name: str, org_id: int) -> int:
     return course_id
 
 
+def convert_course_db_to_dict(course: Tuple) -> Dict:
+    result = {
+        "id": course[0],
+        "name": course[1],
+    }
+
+    if len(course) > 2:
+        result["org_id"] = course[2]
+
+    return result
+
+
+async def get_course(course_id: int) -> Dict:
+    course = await execute_db_operation(
+        f"SELECT id, name FROM {courses_table_name} WHERE id = ?",
+        (course_id,),
+        fetch_one=True,
+    )
+
+    # Fix the milestones query to match the actual schema
+    milestones = await execute_db_operation(
+        f"""SELECT m.id, m.name, m.color, cm.ordering 
+            FROM {course_milestones_table_name} cm
+            JOIN milestones m ON cm.milestone_id = m.id
+            WHERE cm.course_id = ? ORDER BY cm.ordering""",
+        (course_id,),
+        fetch_all=True,
+    )
+
+    # Fetch all tasks for this course
+    tasks = await execute_db_operation(
+        f"""SELECT t.id, t.title, t.type, t.status, ct.milestone_id, ct.ordering
+            FROM {course_tasks_table_name} ct
+            JOIN {tasks_table_name} t ON ct.task_id = t.id
+            WHERE ct.course_id = ? AND t.deleted_at IS NULL
+            ORDER BY ct.milestone_id, ct.ordering""",
+        (course_id,),
+        fetch_all=True,
+    )
+
+    # Group tasks by milestone_id
+    tasks_by_milestone = defaultdict(list)
+    for task in tasks:
+        milestone_id = task[4]
+
+        tasks_by_milestone[milestone_id].append(
+            {
+                "id": task[0],
+                "title": task[1],
+                "type": task[2],
+                "status": task[3],
+                "ordering": task[5],
+            }
+        )
+
+    course_dict = convert_course_db_to_dict(course)
+    course_dict["milestones"] = []
+
+    for milestone in milestones:
+        milestone_id = milestone[0]
+        milestone_dict = {
+            "id": milestone_id,
+            "name": milestone[1],
+            "color": milestone[2],
+            "ordering": milestone[3],
+            "tasks": tasks_by_milestone.get(milestone_id, []),
+        }
+        course_dict["milestones"].append(milestone_dict)
+
+    return course_dict
+
+
 async def update_course_name(course_id: int, name: str):
     await execute_db_operation(
         f"UPDATE {courses_table_name} SET name = ? WHERE id = ?",
@@ -2877,13 +3256,6 @@ async def update_cohort_name(cohort_id: int, name: str):
         f"UPDATE {cohorts_table_name} SET name = ? WHERE id = ?",
         (name, cohort_id),
     )
-
-
-def convert_course_db_to_dict(course: Tuple) -> Dict:
-    return {
-        "id": course[0],
-        "name": course[1],
-    }
 
 
 async def get_all_courses_for_org(org_id: int):
@@ -3134,23 +3506,31 @@ async def get_user_courses_from_db(user_id: int) -> List[Dict]:
         user_id: The ID of the user
 
     Returns:
-        List of course dictionaries with their details
+        List of course dictionaries with their details and user's role
     """
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
         # Get all courses where the user is a learner or mentor through cohorts
         user_cohorts = await get_user_cohorts(user_id)
-        cohort_ids = [cohort["id"] for cohort in user_cohorts]
 
-        # Start with an empty set to store unique course IDs
-        course_ids = set()
+        # Dictionary to track user's role in each course
+        course_roles = {}
 
-        # Add courses from user's cohorts
-        for cohort_id in cohort_ids:
+        # Add courses from user's cohorts with their roles
+        for cohort in user_cohorts:
+            cohort_id = cohort["id"]
+            user_role_in_cohort = cohort.get("role")  # Get user's role in this cohort
+
             cohort_courses = await get_courses_for_cohort(cohort_id)
             for course in cohort_courses:
-                course_ids.add(course["id"])
+                course_id = course["id"]
+                # Only update role if not already an admin/owner
+                if course_id not in course_roles or course_roles[course_id] not in [
+                    "admin",
+                    "owner",
+                ]:
+                    course_roles[course_id] = user_role_in_cohort
 
         # Get organizations where the user is an admin or owner
         user_orgs = await get_user_organizations(user_id)
@@ -3162,21 +3542,26 @@ async def get_user_courses_from_db(user_id: int) -> List[Dict]:
         for org_id in admin_owner_org_ids:
             org_courses = await get_all_courses_for_org(org_id)
             for course in org_courses:
-                course_ids.add(course["id"])
+                course_id = course["id"]
+                # Admin/owner role takes precedence
+                course_roles[course_id] = "admin"
 
         # If no courses found, return empty list
-        if not course_ids:
+        if not course_roles:
             return []
 
         # Fetch detailed information for all course IDs
         courses = []
-        for course_id in course_ids:
-            # Fetch course from DB
+        for course_id, role in course_roles.items():
+            # Fetch course from DB including org_id
             await cursor.execute(
-                f"SELECT * FROM {courses_table_name} WHERE id = ?", (course_id,)
+                f"SELECT id, name, org_id FROM {courses_table_name} WHERE id = ?",
+                (course_id,),
             )
             course_row = await cursor.fetchone()
             if course_row:
-                courses.append(convert_course_db_to_dict(course_row))
+                course_dict = convert_course_db_to_dict(course_row)
+                course_dict["role"] = role  # Add user's role to the course dictionary
+                courses.append(course_dict)
 
         return courses

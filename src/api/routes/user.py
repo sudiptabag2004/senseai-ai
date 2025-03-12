@@ -14,6 +14,7 @@ from api.db import (
     get_user_organizations,
 )
 from api.utils.db import get_new_db_connection
+from api.models import UserCourse
 
 router = APIRouter()
 
@@ -72,8 +73,8 @@ async def is_user_present_in_cohort(user_id: int, cohort_id: int) -> bool:
     return await is_user_in_cohort_from_db(user_id, cohort_id)
 
 
-@router.get("/{user_id}/courses")
-async def get_user_courses(user_id: int) -> List[Dict]:
+@router.get("/{user_id}/courses", response_model=List[UserCourse])
+async def get_user_courses(user_id: int) -> List[UserCourse]:
     return await get_user_courses_from_db(user_id)
 
 

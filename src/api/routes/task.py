@@ -3,7 +3,7 @@ from typing import List, Dict
 from api.db import (
     get_all_tasks_for_org_or_course as get_all_tasks_for_org_or_course_from_db,
     get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
-    get_course_task as get_course_task_from_db,
+    get_task as get_task_from_db,
     get_scoring_criteria_for_task as get_scoring_criteria_for_task_from_db,
     store_task as store_task_in_db,
     update_task as update_task_in_db,
@@ -17,16 +17,22 @@ from api.db import (
     remove_scoring_criteria_from_task as remove_scoring_criteria_from_task_in_db,
     get_courses_for_tasks as get_courses_for_tasks_from_db,
     update_tests_for_task as update_tests_for_task_in_db,
+    create_draft_task_for_course as create_draft_task_for_course_in_db,
+    publish_learning_material_task as publish_learning_material_task_in_db,
 )
 from api.models import (
     Task,
+    TaskWithBlocks,
     LeaderboardViewType,
     StoreTaskRequest,
     UpdateTaskRequest,
     TaskTagsRequest,
     AddScoringCriteriaToTasksRequest,
     UpdateTaskTestsRequest,
+    CreateDraftTaskRequest,
     TaskCourseResponse,
+    CreateDraftTaskResponse,
+    PublishLearningMaterialTaskRequest,
 )
 
 router = APIRouter()
@@ -44,25 +50,48 @@ async def get_tasks_for_course(course_id: int, milestone_id: int = None) -> List
     return await get_all_verified_tasks_for_course_from_db(course_id, milestone_id)
 
 
-@router.post("/", response_model=int)
-async def store_task(request: StoreTaskRequest) -> int:
-    return await store_task_in_db(
-        name=request.name,
-        description=request.description,
-        answer=request.answer,
-        tags=request.tags,
-        input_type=request.input_type,
-        response_type=request.response_type,
-        coding_languages=request.coding_languages,
-        generation_model=request.generation_model,
-        verified=request.verified,
-        tests=request.tests,
-        org_id=request.org_id,
-        context=request.context,
-        task_type=request.task_type,
-        max_attempts=request.max_attempts,
-        is_feedback_shown=request.is_feedback_shown,
+@router.post("/", response_model=CreateDraftTaskResponse)
+async def create_draft_task_for_course(
+    request: CreateDraftTaskRequest,
+) -> CreateDraftTaskResponse:
+    id = await create_draft_task_for_course_in_db(
+        request.title,
+        str(request.type),
+        request.org_id,
+        request.course_id,
+        request.milestone_id,
     )
+    return {"id": id}
+
+
+@router.post("/{task_id}/learning_material", response_model=TaskWithBlocks)
+async def publish_learning_material_task(
+    task_id: int, request: PublishLearningMaterialTaskRequest
+) -> TaskWithBlocks:
+    result = await publish_learning_material_task_in_db(task_id, request.blocks)
+    if not result:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return result
+
+
+# async def store_task(request: StoreTaskRequest) -> int:
+#     return await store_task_in_db(
+#         name=request.name,
+#         description=request.description,
+#         answer=request.answer,
+#         tags=request.tags,
+#         input_type=request.input_type,
+#         response_type=request.response_type,
+#         coding_languages=request.coding_languages,
+#         generation_model=request.generation_model,
+#         verified=request.verified,
+#         tests=request.tests,
+#         org_id=request.org_id,
+#         context=request.context,
+#         task_type=request.task_type,
+#         max_attempts=request.max_attempts,
+#         is_feedback_shown=request.is_feedback_shown,
+#     )
 
 
 @router.get("/courses")
@@ -129,9 +158,9 @@ async def get_tasks_completed_for_user(
     return await get_solved_tasks_for_user_from_db(user_id, cohort_id, view)
 
 
-@router.get("/{task_id}", response_model=Task)
-async def get_task(task_id: int, course_id: int) -> Task:
-    task = await get_course_task_from_db(task_id, course_id)
+@router.get("/{task_id}", response_model=TaskWithBlocks)
+async def get_task(task_id: int) -> TaskWithBlocks:
+    task = await get_task_from_db(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
