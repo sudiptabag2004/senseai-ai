@@ -37,7 +37,7 @@ from api.config import (
     group_role_mentor,
     uncategorized_milestone_color,
 )
-from api.models import LeaderboardViewType, TaskWithBlocks, TaskStatus
+from api.models import LeaderboardViewType, LearningMaterialTask, TaskStatus
 from api.utils import (
     get_date_from_str,
     generate_random_color,
@@ -54,6 +54,7 @@ from api.utils.db import (
     execute_many_db_operation,
     set_db_defaults,
 )
+from api.models import TaskType
 
 
 async def create_tests_table(cursor):
@@ -881,6 +882,87 @@ async def get_all_verified_tasks_for_course(course_id: int, milestone_id: int = 
     return verified_tasks
 
 
+async def fetch_blocks(owner_id: int, owner_type: Literal["task", "question"]):
+    owner_id_param = "task_id" if owner_type == "task" else "question_id"
+
+    # Fetch blocks for this task
+    blocks_data = await execute_db_operation(
+        f"""
+        SELECT id, parent_id, type, properties, content, position
+        FROM {blocks_table_name}
+        WHERE {owner_id_param} = ?
+        ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, position
+        """,
+        (owner_id,),
+        fetch_all=True,
+    )
+
+    # Convert blocks to a tree structure
+    block_tree = []
+    block_dict = {}
+
+    if not blocks_data:
+        return []
+
+    # Create a dictionary of all blocks
+    for block_row in blocks_data:
+        block_id, parent_id, block_type, properties_json, content, position = block_row
+
+        # Parse properties from JSON
+        try:
+            properties = json.loads(properties_json) if properties_json else {}
+        except:
+            properties = {}
+
+        # Extract client ID if it exists
+        client_id = properties.pop("client_id", None)
+
+        # Parse content based on block type
+        block_content = content
+        if content:
+            try:
+                # Try to parse as JSON first
+                parsed_content = json.loads(content)
+                block_content = parsed_content
+            except (json.JSONDecodeError, TypeError):
+                # If not valid JSON, keep as is
+                pass
+
+        block = {
+            "id": client_id
+            or str(block_id),  # Use client ID if available, otherwise use DB ID
+            "type": block_type,
+            "props": properties,
+            "content": block_content,
+            "position": position,
+            "children": [],
+        }
+
+        block_dict[block_id] = block
+
+        # Add to tree if it's a root block
+        if parent_id is None:
+            block_tree.append(block)
+
+    # Link children to parents
+    for block_row in blocks_data:
+        block_id, parent_id, _, _, _, _ = block_row
+        if parent_id is not None and parent_id in block_dict:
+            block_dict[parent_id]["children"].append(block_dict[block_id])
+
+    return block_tree
+
+
+def convert_question_db_to_dict(question) -> Dict:
+    return {
+        "id": question[0],
+        "type": question[1],
+        "answer": question[2],
+        "input_type": question[3],
+        "response_type": question[4],
+    }
+
+
 async def get_task(task_id: int):
     task = await execute_db_operation(
         f"""
@@ -897,100 +979,32 @@ async def get_task(task_id: int):
 
     task_data = {"id": task[0], "title": task[1], "type": task[2], "status": task[3]}
 
-    # Fetch blocks for this task
-    blocks_data = await execute_db_operation(
-        f"""
-        SELECT id, parent_id, type, properties, content, position
-        FROM {blocks_table_name}
-        WHERE task_id = ?
-        ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, position
-        """,
-        (task_id,),
-        fetch_all=True,
-    )
+    if task_data["type"] == TaskType.LEARNING_MATERIAL:
+        task_data["blocks"] = await fetch_blocks(task_id, "task")
+    elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
+        questions = await execute_db_operation(
+            f"""
+            SELECT id, type, answer, input_type, response_type
+            FROM {questions_table_name}
+            WHERE task_id = ? ORDER BY position ASC
+            """,
+            (task_id,),
+            fetch_all=True,
+        )
 
-    # Convert blocks to a tree structure
-    block_tree = []
-    block_dict = {}
+        questions = [convert_question_db_to_dict(question) for question in questions]
 
-    if blocks_data:
-        # Create a dictionary of all blocks
-        for block_row in blocks_data:
-            block_id, parent_id, block_type, properties_json, content, position = (
-                block_row
-            )
+        for question in questions:
+            question["blocks"] = await fetch_blocks(question["id"], "question")
 
-            # Parse properties from JSON
-            try:
-                properties = json.loads(properties_json) if properties_json else {}
-            except:
-                properties = {}
-
-            # Extract client ID if it exists
-            client_id = properties.pop("client_id", None)
-
-            # Parse content based on block type
-            block_content = content
-            if content:
-                try:
-                    # Try to parse as JSON first
-                    parsed_content = json.loads(content)
-                    block_content = parsed_content
-                except (json.JSONDecodeError, TypeError):
-                    # If not valid JSON, keep as is
-                    pass
-
-            block = {
-                "id": client_id
-                or str(block_id),  # Use client ID if available, otherwise use DB ID
-                "type": block_type,
-                "props": properties,
-                "content": block_content,
-                "position": position,
-                "children": [],
-            }
-
-            block_dict[block_id] = block
-
-            # Add to tree if it's a root block
-            if parent_id is None:
-                block_tree.append(block)
-
-        # Link children to parents
-        for block_row in blocks_data:
-            block_id, parent_id, _, _, _, _ = block_row
-            if parent_id is not None and parent_id in block_dict:
-                block_dict[parent_id]["children"].append(block_dict[block_id])
-
-    # Add blocks to the task data
-    task_data["blocks"] = block_tree
+        task_data["questions"] = questions
 
     return task_data
 
 
-async def publish_learning_material_task(task_id: int, blocks: List) -> TaskWithBlocks:
-    task = await execute_db_operation(
-        f"""
-        SELECT id, title, type, status
-        FROM {tasks_table_name}
-        WHERE id = ? AND deleted_at IS NULL
-        """,
-        (task_id,),
-        fetch_one=True,
-    )
-
-    if not task:
-        return False
-
-    # Delete any existing blocks for this task to avoid duplicates
-    await execute_db_operation(
-        f"""
-        DELETE FROM {blocks_table_name}
-        WHERE task_id = ?
-        """,
-        (task_id,),
-    )
-
+async def store_blocks(
+    cursor, blocks: List[Dict], owner_id: int, owner_type: Literal["task", "question"]
+):
     # Prepare all blocks in advance with a flattened structure
     all_block_operations = []
     client_id_to_temp_id = {}
@@ -1053,8 +1067,10 @@ async def publish_learning_material_task(task_id: int, blocks: List) -> TaskWith
         # Child blocks - position is relative to siblings with the same parent
         position = blocks_by_parent.get(parent_temp_id, []).index(temp_id)
 
+        owner_id_param = "task_id" if owner_type == "task" else "question_id"
+
         # Create insert operation
-        insert_query = f"""INSERT INTO {blocks_table_name} (task_id, parent_id, type, properties, content, position) VALUES (?, ?, ?, ?, ?, ?)"""
+        insert_query = f"""INSERT INTO {blocks_table_name} ({owner_id_param}, parent_id, type, properties, content, position) VALUES (?, ?, ?, ?, ?, ?)"""
 
         # For parent_id, we'll use NULL for root blocks
         parent_id_param = (
@@ -1066,7 +1082,7 @@ async def publish_learning_material_task(task_id: int, blocks: List) -> TaskWith
             (
                 insert_query,
                 (
-                    task_id,
+                    owner_id,
                     parent_id_param,
                     block_type,
                     properties_json,
@@ -1079,39 +1095,147 @@ async def publish_learning_material_task(task_id: int, blocks: List) -> TaskWith
 
     # If we have no blocks to insert, just return success
     if not all_block_operations:
-        return await get_task(task_id)
+        return
+
+    # Delete any existing blocks for this task to avoid duplicates
+    await cursor.execute(
+        f"""
+        DELETE FROM {blocks_table_name}
+        WHERE {owner_id_param} = ?
+        """,
+        (owner_id,),
+    )
+
+    # Execute each insert and keep track of the real DB IDs
+    temp_id_to_db_id = {}
+
+    for query, params, temp_id_tag in all_block_operations:
+        # Replace parent_id parameter with real DB ID if it's a reference
+        final_params = list(params)
+        if (
+            params[1]
+            and isinstance(params[1], str)
+            and params[1].startswith("TEMP_ID_")
+        ):
+            parent_temp_id = int(params[1].replace("TEMP_ID_", ""))
+            parent_db_id = temp_id_to_db_id.get(parent_temp_id)
+            final_params[1] = parent_db_id
+
+        # Execute the insert
+        await cursor.execute(query, tuple(final_params))
+
+        # Get the inserted ID and map it to the temp ID
+        db_id = cursor.lastrowid
+        temp_id = int(temp_id_tag.replace("TEMP_ID_", ""))
+        temp_id_to_db_id[temp_id] = db_id
+
+
+async def does_task_exist(task_id: int):
+    task = await execute_db_operation(
+        f"""
+        SELECT id
+        FROM {tasks_table_name}
+        WHERE id = ? AND deleted_at IS NULL
+        """,
+        (task_id,),
+        fetch_one=True,
+    )
+
+    return task is not None
+
+
+async def publish_learning_material_task(
+    task_id: int, title: str, blocks: List
+) -> LearningMaterialTask:
+    if not does_task_exist(task_id):
+        return False
 
     # Execute all operations in a single transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
-        # Execute each insert and keep track of the real DB IDs
-        temp_id_to_db_id = {}
-
-        for query, params, temp_id_tag in all_block_operations:
-            # Replace parent_id parameter with real DB ID if it's a reference
-            final_params = list(params)
-            if (
-                params[1]
-                and isinstance(params[1], str)
-                and params[1].startswith("TEMP_ID_")
-            ):
-                parent_temp_id = int(params[1].replace("TEMP_ID_", ""))
-                parent_db_id = temp_id_to_db_id.get(parent_temp_id)
-                final_params[1] = parent_db_id
-
-            # Execute the insert
-            await cursor.execute(query, tuple(final_params))
-
-            # Get the inserted ID and map it to the temp ID
-            db_id = cursor.lastrowid
-            temp_id = int(temp_id_tag.replace("TEMP_ID_", ""))
-            temp_id_to_db_id[temp_id] = db_id
+        await store_blocks(cursor, blocks, task_id, "task")
 
         # Update task status to published
         await cursor.execute(
-            f"UPDATE {tasks_table_name} SET status = ? WHERE id = ?",
-            (str(TaskStatus.PUBLISHED), task_id),
+            f"UPDATE {tasks_table_name} SET status = ?, title = ? WHERE id = ?",
+            (str(TaskStatus.PUBLISHED), title, task_id),
+        )
+
+        await conn.commit()
+
+        return await get_task(task_id)
+
+
+async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
+    if not does_task_exist(task_id):
+        return False
+
+    # Execute all operations in a single transaction
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        for index, question in enumerate(questions):
+            question = question.model_dump()
+
+            await cursor.execute(
+                f"""
+                INSERT INTO {questions_table_name} (task_id, type, answer, input_type, response_type, coding_language, generation_model, position, max_attempts, is_feedback_shown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    str(question["type"]),
+                    question["answer"],
+                    question["input_type"],
+                    question["response_type"],
+                    question["coding_languages"],
+                    question["generation_model"],
+                    index,
+                    question["max_attempts"],
+                    question["is_feedback_shown"],
+                ),
+            )
+
+            question_id = cursor.lastrowid
+            await store_blocks(cursor, question["blocks"], question_id, "question")
+
+        # Update task status to published
+        await cursor.execute(
+            f"UPDATE {tasks_table_name} SET status = ?, title = ? WHERE id = ?",
+            (str(TaskStatus.PUBLISHED), title, task_id),
+        )
+
+        await conn.commit()
+
+        return await get_task(task_id)
+
+
+async def update_quiz(task_id: int, title: str, questions: List[Dict]):
+    if not does_task_exist(task_id):
+        return False
+
+    # Execute all operations in a single transaction
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+        for question in questions:
+            question = question.model_dump()
+
+            await cursor.execute(
+                f"""
+                UPDATE {questions_table_name} SET answer = ? WHERE id = ?
+                """,
+                (
+                    question["answer"],
+                    question["id"],
+                ),
+            )
+
+            await store_blocks(cursor, question["blocks"], question["id"], "question")
+
+        # Update task status to published
+        await cursor.execute(
+            f"UPDATE {tasks_table_name} SET title = ? WHERE id = ?",
+            (title, task_id),
         )
 
         await conn.commit()

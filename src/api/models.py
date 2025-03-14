@@ -195,8 +195,69 @@ class Block(BaseModel):
     children: List
 
 
-class TaskWithBlocks(Task):
+class LearningMaterialTask(Task):
     blocks: List[Block]
+
+
+class TaskInputType(Enum):
+    CODING = "coding"
+    TEXT = "text"
+    AUDIO = "audio"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskInputType):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class TaskAIResponseType(Enum):
+    CHAT = "chat"
+    REPORT = "report"
+    EXAM = "exam"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, TaskAIResponseType):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
+class QuestionType(Enum):
+    SUBJECTIVE = "subjective"
+    OBJECTIVE = "objective"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, QuestionType):
+            return self.value == other.value
+
+
+class Question(BaseModel):
+    id: int
+    blocks: List[Block]
+    answer: str
+    type: QuestionType
+    input_type: TaskInputType
+    response_type: TaskAIResponseType
+
+
+class QuizTask(Task):
+    questions: List[Question]
 
 
 class MilestoneTask(Task):
@@ -267,40 +328,6 @@ class Tag(BaseModel):
     name: str
 
 
-class TaskInputType(Enum):
-    CODING = "coding"
-    TEXT = "text"
-    AUDIO = "audio"
-
-    def __str__(self):
-        return self.value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        elif isinstance(other, TaskInputType):
-            return self.value == other.value
-
-        raise NotImplementedError()
-
-
-class TaskAIResponseType(Enum):
-    CHAT = "chat"
-    REPORT = "report"
-    EXAM = "exam"
-
-    def __str__(self):
-        return self.value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        elif isinstance(other, TaskAIResponseType):
-            return self.value == other.value
-
-        raise NotImplementedError()
-
-
 class User(BaseModel):
     id: int
     email: str
@@ -347,25 +374,36 @@ class CreateDraftTaskResponse(BaseModel):
 
 
 class PublishLearningMaterialTaskRequest(BaseModel):
+    title: str
     blocks: List[dict]
 
 
-class StoreTaskRequest(BaseModel):
-    name: str
-    description: str
+class PublishQuestionRequest(BaseModel):
+    blocks: List[dict]
     answer: str | None
-    tags: List[Dict]
     input_type: str | None
     response_type: str | None
     coding_languages: List[str] | None
     generation_model: str | None
-    verified: bool
-    tests: List[dict]
-    org_id: int
-    context: str | None
-    task_type: str
+    type: QuestionType
     max_attempts: int | None
     is_feedback_shown: bool | None
+
+
+class PublishQuizRequest(BaseModel):
+    title: str
+    questions: List[PublishQuestionRequest]
+
+
+class UpdateQuestionRequest(BaseModel):
+    id: int
+    blocks: List[dict]
+    answer: str | None
+
+
+class UpdateQuizRequest(BaseModel):
+    title: str
+    questions: List[UpdateQuestionRequest]
 
 
 class UpdateTaskRequest(BaseModel):
