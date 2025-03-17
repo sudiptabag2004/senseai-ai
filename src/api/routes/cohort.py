@@ -37,6 +37,8 @@ from api.models import (
     RemoveCoursesFromCohortRequest,
     Streaks,
     LeaderboardViewType,
+    Course,
+    CourseWithMilestonesAndTasks,
 )
 from api.utils.db import get_new_db_connection
 
@@ -152,9 +154,13 @@ async def remove_courses_from_cohort(
     return {"success": True}
 
 
-@router.get("/{cohort_id}/courses")
-async def get_courses_for_cohort(cohort_id: int) -> List[Dict]:
-    return await get_courses_for_cohort_from_db(cohort_id)
+@router.get(
+    "/{cohort_id}/courses", response_model=List[CourseWithMilestonesAndTasks | Course]
+)
+async def get_courses_for_cohort(
+    cohort_id: int, include_tree: bool = False
+) -> List[CourseWithMilestonesAndTasks | Course]:
+    return await get_courses_for_cohort_from_db(cohort_id, include_tree)
 
 
 @router.get("/{cohort_id}/users/{user_id}/groups")

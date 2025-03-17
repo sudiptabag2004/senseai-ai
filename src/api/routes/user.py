@@ -10,11 +10,12 @@ from api.db import (
     get_user_active_in_last_n_days as get_user_active_in_last_n_days_from_db,
     get_user_streak as get_user_streak_from_db,
     is_user_in_cohort as is_user_in_cohort_from_db,
-    get_user_courses_from_db,
+    get_user_courses as get_user_courses_from_db,
     get_user_organizations,
+    get_user_org_cohorts as get_user_org_cohorts_from_db,
 )
 from api.utils.db import get_new_db_connection
-from api.models import UserCourse
+from api.models import UserCourse, UserCohort
 
 router = APIRouter()
 
@@ -76,6 +77,11 @@ async def is_user_present_in_cohort(user_id: int, cohort_id: int) -> bool:
 @router.get("/{user_id}/courses", response_model=List[UserCourse])
 async def get_user_courses(user_id: int) -> List[UserCourse]:
     return await get_user_courses_from_db(user_id)
+
+
+@router.get("/{user_id}/org/{org_id}/cohorts", response_model=List[UserCohort])
+async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
+    return await get_user_org_cohorts_from_db(user_id, org_id)
 
 
 @router.get("/{user_id}/orgs")

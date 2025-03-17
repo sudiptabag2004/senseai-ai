@@ -278,9 +278,15 @@ class UserCourseRole(str, Enum):
     MENTOR = "mentor"
 
 
+class Organization(BaseModel):
+    id: int
+    name: str
+    slug: str
+
+
 class UserCourse(Course):
     role: UserCourseRole
-    org_id: int
+    org: Organization
 
 
 class AddCourseToCohortsRequest(BaseModel):
@@ -483,3 +489,9 @@ class AddCVReviewUsageRequest(BaseModel):
     user_id: int
     role: str
     ai_review: str
+
+
+class UserCohort(BaseModel):
+    id: int
+    name: str
+    role: Literal[UserCourseRole.LEARNER, UserCourseRole.MENTOR]

@@ -11,6 +11,7 @@ from api.db import (
     add_users_to_org_by_email as add_users_to_org_by_email_in_db,
     remove_members_from_org as remove_members_from_org_from_db,
     get_org_members as get_org_members_from_db,
+    get_org_by_slug as get_org_by_slug_from_db,
 )
 from api.utils.db import get_new_db_connection
 from api.models import (
@@ -41,6 +42,16 @@ async def create_organization(
 @router.get("/{org_id}")
 async def get_org_by_id(org_id: int) -> Dict:
     org_details = await get_org_by_id_from_db(org_id)
+
+    if not org_details:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return org_details
+
+
+@router.get("/slug/{slug}")
+async def get_org_by_slug(slug: str) -> Dict:
+    org_details = await get_org_by_slug_from_db(slug)
 
     if not org_details:
         raise HTTPException(status_code=404, detail="Organization not found")

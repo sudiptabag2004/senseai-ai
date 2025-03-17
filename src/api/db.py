@@ -37,7 +37,7 @@ from api.config import (
     group_role_mentor,
     uncategorized_milestone_color,
 )
-from api.models import LeaderboardViewType, LearningMaterialTask, TaskStatus
+from api.models import LeaderboardViewType, LearningMaterialTask, TaskStatus, UserCohort
 from api.utils import (
     get_date_from_str,
     generate_random_color,
@@ -87,6 +87,10 @@ async def create_organizations_table(cursor):
                 openai_api_key TEXT,
                 openai_free_trial BOOLEAN
             )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_org_slug ON {organizations_table_name} (slug)"""
     )
 
 
@@ -2811,6 +2815,15 @@ async def get_org_by_id(org_id: int):
     return convert_org_db_to_dict(org_details)
 
 
+async def get_org_by_slug(slug: str):
+    org_details = await execute_db_operation(
+        f"SELECT * FROM {organizations_table_name} WHERE slug = ?",
+        (slug,),
+        fetch_one=True,
+    )
+    return convert_org_db_to_dict(org_details)
+
+
 async def get_hva_org_id():
     hva_org_id = await execute_db_operation(
         "SELECT id FROM organizations WHERE name = ?",
@@ -3303,7 +3316,11 @@ def convert_course_db_to_dict(course: Tuple) -> Dict:
     }
 
     if len(course) > 2:
-        result["org_id"] = course[2]
+        result["org"] = {
+            "id": course[2],
+            "name": course[3],
+            "slug": course[4],
+        }
 
     return result
 
@@ -3452,7 +3469,7 @@ async def remove_courses_from_cohort(cohort_id: int, course_ids: List[int]):
     )
 
 
-async def get_courses_for_cohort(cohort_id: int):
+async def get_courses_for_cohort(cohort_id: int, include_tree: bool = False):
     courses = await execute_db_operation(
         f"""
         SELECT c.id, c.name 
@@ -3463,7 +3480,15 @@ async def get_courses_for_cohort(cohort_id: int):
         (cohort_id,),
         fetch_all=True,
     )
-    return [{"id": course[0], "name": course[1]} for course in courses]
+    courses = [{"id": course[0], "name": course[1]} for course in courses]
+
+    if not include_tree:
+        return courses
+
+    for index, course in enumerate(courses):
+        courses[index] = await get_course(course["id"])
+
+    return courses
 
 
 async def get_cohorts_for_course(course_id: int):
@@ -3620,7 +3645,7 @@ async def migrate_tasks_table():
     )
 
 
-async def get_user_courses_from_db(user_id: int) -> List[Dict]:
+async def get_user_courses(user_id: int) -> List[Dict]:
     """
     Get all courses for a user based on different roles:
     1. Courses where the user is a learner or mentor through cohorts
@@ -3679,7 +3704,7 @@ async def get_user_courses_from_db(user_id: int) -> List[Dict]:
         for course_id, role in course_roles.items():
             # Fetch course from DB including org_id
             await cursor.execute(
-                f"SELECT id, name, org_id FROM {courses_table_name} WHERE id = ?",
+                f"SELECT c.id, c.name, o.id, o.name, o.slug FROM {courses_table_name} c JOIN {organizations_table_name} o ON c.org_id = o.id WHERE c.id = ?",
                 (course_id,),
             )
             course_row = await cursor.fetchone()
@@ -3689,3 +3714,29 @@ async def get_user_courses_from_db(user_id: int) -> List[Dict]:
                 courses.append(course_dict)
 
         return courses
+
+
+async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
+    """
+    Get all the cohorts in the organization that the user is a member in
+    """
+    cohorts = await execute_db_operation(
+        f"""SELECT c.id, c.name, uc.role
+            FROM {cohorts_table_name} c
+            JOIN {user_cohorts_table_name} uc ON c.id = uc.cohort_id
+            WHERE uc.user_id = ? AND c.org_id = ?""",
+        (user_id, org_id),
+        fetch_all=True,
+    )
+
+    if not cohorts:
+        return []
+
+    return [
+        {
+            "id": cohort[0],
+            "name": cohort[1],
+            "role": cohort[2],
+        }
+        for cohort in cohorts
+    ]
