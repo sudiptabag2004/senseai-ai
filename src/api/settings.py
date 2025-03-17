@@ -4,6 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     google_client_id: str
+    openai_api_key: str
 
     model_config = SettingsConfigDict(env_file="api/.env")
 

@@ -314,9 +314,9 @@ class ResponseType(str, Enum):
 
 class ChatMessage(BaseModel):
     id: int
-    timestamp: str
+    created_at: str
     user_id: int
-    task_id: int
+    question_id: int
     role: ChatRole | None
     content: Optional[str] | None
     is_solved: bool
@@ -495,3 +495,8 @@ class UserCohort(BaseModel):
     id: int
     name: str
     role: Literal[UserCourseRole.LEARNER, UserCourseRole.MENTOR]
+
+
+class AIChatRequest(BaseModel):
+    user_response: str
+    # task_context: str

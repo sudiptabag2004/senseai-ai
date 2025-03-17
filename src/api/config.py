@@ -48,3 +48,9 @@ group_role_mentor = "mentor"
 
 uncategorized_milestone_name = "[UNASSIGNED]"
 uncategorized_milestone_color = "#808080"
+
+openai_plan_to_model_name = {
+    "reasoning": "o3-mini-2025-01-31",
+    "text": "gpt-4o-2024-11-20",
+    "audio": "gpt-4o-audio-preview-2024-12-17",
+}

@@ -448,13 +448,13 @@ async def create_chat_history_table(cursor):
                 CREATE TABLE IF NOT EXISTS {chat_history_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    task_id INTEGER NOT NULL,
+                    question_id INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT,
                     is_solved BOOLEAN NOT NULL DEFAULT 0,
                     response_type TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
                     FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
                 )"""
     )
@@ -464,7 +464,7 @@ async def create_chat_history_table(cursor):
     )
 
     await cursor.execute(
-        f"""CREATE INDEX idx_chat_history_task_id ON {chat_history_table_name} (task_id)"""
+        f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
     )
 
 
@@ -967,6 +967,78 @@ def convert_question_db_to_dict(question) -> Dict:
     }
 
 
+async def get_question(question_id: int) -> Dict:
+    question = await execute_db_operation(
+        f"""
+        SELECT id, type, answer, input_type, response_type
+        FROM {questions_table_name}
+        WHERE id = ?
+        """,
+        (question_id,),
+        fetch_one=True,
+    )
+
+    if not question:
+        return None
+
+    question = convert_question_db_to_dict(question)
+
+    question["blocks"] = await fetch_blocks(question_id, "question")
+
+    return question
+
+
+def construct_description_from_blocks(blocks: List[Dict]) -> str:
+    """
+    Constructs a textual description from a tree of block data.
+
+    Args:
+        blocks: A list of block dictionaries, potentially with nested children
+
+    Returns:
+        A formatted string representing the content of the blocks
+    """
+    if not blocks:
+        return ""
+
+    description = ""
+
+    for block in blocks:
+        block_type = block.get("type", "")
+        content = block.get("content", "")
+        children = block.get("children", [])
+
+        # Process based on block type
+        if block_type == "paragraph":
+            if isinstance(content, str) and content:
+                description += f"{content}\n"
+
+        elif block_type == "heading":
+            level = block.get("props", {}).get("level", 1)
+            if isinstance(content, str):
+                description += f"{'#' * level} {content}\n"
+
+        elif block_type == "code":
+            language = block.get("props", {}).get("language", "")
+            if isinstance(content, str):
+                description += f"```{language}\n{content}\n```\n"
+
+        elif block_type == "bulletList" or block_type == "orderedList":
+            # For lists, we'll process their children separately
+            pass
+
+        elif block_type == "listItem":
+            if isinstance(content, str):
+                description += f"- {content}\n"
+
+        # Recursively process children if present
+        if children:
+            child_description = construct_description_from_blocks(children)
+            description += child_description
+
+    return description.strip()
+
+
 async def get_task(task_id: int):
     task = await execute_db_operation(
         f"""
@@ -1389,12 +1461,12 @@ async def get_all_chat_history(org_id: int):
     ]
 
 
-async def get_task_chat_history_for_user(task_id: int, user_id: int):
+async def get_question_chat_history_for_user(question_id: int, user_id: int):
     chat_history = await execute_db_operation(
         f"""
-    SELECT id, timestamp, user_id, task_id, role, content, is_solved, response_type FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?
+    SELECT id, created_at, user_id, question_id, role, content, is_solved, response_type FROM {chat_history_table_name} WHERE question_id = ? AND user_id = ?
     """,
-        (task_id, user_id),
+        (question_id, user_id),
         fetch_all=True,
     )
 
@@ -1403,7 +1475,7 @@ async def get_task_chat_history_for_user(task_id: int, user_id: int):
             "id": row[0],
             "timestamp": row[1],
             "user_id": row[2],
-            "task_id": row[3],
+            "question_id": row[3],
             "role": row[4],
             "content": row[5],
             "is_solved": bool(row[6]),
@@ -3740,3 +3812,39 @@ async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
         }
         for cohort in cohorts
     ]
+
+
+async def migrate_chat_history_table():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Drop the existing table if it exists
+        await cursor.execute(f"DROP TABLE IF EXISTS {chat_history_table_name}")
+
+        # Create the new table with question_id instead of task_id
+        await cursor.execute(
+            f"""
+            CREATE TABLE {chat_history_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                question_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT,
+                is_solved BOOLEAN NOT NULL DEFAULT 0,
+                response_type TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
+            )
+        """
+        )
+
+        # Create indices for the new table
+        await cursor.execute(
+            f"""CREATE INDEX idx_chat_history_user_id ON {chat_history_table_name} (user_id)"""
+        )
+        await cursor.execute(
+            f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
+        )
+
+        await conn.commit()
