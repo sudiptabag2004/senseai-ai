@@ -505,3 +505,8 @@ class AIChatRequest(BaseModel):
 
 class MarkTaskCompletedRequest(BaseModel):
     user_id: int
+
+
+class GetUserStreakResponse(BaseModel):
+    streak_count: int
+    active_days: List[str]

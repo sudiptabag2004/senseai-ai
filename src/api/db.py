@@ -1872,11 +1872,11 @@ async def delete_all_chat_history():
 async def get_user_active_in_last_n_days(user_id: int, n: int, cohort_id: int):
     activity_per_day = await execute_db_operation(
         f"""
-    SELECT DATE(datetime(timestamp, '+5 hours', '+30 minutes')), COUNT(*)
+    SELECT DATE(datetime(created_at, '+5 hours', '+30 minutes')), COUNT(*)
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND DATE(datetime(timestamp, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
-    GROUP BY DATE(timestamp)
-    ORDER BY DATE(timestamp)
+    WHERE user_id = ? AND DATE(datetime(created_at, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND question_id IN (SELECT question_id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
+    GROUP BY DATE(created_at)
+    ORDER BY DATE(created_at)
     """,
         (user_id, cohort_id),
         fetch_all=True,
@@ -1951,11 +1951,11 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
 async def get_user_streak(user_id: int, cohort_id: int):
     user_usage_dates = await execute_db_operation(
         f"""
-    SELECT MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
+    SELECT MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
-    GROUP BY DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
-    ORDER BY timestamp DESC
+    WHERE user_id = ? AND question_id IN (SELECT question_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
+    GROUP BY DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+    ORDER BY created_at DESC
     """,
         (user_id, cohort_id),
         fetch_all=True,

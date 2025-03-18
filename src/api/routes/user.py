@@ -15,7 +15,7 @@ from api.db import (
     get_user_org_cohorts as get_user_org_cohorts_from_db,
 )
 from api.utils.db import get_new_db_connection
-from api.models import UserCourse, UserCohort
+from api.models import UserCourse, UserCohort, GetUserStreakResponse
 
 router = APIRouter()
 
@@ -65,8 +65,19 @@ async def get_user_active_days(user_id: int, days: int, cohort_id: int) -> List[
 
 
 @router.get("/{user_id}/streak")
-async def get_user_streak(user_id: int, cohort_id: int) -> List[str]:
-    return await get_user_streak_from_db(user_id, cohort_id)
+async def get_user_streak(user_id: int, cohort_id: int) -> GetUserStreakResponse:
+    streak_days = await get_user_streak_from_db(user_id, cohort_id)
+
+    streak_count = len(streak_days)
+
+    # Get the user's activity for the last 3 days as we are displaying a week's activity
+    # with the current day in the center
+    active_days = await get_user_active_in_last_n_days_from_db(user_id, 3, cohort_id)
+
+    return {
+        "streak_count": streak_count,
+        "active_days": active_days,
+    }
 
 
 @router.get("/{user_id}/cohort/{cohort_id}/present")
