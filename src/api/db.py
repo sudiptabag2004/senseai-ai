@@ -1730,99 +1730,119 @@ async def mark_task_completed(task_id: int, user_id: int):
 
         await conn.commit()
 
-    # async def get_cohort_completion(cohort_id: int, user_id: int):
-    #     # Get all courses for the cohort
-    #     courses = await get_courses_for_cohort(cohort_id, include_tree=True)
-    # result = []
 
-    # # For each course, get completion data
-    # for course in courses:
-    #     course_id = course["id"]
-    #     course_completion = []
+async def get_cohort_completion(cohort_id: int, user_id: int):
+    """
+    Retrieves completion data for a user in a specific cohort.
 
-    #     # Process each milestone
-    #     for milestone in course["milestones"]:
-    #         milestone_id = milestone["id"]
-    #         milestone_completion = []
+    Args:
+        cohort_id: The ID of the cohort
+        user_id: The ID of the user
 
-    #         # Process each task in the milestone
-    #         for task in milestone["tasks"]:
-    #             task_id = task["id"]
-    #             task_type = task["type"]
+    Returns:
+        A dictionary mapping task IDs to their completion status:
+        {
+            task_id: {
+                "is_complete": bool,
+                "questions": [{"question_id": int, "is_complete": bool}]
+            }
+        }
+    """
+    # Check if user belongs to cohort
+    user_in_cohort = await is_user_in_cohort(user_id, cohort_id)
+    if not user_in_cohort:
+        return {}
 
-    #             # Create the task completion object
-    #             task_completion = {
-    #                 "task_id": task_id,
-    #                 "is_complete": False,
-    #                 "questions": [],
-    #             }
+    # Get completed tasks for the user from task_completions_table
+    completed_tasks = await execute_db_operation(
+        f"""
+        SELECT task_id 
+        FROM {task_completions_table_name}
+        WHERE user_id = ? AND task_id IS NOT NULL
+        """,
+        (user_id,),
+        fetch_all=True,
+    )
+    completed_task_ids = {row[0] for row in completed_tasks}
 
-    #             if task_type == TaskType.LEARNING_MATERIAL:
-    #                 # For learning material tasks, check if there's at least one solved message
-    #                 solved_status = await execute_db_operation(
-    #                     f"""
-    #                     SELECT EXISTS (
-    #                         SELECT 1 FROM {chat_history_table_name}
-    #                         WHERE user_id = ? AND task_id = ? AND is_solved = 1 AND role = 'user'
-    #                     )
-    #                     """,
-    #                     (user_id, task_id),
-    #                     fetch_one=True,
-    #                 )
-    #                 task_completion["is_complete"] = bool(solved_status[0])
+    # Get completed questions for the user from task_completions_table
+    completed_questions = await execute_db_operation(
+        f"""
+        SELECT question_id 
+        FROM {task_completions_table_name}
+        WHERE user_id = ? AND question_id IS NOT NULL
+        """,
+        (user_id,),
+        fetch_all=True,
+    )
+    completed_question_ids = {row[0] for row in completed_questions}
 
-    #             elif task_type in [TaskType.QUIZ, TaskType.EXAM]:
-    #                 # For quiz and exam tasks, get all questions
-    #                 questions = await execute_db_operation(
-    #                     f"""
-    #                     SELECT id FROM {questions_table_name}
-    #                     WHERE task_id = ?
-    #                     ORDER BY ordering
-    #                     """,
-    #                     (task_id,),
-    #                     fetch_all=True,
-    #                 )
+    # Get all tasks for the cohort
+    # Get learning material tasks
+    learning_material_tasks = await execute_db_operation(
+        f"""
+        SELECT DISTINCT t.id
+        FROM {tasks_table_name} t
+        JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}'
+        """,
+        (cohort_id,),
+        fetch_all=True,
+    )
 
-    #                 all_questions_complete = True
+    result = {}
 
-    #                 # Check completion for each question
-    #                 for question in questions:
-    #                     question_id = question[0]
+    for task in learning_material_tasks:
+        # For learning material, check if it's in the completed tasks list
+        result[task[0]] = {"is_complete": task[0] in completed_task_ids}
 
-    #                     # Check if there's at least one solved message for this question
-    #                     question_solved = await execute_db_operation(
-    #                         f"""
-    #                         SELECT EXISTS (
-    #                             SELECT 1 FROM {chat_history_table_name}
-    #                             WHERE user_id = ? AND question_id = ? AND is_solved = 1 AND role = 'user'
-    #                         )
-    #                         """,
-    #                         (user_id, question_id),
-    #                         fetch_one=True,
-    #                     )
+    # Get quiz and exam task questions
+    quiz_exam_questions = await execute_db_operation(
+        f"""
+        SELECT DISTINCT t.id as task_id, q.id as question_id
+        FROM {tasks_table_name} t
+        JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
+        LEFT JOIN {questions_table_name} q ON t.id = q.task_id AND q.deleted_at IS NULL
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}'
+        ORDER BY t.id, q.position ASC
+        """,
+        (cohort_id,),
+        fetch_all=True,
+    )
 
-    #                     is_complete = bool(question_solved[0])
-    #                     if not is_complete:
-    #                         all_questions_complete = False
+    # Group questions by task_id
+    quiz_exam_tasks = defaultdict(list)
+    for row in quiz_exam_questions:
+        task_id = row[0]
+        question_id = row[1]
 
-    #                     task_completion["questions"].append(
-    #                         {"question_id": question_id, "is_complete": is_complete}
-    #                     )
+        quiz_exam_tasks[task_id].append(question_id)
 
-    #                 # A quiz/exam task is complete only if all its questions are complete
-    #                 task_completion["is_complete"] = all_questions_complete
+    for task_id in quiz_exam_tasks:
+        is_task_complete = True
+        question_completions = []
 
-    #             milestone_completion.append(task_completion)
+        for question_id in quiz_exam_tasks[task_id]:
+            is_question_complete = question_id in completed_question_ids
 
-    #         # Add milestone completion to the list
-    #         course_completion.append(
-    #             {"milestone_id": milestone_id, "completion": milestone_completion}
-    #         )
+            question_completions.append(
+                {
+                    "question_id": question_id,
+                    "is_complete": is_question_complete,
+                }
+            )
 
-    #     # Add course completion to the result
-    #     result.append({"course_id": course_id, "completion": course_completion})
+            if not is_question_complete:
+                is_task_complete = False
 
-    # return result
+        result[task_id] = {
+            "is_complete": is_task_complete,
+            "questions": question_completions,
+        }
+
+    return result
 
 
 async def delete_message(message_id: int):
