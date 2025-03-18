@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict
+from fastapi.responses import StreamingResponse
+from typing import Dict, AsyncGenerator
+import json
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 from api.config import openai_plan_to_model_name
 from api.models import TaskAIResponseType, AIChatRequest, TaskType
-from api.llm import run_llm_with_instructor
+from api.llm import run_llm_with_instructor, stream_llm_with_instructor
 from api.settings import settings
 from api.utils.logging import logger
 from api.db import (
@@ -17,7 +19,7 @@ router = APIRouter()
 
 
 @router.post("/chat")
-async def ai_response_for_question(request: AIChatRequest) -> Dict:
+async def ai_response_for_question(request: AIChatRequest):
     if request.question_id is None and request.question is None:
         raise HTTPException(
             status_code=400, detail="Question ID or question is required"
@@ -77,7 +79,6 @@ async def ai_response_for_question(request: AIChatRequest) -> Dict:
         question_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{question['answer']}\n```"""
 
     class Output(BaseModel):
-        analysis: str = Field(description="Analysis of the student's response")
         if question["response_type"] == TaskAIResponseType.CHAT:
             feedback: str = Field(
                 description="Feedback on the student's response; add newline characters to the feedback to make it more readable where necessary"
@@ -105,14 +106,26 @@ async def ai_response_for_question(request: AIChatRequest) -> Dict:
     messages = [{"role": "system", "content": system_prompt}] + chat_history
 
     try:
-        pred = run_llm_with_instructor(
-            api_key=settings.openai_api_key,
-            model=model,
-            messages=messages,
-            response_model=Output,
-            max_completion_tokens=4096,
+        # Define an async generator for streaming
+        async def stream_response() -> AsyncGenerator[str, None]:
+            stream = stream_llm_with_instructor(
+                api_key=settings.openai_api_key,
+                model=model,
+                messages=messages,
+                response_model=Output,
+                max_completion_tokens=4096,
+            )
+
+            # Since stream is a regular generator, not an async generator,
+            # we need to iterate over it differently
+            for chunk in stream:
+                yield json.dumps(chunk.model_dump()) + "\n"
+
+        # Return a streaming response
+        return StreamingResponse(
+            stream_response(),
+            media_type="application/x-ndjson",
         )
-        return pred.model_dump()
 
     except Exception as exception:
         logger.error(exception)
