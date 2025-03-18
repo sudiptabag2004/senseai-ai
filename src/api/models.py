@@ -191,8 +191,10 @@ class Block(BaseModel):
     type: str
     props: Dict
     content: str | List
-    position: int
     children: List
+    position: Optional[int] = (
+        None  # not present when sent from frontend at the time of publishing
+    )
 
 
 class LearningMaterialTask(Task):
