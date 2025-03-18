@@ -37,7 +37,13 @@ from api.config import (
     group_role_mentor,
     uncategorized_milestone_color,
 )
-from api.models import LeaderboardViewType, LearningMaterialTask, TaskStatus, UserCohort
+from api.models import (
+    LeaderboardViewType,
+    LearningMaterialTask,
+    TaskStatus,
+    UserCohort,
+    StoreMessageRequest,
+)
 from api.utils import (
     get_date_from_str,
     generate_random_color,
@@ -988,12 +994,15 @@ async def get_question(question_id: int) -> Dict:
     return question
 
 
-def construct_description_from_blocks(blocks: List[Dict]) -> str:
+def construct_description_from_blocks(
+    blocks: List[Dict], nesting_level: int = 0
+) -> str:
     """
     Constructs a textual description from a tree of block data.
 
     Args:
         blocks: A list of block dictionaries, potentially with nested children
+        nesting_level: The current nesting level (used for proper indentation)
 
     Returns:
         A formatted string representing the content of the blocks
@@ -1002,41 +1011,71 @@ def construct_description_from_blocks(blocks: List[Dict]) -> str:
         return ""
 
     description = ""
+    indent = "    " * nesting_level  # 4 spaces per nesting level
 
     for block in blocks:
         block_type = block.get("type", "")
-        content = block.get("content", "")
+        content = block.get("content", [])
         children = block.get("children", [])
 
         # Process based on block type
         if block_type == "paragraph":
-            if isinstance(content, str) and content:
-                description += f"{content}\n"
+            # Content is a list of text objects
+            if isinstance(content, list):
+                paragraph_text = ""
+                for text_obj in content:
+                    if isinstance(text_obj, dict) and "text" in text_obj:
+                        paragraph_text += text_obj["text"]
+                if paragraph_text:
+                    description += f"{indent}{paragraph_text}\n"
 
         elif block_type == "heading":
             level = block.get("props", {}).get("level", 1)
-            if isinstance(content, str):
-                description += f"{'#' * level} {content}\n"
+            if isinstance(content, list):
+                heading_text = ""
+                for text_obj in content:
+                    if isinstance(text_obj, dict) and "text" in text_obj:
+                        heading_text += text_obj["text"]
+                if heading_text:
+                    # Headings are typically not indented, but we'll respect nesting for consistency
+                    description += f"{indent}{'#' * level} {heading_text}\n"
 
-        elif block_type == "code":
+        elif block_type == "codeBlock":
             language = block.get("props", {}).get("language", "")
-            if isinstance(content, str):
-                description += f"```{language}\n{content}\n```\n"
+            if isinstance(content, list):
+                code_text = ""
+                for text_obj in content:
+                    if isinstance(text_obj, dict) and "text" in text_obj:
+                        code_text += text_obj["text"]
+                if code_text:
+                    description += (
+                        f"{indent}```{language}\n{indent}{code_text}\n{indent}```\n"
+                    )
 
-        elif block_type == "bulletList" or block_type == "orderedList":
-            # For lists, we'll process their children separately
-            pass
+        elif block_type in ["numberedListItem", "checkListItem", "bulletListItem"]:
+            if isinstance(content, list):
+                item_text = ""
+                for text_obj in content:
+                    if isinstance(text_obj, dict) and "text" in text_obj:
+                        item_text += text_obj["text"]
+                if item_text:
+                    # Use proper list marker based on parent list type
+                    if block_type == "numberedListItem":
+                        marker = "1. "
+                    elif block_type == "checkListItem":
+                        marker = "- [ ] "
+                    elif block_type == "bulletListItem":
+                        marker = "- "
 
-        elif block_type == "listItem":
-            if isinstance(content, str):
-                description += f"- {content}\n"
+                    description += f"{indent}{marker}{item_text}\n"
 
-        # Recursively process children if present
         if children:
-            child_description = construct_description_from_blocks(children)
+            child_description = construct_description_from_blocks(
+                children, nesting_level + 1
+            )
             description += child_description
 
-    return description.strip()
+    return description
 
 
 async def get_task(task_id: int):
@@ -1388,46 +1427,60 @@ async def delete_tasks(task_ids: List[int]):
     )
 
 
-async def store_message(
-    user_id: int,
-    task_id: int,
-    role: str,
-    content: str,
-    is_solved: bool = False,
-    response_type: str = None,
+async def store_messages(
+    messages: List[StoreMessageRequest],
 ):
-    # Insert the new message
-    new_id = await execute_db_operation(
-        f"""
-    INSERT INTO {chat_history_table_name} (user_id, task_id, role, content, is_solved, response_type)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """,
-        (user_id, task_id, role, content, is_solved, response_type),
-        get_last_row_id=True,
-    )
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        new_row_ids = []
+
+        for message in messages:
+            # Insert the new message
+            await cursor.execute(
+                f"""
+            INSERT INTO {chat_history_table_name} (user_id, question_id, role, content, is_solved, response_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    message.user_id,
+                    message.question_id,
+                    message.role,
+                    message.content,
+                    message.is_solved,
+                    message.response_type,
+                ),
+            )
+
+            new_row_id = cursor.lastrowid
+            new_row_ids.append(new_row_id)
+
+        await conn.commit()
 
     # Fetch the newly inserted row
-    new_row = await execute_db_operation(
+    new_rows = await execute_db_operation(
         f"""
-    SELECT id, timestamp, user_id, task_id, role, content, is_solved, response_type
+    SELECT id, created_at, user_id, question_id, role, content, is_solved, response_type
     FROM {chat_history_table_name}
-    WHERE id = ?
+    WHERE id IN ({','.join(map(str, new_row_ids))})
     """,
-        (new_id,),
-        fetch_one=True,
+        fetch_all=True,
     )
 
     # Return the newly inserted row as a dictionary
-    return {
-        "id": new_row[0],
-        "timestamp": new_row[1],
-        "user_id": new_row[2],
-        "task_id": new_row[3],
-        "role": new_row[4],
-        "content": new_row[5],
-        "is_solved": new_row[6],
-        "response_type": new_row[7],
-    }
+    return [
+        {
+            "id": new_row[0],
+            "created_at": new_row[1],
+            "user_id": new_row[2],
+            "question_id": new_row[3],
+            "role": new_row[4],
+            "content": new_row[5],
+            "is_solved": new_row[6],
+            "response_type": new_row[7],
+        }
+        for new_row in new_rows
+    ]
 
 
 async def get_all_chat_history(org_id: int):

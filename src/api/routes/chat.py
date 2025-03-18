@@ -1,28 +1,23 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
 from api.db import (
-    store_message as store_message_in_db,
+    store_messages as store_messages_in_db,
     get_all_chat_history as get_all_chat_history_from_db,
     get_user_chat_history_for_tasks as get_user_chat_history_for_tasks_from_db,
     delete_all_chat_history as delete_all_chat_history_from_db,
 )
 from api.models import (
     ChatMessage,
-    StoreMessageRequest,
+    StoreMessagesRequest,
 )
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ChatMessage)
-async def store_message(request: StoreMessageRequest) -> ChatMessage:
-    return await store_message_in_db(
-        user_id=request.user_id,
-        task_id=request.task_id,
-        role=request.role,
-        content=request.content,
-        is_solved=request.is_solved,
-        response_type=request.response_type,
+@router.post("/", response_model=List[ChatMessage])
+async def store_messages(request: StoreMessagesRequest) -> List[ChatMessage]:
+    return await store_messages_in_db(
+        messages=request.messages,
     )
 
 

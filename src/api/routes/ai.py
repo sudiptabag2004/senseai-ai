@@ -17,26 +17,49 @@ router = APIRouter()
 
 
 @router.post("/chat")
-async def ai_response_for_question(
-    question_id: int, user_id: int, request: AIChatRequest
-) -> Dict:
-    question = await get_question(question_id)
+async def ai_response_for_question(request: AIChatRequest) -> Dict:
+    if request.question_id is None and request.question is None:
+        raise HTTPException(
+            status_code=400, detail="Question ID or question is required"
+        )
 
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
+    if request.question_id is not None and request.user_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="User ID is required when question ID is provided",
+        )
 
-    chat_history = await get_question_chat_history_for_user(question_id, user_id)
-    chat_history = [
-        {
-            "role": message.role,
-            "content": message.content,
-        }
-        for message in chat_history
-    ]
+    if request.question and request.chat_history is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Chat history is required when question is provided",
+        )
+
+    if request.question_id:
+        question = await get_question(request.question_id)
+        if not question:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        chat_history = await get_question_chat_history_for_user(
+            request.question_id, request.user_id
+        )
+        chat_history = [
+            {
+                "role": message["role"],
+                "content": message["content"],
+            }
+            for message in chat_history
+        ]
+    else:
+        question = request.question.model_dump()
+        chat_history = request.chat_history
 
     question_description = construct_description_from_blocks(question["blocks"])
     question_details = f"""Task:\n```\n{question_description}\n```"""
 
+    import ipdb
+
+    ipdb.set_trace()
     chat_history = (
         [
             {

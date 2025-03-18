@@ -247,8 +247,7 @@ class QuestionType(Enum):
             return self.value == other.value
 
 
-class Question(BaseModel):
-    id: int
+class DraftQuestion(BaseModel):
     blocks: List[Block]
     answer: str
     type: QuestionType
@@ -256,8 +255,12 @@ class Question(BaseModel):
     response_type: TaskAIResponseType
 
 
+class PublishedQuestion(DraftQuestion):
+    id: int
+
+
 class QuizTask(Task):
-    questions: List[Question]
+    questions: List[PublishedQuestion]
 
 
 class MilestoneTask(Task):
@@ -306,7 +309,7 @@ class ChatRole(str, Enum):
     ASSISTANT = "assistant"
 
 
-class ResponseType(str, Enum):
+class ChatResponseType(str, Enum):
     TEXT = "text"
     CODE = "code"
     AUDIO = "audio"
@@ -320,7 +323,7 @@ class ChatMessage(BaseModel):
     role: ChatRole | None
     content: Optional[str] | None
     is_solved: bool
-    response_type: Optional[ResponseType] | None
+    response_type: Optional[ChatResponseType] | None
     # Optional fields that are only present in some queries
     user_email: Optional[str] = None
     task_name: Optional[str] = None
@@ -384,14 +387,9 @@ class PublishLearningMaterialTaskRequest(BaseModel):
     blocks: List[dict]
 
 
-class PublishQuestionRequest(BaseModel):
-    blocks: List[dict]
-    answer: str | None
-    input_type: str | None
-    response_type: str | None
+class PublishQuestionRequest(DraftQuestion):
     coding_languages: List[str] | None
     generation_model: str | None
-    type: QuestionType
     max_attempts: int | None
     is_feedback_shown: bool | None
 
@@ -426,11 +424,15 @@ class UpdateTaskRequest(BaseModel):
 
 class StoreMessageRequest(BaseModel):
     user_id: int
-    task_id: int
+    question_id: int
     role: str
     content: str | None
     is_solved: bool = False
-    response_type: str | None = None
+    response_type: ChatResponseType | None = None
+
+
+class StoreMessagesRequest(BaseModel):
+    messages: List[StoreMessageRequest]
 
 
 class GetUserChatHistoryRequest(BaseModel):
@@ -499,4 +501,8 @@ class UserCohort(BaseModel):
 
 class AIChatRequest(BaseModel):
     user_response: str
+    question: Optional[DraftQuestion] = None
+    chat_history: Optional[List[Dict]] = None
+    question_id: Optional[int] = None
+    user_id: Optional[int] = None
     # task_context: str
