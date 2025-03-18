@@ -322,14 +322,7 @@ class ChatMessage(BaseModel):
     question_id: int
     role: ChatRole | None
     content: Optional[str] | None
-    is_solved: bool
     response_type: Optional[ChatResponseType] | None
-    # Optional fields that are only present in some queries
-    user_email: Optional[str] = None
-    task_name: Optional[str] = None
-    task_description: Optional[str] = None
-    task_context: Optional[str] = None
-    chat_id: Optional[int] = None  # Used in get_user_chat_history_for_tasks
 
 
 class Tag(BaseModel):
@@ -423,16 +416,16 @@ class UpdateTaskRequest(BaseModel):
 
 
 class StoreMessageRequest(BaseModel):
-    user_id: int
-    question_id: int
     role: str
     content: str | None
-    is_solved: bool = False
     response_type: ChatResponseType | None = None
 
 
 class StoreMessagesRequest(BaseModel):
     messages: List[StoreMessageRequest]
+    user_id: int
+    question_id: int
+    is_complete: bool
 
 
 class GetUserChatHistoryRequest(BaseModel):
@@ -506,3 +499,7 @@ class AIChatRequest(BaseModel):
     question_id: Optional[int] = None
     user_id: Optional[int] = None
     # task_context: str
+
+
+class MarkTaskCompletedRequest(BaseModel):
+    user_id: int

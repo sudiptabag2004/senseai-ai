@@ -42,6 +42,7 @@ badges_table_name = "badges"
 cv_review_usage_table_name = "cv_review_usage"
 organizations_table_name = "organizations"
 user_organizations_table_name = "user_organizations"
+task_completions_table_name = "task_completions"
 
 group_role_learner = "learner"
 group_role_mentor = "mentor"

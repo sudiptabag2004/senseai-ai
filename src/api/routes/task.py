@@ -21,6 +21,7 @@ from api.db import (
     publish_learning_material_task as publish_learning_material_task_in_db,
     publish_quiz as publish_quiz_in_db,
     update_quiz as update_quiz_in_db,
+    mark_task_completed as mark_task_completed_in_db,
 )
 from api.models import (
     Task,
@@ -38,6 +39,7 @@ from api.models import (
     PublishLearningMaterialTaskRequest,
     UpdateQuestionRequest,
     UpdateQuizRequest,
+    MarkTaskCompletedRequest,
 )
 
 router = APIRouter()
@@ -197,4 +199,10 @@ async def remove_tags_from_task(task_id: int, request: TaskTagsRequest):
 @router.put("/{task_id}/tests")
 async def update_task_tests(task_id: int, request: UpdateTaskTestsRequest):
     await update_tests_for_task_in_db(task_id, request.tests)
+    return {"success": True}
+
+
+@router.post("/{task_id}/complete")
+async def mark_task_completed(task_id: int, request: MarkTaskCompletedRequest):
+    await mark_task_completed_in_db(task_id, request.user_id)
     return {"success": True}

@@ -36,6 +36,7 @@ from api.config import (
     group_role_learner,
     group_role_mentor,
     uncategorized_milestone_color,
+    task_completions_table_name,
 )
 from api.models import (
     LeaderboardViewType,
@@ -43,6 +44,7 @@ from api.models import (
     TaskStatus,
     UserCohort,
     StoreMessageRequest,
+    ChatMessage,
 )
 from api.utils import (
     get_date_from_str,
@@ -457,7 +459,6 @@ async def create_chat_history_table(cursor):
                     question_id INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT,
-                    is_solved BOOLEAN NOT NULL DEFAULT 0,
                     response_type TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
@@ -471,6 +472,35 @@ async def create_chat_history_table(cursor):
 
     await cursor.execute(
         f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
+    )
+
+
+async def create_task_completion_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {task_completions_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                task_id INTEGER,
+                question_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id) ON DELETE CASCADE,
+                UNIQUE(user_id, task_id),
+                UNIQUE(user_id, question_id)
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_task_completion_user_id ON {task_completions_table_name} (user_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_task_completion_task_id ON {task_completions_table_name} (task_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_task_completion_question_id ON {task_completions_table_name} (question_id)"""
     )
 
 
@@ -547,6 +577,9 @@ async def init_db():
             if not await check_table_exists(chat_history_table_name, cursor):
                 await create_chat_history_table(cursor)
 
+            if not await check_table_exists(task_completions_table_name, cursor):
+                await create_task_completion_table(cursor)
+
             if not await check_table_exists(course_tasks_table_name, cursor):
                 await create_course_tasks_table(cursor)
 
@@ -587,6 +620,8 @@ async def init_db():
             await create_task_scoring_criteria_table(cursor)
 
             await create_chat_history_table(cursor)
+
+            await create_task_completion_table(cursor)
 
             await create_tests_table(cursor)
 
@@ -1078,7 +1113,7 @@ def construct_description_from_blocks(
     return description
 
 
-async def get_task(task_id: int):
+async def get_basic_task_details(task_id: int) -> Dict:
     task = await execute_db_operation(
         f"""
         SELECT id, title, type, status
@@ -1092,7 +1127,19 @@ async def get_task(task_id: int):
     if not task:
         return None
 
-    task_data = {"id": task[0], "title": task[1], "type": task[2], "status": task[3]}
+    return {
+        "id": task[0],
+        "title": task[1],
+        "type": task[2],
+        "status": task[3],
+    }
+
+
+async def get_task(task_id: int):
+    task_data = await get_basic_task_details(task_id)
+
+    if not task_data:
+        return None
 
     if task_data["type"] == TaskType.LEARNING_MATERIAL:
         task_data["blocks"] = await fetch_blocks(task_id, "task")
@@ -1245,7 +1292,7 @@ async def store_blocks(
         temp_id_to_db_id[temp_id] = db_id
 
 
-async def does_task_exist(task_id: int):
+async def does_task_exist(task_id: int) -> bool:
     task = await execute_db_operation(
         f"""
         SELECT id
@@ -1429,6 +1476,9 @@ async def delete_tasks(task_ids: List[int]):
 
 async def store_messages(
     messages: List[StoreMessageRequest],
+    user_id: int,
+    question_id: int,
+    is_complete: bool,
 ):
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -1439,15 +1489,14 @@ async def store_messages(
             # Insert the new message
             await cursor.execute(
                 f"""
-            INSERT INTO {chat_history_table_name} (user_id, question_id, role, content, is_solved, response_type)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO {chat_history_table_name} (user_id, question_id, role, content, response_type)
+            VALUES (?, ?, ?, ?, ?)
             """,
                 (
-                    message.user_id,
-                    message.question_id,
+                    user_id,
+                    question_id,
                     message.role,
                     message.content,
-                    message.is_solved,
                     message.response_type,
                 ),
             )
@@ -1455,12 +1504,20 @@ async def store_messages(
             new_row_id = cursor.lastrowid
             new_row_ids.append(new_row_id)
 
+        if is_complete:
+            await cursor.execute(
+                f"""
+                INSERT INTO {task_completions_table_name} (user_id, question_id)
+                VALUES (?, ?) ON CONFLICT(user_id, question_id) DO NOTHING
+                """,
+                (user_id, question_id),
+            )
+
         await conn.commit()
 
     # Fetch the newly inserted row
     new_rows = await execute_db_operation(
-        f"""
-    SELECT id, created_at, user_id, question_id, role, content, is_solved, response_type
+        f"""SELECT id, created_at, user_id, question_id, role, content, response_type
     FROM {chat_history_table_name}
     WHERE id IN ({','.join(map(str, new_row_ids))})
     """,
@@ -1476,8 +1533,7 @@ async def store_messages(
             "question_id": new_row[3],
             "role": new_row[4],
             "content": new_row[5],
-            "is_solved": new_row[6],
-            "response_type": new_row[7],
+            "response_type": new_row[6],
         }
         for new_row in new_rows
     ]
@@ -1514,28 +1570,59 @@ async def get_all_chat_history(org_id: int):
     ]
 
 
-async def get_question_chat_history_for_user(question_id: int, user_id: int):
+def convert_chat_message_to_dict(message: Tuple) -> ChatMessage:
+    return {
+        "id": message[0],
+        "created_at": message[1],
+        "user_id": message[2],
+        "question_id": message[3],
+        "role": message[4],
+        "content": message[5],
+        "response_type": message[6],
+    }
+
+
+async def get_question_chat_history_for_user(
+    question_id: int, user_id: int
+) -> List[ChatMessage]:
     chat_history = await execute_db_operation(
         f"""
-    SELECT id, created_at, user_id, question_id, role, content, is_solved, response_type FROM {chat_history_table_name} WHERE question_id = ? AND user_id = ?
+    SELECT id, created_at, user_id, question_id, role, content, response_type FROM {chat_history_table_name} WHERE question_id = ? AND user_id = ?
     """,
         (question_id, user_id),
         fetch_all=True,
     )
 
-    return [
-        {
-            "id": row[0],
-            "timestamp": row[1],
-            "user_id": row[2],
-            "question_id": row[3],
-            "role": row[4],
-            "content": row[5],
-            "is_solved": bool(row[6]),
-            "response_type": row[7],
-        }
-        for row in chat_history
-    ]
+    return [convert_chat_message_to_dict(row) for row in chat_history]
+
+
+async def get_task_chat_history_for_user(
+    task_id: int, user_id: int
+) -> List[ChatMessage]:
+    task = await get_basic_task_details(task_id)
+
+    if not task:
+        raise ValueError("Task does not exist")
+
+    if task["type"] == TaskType.LEARNING_MATERIAL:
+        raise ValueError("Task is not a quiz or exam")
+
+    query = f"""
+        SELECT ch.id, ch.created_at, ch.user_id, ch.question_id, ch.role, ch.content, ch.response_type
+        FROM {chat_history_table_name} ch
+        JOIN {questions_table_name} q ON ch.question_id = q.id
+        WHERE q.task_id = ? 
+        AND ch.user_id = ?
+        ORDER BY ch.created_at ASC
+    """
+
+    chat_history = await execute_db_operation(
+        query,
+        (task_id, user_id),
+        fetch_all=True,
+    )
+
+    return [convert_chat_message_to_dict(row) for row in chat_history]
 
 
 async def get_user_chat_history_for_tasks(task_ids: List[int], user_id: int):
@@ -1613,6 +1700,129 @@ async def get_solved_tasks_for_user(
         )
 
     return [task[0] for task in results]
+
+
+async def mark_task_completed(task_id: int, user_id: int):
+    # Update task completion table
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Check if the task is already marked as completed
+        existing_completion = await execute_db_operation(
+            f"""
+            SELECT id FROM {task_completions_table_name}
+            WHERE user_id = ? AND task_id = ?
+            """,
+            (user_id, task_id),
+            fetch_one=True,
+        )
+        if existing_completion:
+            return
+
+        # If not already completed, insert a new record
+        await cursor.execute(
+            f"""
+            INSERT INTO {task_completions_table_name} (user_id, task_id)
+            VALUES (?, ?)
+            """,
+            (user_id, task_id),
+        )
+
+        await conn.commit()
+
+    # async def get_cohort_completion(cohort_id: int, user_id: int):
+    #     # Get all courses for the cohort
+    #     courses = await get_courses_for_cohort(cohort_id, include_tree=True)
+    # result = []
+
+    # # For each course, get completion data
+    # for course in courses:
+    #     course_id = course["id"]
+    #     course_completion = []
+
+    #     # Process each milestone
+    #     for milestone in course["milestones"]:
+    #         milestone_id = milestone["id"]
+    #         milestone_completion = []
+
+    #         # Process each task in the milestone
+    #         for task in milestone["tasks"]:
+    #             task_id = task["id"]
+    #             task_type = task["type"]
+
+    #             # Create the task completion object
+    #             task_completion = {
+    #                 "task_id": task_id,
+    #                 "is_complete": False,
+    #                 "questions": [],
+    #             }
+
+    #             if task_type == TaskType.LEARNING_MATERIAL:
+    #                 # For learning material tasks, check if there's at least one solved message
+    #                 solved_status = await execute_db_operation(
+    #                     f"""
+    #                     SELECT EXISTS (
+    #                         SELECT 1 FROM {chat_history_table_name}
+    #                         WHERE user_id = ? AND task_id = ? AND is_solved = 1 AND role = 'user'
+    #                     )
+    #                     """,
+    #                     (user_id, task_id),
+    #                     fetch_one=True,
+    #                 )
+    #                 task_completion["is_complete"] = bool(solved_status[0])
+
+    #             elif task_type in [TaskType.QUIZ, TaskType.EXAM]:
+    #                 # For quiz and exam tasks, get all questions
+    #                 questions = await execute_db_operation(
+    #                     f"""
+    #                     SELECT id FROM {questions_table_name}
+    #                     WHERE task_id = ?
+    #                     ORDER BY ordering
+    #                     """,
+    #                     (task_id,),
+    #                     fetch_all=True,
+    #                 )
+
+    #                 all_questions_complete = True
+
+    #                 # Check completion for each question
+    #                 for question in questions:
+    #                     question_id = question[0]
+
+    #                     # Check if there's at least one solved message for this question
+    #                     question_solved = await execute_db_operation(
+    #                         f"""
+    #                         SELECT EXISTS (
+    #                             SELECT 1 FROM {chat_history_table_name}
+    #                             WHERE user_id = ? AND question_id = ? AND is_solved = 1 AND role = 'user'
+    #                         )
+    #                         """,
+    #                         (user_id, question_id),
+    #                         fetch_one=True,
+    #                     )
+
+    #                     is_complete = bool(question_solved[0])
+    #                     if not is_complete:
+    #                         all_questions_complete = False
+
+    #                     task_completion["questions"].append(
+    #                         {"question_id": question_id, "is_complete": is_complete}
+    #                     )
+
+    #                 # A quiz/exam task is complete only if all its questions are complete
+    #                 task_completion["is_complete"] = all_questions_complete
+
+    #             milestone_completion.append(task_completion)
+
+    #         # Add milestone completion to the list
+    #         course_completion.append(
+    #             {"milestone_id": milestone_id, "completion": milestone_completion}
+    #         )
+
+    #     # Add course completion to the result
+    #     result.append({"course_id": course_id, "completion": course_completion})
+
+    # return result
 
 
 async def delete_message(message_id: int):
@@ -3899,5 +4109,49 @@ async def migrate_chat_history_table():
         await cursor.execute(
             f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
         )
+
+        await conn.commit()
+
+
+async def migrate_chat_history_table():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Drop the existing table if it exists
+        await cursor.execute(f"DROP TABLE IF EXISTS {chat_history_table_name}")
+
+        # Create the new table without is_solved column
+        await cursor.execute(
+            f"""
+            CREATE TABLE {chat_history_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                question_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT,
+                response_type TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
+            )
+        """
+        )
+
+        # Create indices for the new table
+        await cursor.execute(
+            f"""CREATE INDEX idx_chat_history_user_id ON {chat_history_table_name} (user_id)"""
+        )
+        await cursor.execute(
+            f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
+        )
+
+        await conn.commit()
+
+
+async def drop_task_completions_table():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(f"DROP TABLE IF EXISTS {task_completions_table_name}")
 
         await conn.commit()

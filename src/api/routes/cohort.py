@@ -21,6 +21,7 @@ from api.db import (
     get_cohort_group_ids_for_users as get_cohort_group_ids_for_users_from_db,
     get_cohort_analytics_metrics_for_tasks as get_cohort_analytics_metrics_for_tasks_from_db,
     get_cohort_attempt_data_for_tasks as get_cohort_attempt_data_for_tasks_from_db,
+    # get_cohort_completion as get_cohort_completion_from_db,
 )
 from api.models import (
     CreateCohortRequest,
@@ -161,6 +162,14 @@ async def get_courses_for_cohort(
     cohort_id: int, include_tree: bool = False
 ) -> List[CourseWithMilestonesAndTasks | Course]:
     return await get_courses_for_cohort_from_db(cohort_id, include_tree)
+
+
+# @router.get(
+#     "/{cohort_id}/completion",
+#     response_model=Dict,
+# )
+# async def get_cohort_completion(cohort_id: int, user_id: int) -> Dict:
+#     return await get_cohort_completion_from_db(cohort_id, user_id)
 
 
 @router.get("/{cohort_id}/users/{user_id}/groups")
