@@ -57,9 +57,6 @@ async def ai_response_for_question(request: AIChatRequest) -> Dict:
     question_description = construct_description_from_blocks(question["blocks"])
     question_details = f"""Task:\n```\n{question_description}\n```"""
 
-    import ipdb
-
-    ipdb.set_trace()
     chat_history = (
         [
             {
