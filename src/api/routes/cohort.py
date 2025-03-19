@@ -17,11 +17,11 @@ from api.db import (
     remove_courses_from_cohort as remove_courses_from_cohort_in_db,
     get_courses_for_cohort as get_courses_for_cohort_from_db,
     get_mentor_cohort_groups as get_mentor_cohort_groups_from_db,
-    get_streaks as get_streaks_from_db,
     get_cohort_group_ids_for_users as get_cohort_group_ids_for_users_from_db,
     get_cohort_analytics_metrics_for_tasks as get_cohort_analytics_metrics_for_tasks_from_db,
     get_cohort_attempt_data_for_tasks as get_cohort_attempt_data_for_tasks_from_db,
     get_cohort_completion as get_cohort_completion_from_db,
+    get_cohort_streaks as get_cohort_streaks_from_db,
 )
 from api.models import (
     CreateCohortRequest,
@@ -169,7 +169,45 @@ async def get_courses_for_cohort(
     response_model=Dict,
 )
 async def get_cohort_completion(cohort_id: int, user_id: int) -> Dict:
-    return await get_cohort_completion_from_db(cohort_id, user_id)
+    results = await get_cohort_completion_from_db(cohort_id, [user_id])
+    return results[user_id]
+
+
+@router.get("/{cohort_id}/leaderboard")
+async def get_leaderboard_data(cohort_id: int):
+    leaderboard_data = await get_cohort_streaks_from_db(cohort_id=cohort_id)
+
+    user_ids = [streak["user"]["id"] for streak in leaderboard_data]
+
+    if not user_ids:
+        return {}
+
+    task_completions = await get_cohort_completion_from_db(cohort_id, user_ids)
+
+    num_tasks = len(task_completions[user_ids[0]])
+
+    for user_data in leaderboard_data:
+        user_id = user_data["user"]["id"]
+        num_tasks_completed = 0
+
+        for task_completion_data in task_completions[user_id].values():
+            if task_completion_data["is_complete"]:
+                num_tasks_completed += 1
+
+        user_data["tasks_completed"] = num_tasks_completed
+
+    leaderboard_data = sorted(
+        leaderboard_data,
+        key=lambda x: (x["streak_count"], x["tasks_completed"]),
+        reverse=True,
+    )
+
+    return {
+        "stats": leaderboard_data,
+        "metadata": {
+            "num_tasks": num_tasks,
+        },
+    }
 
 
 @router.get("/{cohort_id}/users/{user_id}/groups")
@@ -184,7 +222,7 @@ async def get_mentor_cohort_groups(
 async def get_all_streaks_for_cohort(
     cohort_id: int = None, view: LeaderboardViewType = str(LeaderboardViewType.ALL_TIME)
 ) -> Streaks:
-    return await get_streaks_from_db(view=view, cohort_id=cohort_id)
+    return await get_cohort_streaks_from_db(view=view, cohort_id=cohort_id)
 
 
 @router.get("/{cohort_id}/groups_for_users")

@@ -1731,13 +1731,13 @@ async def mark_task_completed(task_id: int, user_id: int):
         await conn.commit()
 
 
-async def get_cohort_completion(cohort_id: int, user_id: int):
+async def get_cohort_completion(cohort_id: int, user_ids: List[int]):
     """
     Retrieves completion data for a user in a specific cohort.
 
     Args:
         cohort_id: The ID of the cohort
-        user_id: The ID of the user
+        user_ids: The IDs of the users
 
     Returns:
         A dictionary mapping task IDs to their completion status:
@@ -1748,34 +1748,38 @@ async def get_cohort_completion(cohort_id: int, user_id: int):
             }
         }
     """
-    # Check if user belongs to cohort
-    user_in_cohort = await is_user_in_cohort(user_id, cohort_id)
-    if not user_in_cohort:
-        return {}
+    results = defaultdict(dict)
 
-    # Get completed tasks for the user from task_completions_table
+    # user_in_cohort = await is_user_in_cohort(user_id, cohort_id)
+    # if not user_in_cohort:
+    #     results[user_id] = {}
+    #     continue
+
+    # Get completed tasks for the users from task_completions_table
     completed_tasks = await execute_db_operation(
         f"""
-        SELECT task_id 
+        SELECT user_id, task_id 
         FROM {task_completions_table_name}
-        WHERE user_id = ? AND task_id IS NOT NULL
+        WHERE user_id in ({','.join(map(str, user_ids))}) AND task_id IS NOT NULL
         """,
-        (user_id,),
         fetch_all=True,
     )
-    completed_task_ids = {row[0] for row in completed_tasks}
+    completed_task_ids_for_user = defaultdict(set)
+    for user_id, task_id in completed_tasks:
+        completed_task_ids_for_user[user_id].add(task_id)
 
-    # Get completed questions for the user from task_completions_table
+    # Get completed questions for the users from task_completions_table
     completed_questions = await execute_db_operation(
         f"""
-        SELECT question_id 
+        SELECT user_id, question_id 
         FROM {task_completions_table_name}
-        WHERE user_id = ? AND question_id IS NOT NULL
+        WHERE user_id in ({','.join(map(str, user_ids))}) AND question_id IS NOT NULL
         """,
-        (user_id,),
         fetch_all=True,
     )
-    completed_question_ids = {row[0] for row in completed_questions}
+    completed_question_ids_for_user = defaultdict(set)
+    for user_id, question_id in completed_questions:
+        completed_question_ids_for_user[user_id].add(question_id)
 
     # Get all tasks for the cohort
     # Get learning material tasks
@@ -1791,11 +1795,12 @@ async def get_cohort_completion(cohort_id: int, user_id: int):
         fetch_all=True,
     )
 
-    result = {}
-
-    for task in learning_material_tasks:
-        # For learning material, check if it's in the completed tasks list
-        result[task[0]] = {"is_complete": task[0] in completed_task_ids}
+    for user_id in user_ids:
+        for task in learning_material_tasks:
+            # For learning material, check if it's in the completed tasks list
+            results[user_id][task[0]] = {
+                "is_complete": task[0] in completed_task_ids_for_user[user_id]
+            }
 
     # Get quiz and exam task questions
     quiz_exam_questions = await execute_db_operation(
@@ -1820,29 +1825,32 @@ async def get_cohort_completion(cohort_id: int, user_id: int):
 
         quiz_exam_tasks[task_id].append(question_id)
 
-    for task_id in quiz_exam_tasks:
-        is_task_complete = True
-        question_completions = []
+    for user_id in user_ids:
+        for task_id in quiz_exam_tasks:
+            is_task_complete = True
+            question_completions = []
 
-        for question_id in quiz_exam_tasks[task_id]:
-            is_question_complete = question_id in completed_question_ids
+            for question_id in quiz_exam_tasks[task_id]:
+                is_question_complete = (
+                    question_id in completed_question_ids_for_user[user_id]
+                )
 
-            question_completions.append(
-                {
-                    "question_id": question_id,
-                    "is_complete": is_question_complete,
-                }
-            )
+                question_completions.append(
+                    {
+                        "question_id": question_id,
+                        "is_complete": is_question_complete,
+                    }
+                )
 
-            if not is_question_complete:
-                is_task_complete = False
+                if not is_question_complete:
+                    is_task_complete = False
 
-        result[task_id] = {
-            "is_complete": is_task_complete,
-            "questions": question_completions,
-        }
+            results[user_id][task_id] = {
+                "is_complete": is_task_complete,
+                "questions": question_completions,
+            }
 
-    return result
+    return results
 
 
 async def delete_message(message_id: int):
@@ -1966,7 +1974,7 @@ async def get_user_streak(user_id: int, cohort_id: int):
     )
 
 
-async def get_streaks(
+async def get_cohort_streaks(
     view: LeaderboardViewType = LeaderboardViewType.ALL_TIME, cohort_id: int = None
 ):
     # Build date filter based on duration
@@ -1985,14 +1993,14 @@ async def get_streaks(
         u.first_name,
         u.middle_name,
         u.last_name,
-        GROUP_CONCAT(t.timestamp) as timestamps
+        GROUP_CONCAT(t.created_at) as created_ats
     FROM {users_table_name} u
     LEFT JOIN (
-        SELECT user_id, MAX(datetime(timestamp, '+5 hours', '+30 minutes')) as timestamp
+        SELECT user_id, MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
         FROM {chat_history_table_name}
-        WHERE 1=1 {date_filter} AND task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
-        GROUP BY user_id, DATE(datetime(timestamp, '+5 hours', '+30 minutes'))
-        ORDER BY timestamp DESC, user_id
+        WHERE 1=1 {date_filter} AND question_id IN (SELECT question_id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
+        GROUP BY user_id, DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+        ORDER BY created_at DESC, user_id
     ) t ON u.id = t.user_id
     WHERE u.id IN (
         -- Users who are in the cohort as learners
@@ -2000,11 +2008,14 @@ async def get_streaks(
         UNION
         -- Users who have any chat history for the cohort tasks
         SELECT DISTINCT user_id FROM {chat_history_table_name} 
-        WHERE task_id IN (
-            SELECT task_id FROM {course_tasks_table_name} 
-            WHERE course_id IN (
-                SELECT course_id FROM {course_cohorts_table_name} 
-                WHERE cohort_id = ?
+        WHERE question_id IN (
+            SELECT question_id FROM {questions_table_name} 
+            WHERE task_id IN (
+                SELECT task_id FROM {course_tasks_table_name} 
+                WHERE course_id IN (
+                    SELECT course_id FROM {course_cohorts_table_name} 
+                    WHERE cohort_id = ?
+                )
             )
         )
     )
@@ -2041,7 +2052,7 @@ async def get_streaks(
                     "middle_name": user_middle_name,
                     "last_name": user_last_name,
                 },
-                "count": streak_count,
+                "streak_count": streak_count,
             }
         )
 

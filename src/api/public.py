@@ -4,7 +4,7 @@ from api.models import ChatMessage, LeaderboardViewType
 from api.db import (
     get_all_chat_history as get_all_chat_history_from_db,
     get_all_tasks_for_org_or_course as get_all_tasks_for_org_or_course_from_db,
-    get_streaks as get_streaks_from_db,
+    get_cohort_streaks as get_cohort_streaks_from_db,
     get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
     add_members_to_cohort as add_members_to_cohort_in_db,
 )
@@ -37,7 +37,7 @@ async def get_all_streaks(
     cohort_id: int = None,
     view: Optional[LeaderboardViewType] = str(LeaderboardViewType.ALL_TIME),
 ) -> List[Tuple]:
-    streak_data = await get_streaks_from_db(view=view, cohort_id=cohort_id)
+    streak_data = await get_cohort_streaks_from_db(view=view, cohort_id=cohort_id)
     # only retain the count
     return [
         (value["user"]["id"], value["user"]["email"], value["count"])
