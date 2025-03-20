@@ -1880,13 +1880,48 @@ async def delete_all_chat_history():
 async def get_user_active_in_last_n_days(user_id: int, n: int, cohort_id: int):
     activity_per_day = await execute_db_operation(
         f"""
-    SELECT DATE(datetime(created_at, '+5 hours', '+30 minutes')), COUNT(*)
-    FROM {chat_history_table_name}
-    WHERE user_id = ? AND DATE(datetime(created_at, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') AND question_id IN (SELECT question_id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
-    GROUP BY DATE(created_at)
-    ORDER BY DATE(created_at)
+    WITH chat_activity AS (
+        SELECT DATE(datetime(created_at, '+5 hours', '+30 minutes')) as activity_date, COUNT(*) as count
+        FROM {chat_history_table_name}
+        WHERE user_id = ? 
+        AND DATE(datetime(created_at, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days') 
+        AND question_id IN (
+            SELECT question_id 
+            FROM {questions_table_name} 
+            WHERE task_id IN (
+                SELECT task_id 
+                FROM {course_tasks_table_name} 
+                WHERE course_id IN (
+                    SELECT course_id 
+                    FROM {course_cohorts_table_name} 
+                    WHERE cohort_id = ?
+                )
+            )
+        )
+        GROUP BY activity_date
+    ),
+    task_activity AS (
+        SELECT DATE(datetime(created_at, '+5 hours', '+30 minutes')) as activity_date, COUNT(*) as count
+        FROM {task_completions_table_name}
+        WHERE user_id = ? 
+        AND DATE(datetime(created_at, '+5 hours', '+30 minutes')) >= DATE(datetime('now', '+5 hours', '+30 minutes'), '-{n} days')
+        AND task_id IN (
+            SELECT task_id 
+            FROM {course_tasks_table_name} 
+            WHERE course_id IN (
+                SELECT course_id 
+                FROM {course_cohorts_table_name} 
+                WHERE cohort_id = ?
+            )
+        )
+        GROUP BY activity_date
+    )
+    SELECT activity_date, count FROM chat_activity
+    UNION
+    SELECT activity_date, count FROM task_activity
+    ORDER BY activity_date
     """,
-        (user_id, cohort_id),
+        (user_id, cohort_id, user_id, cohort_id),
         fetch_all=True,
     )
 
@@ -1963,9 +1998,20 @@ async def get_user_streak(user_id: int, cohort_id: int):
     FROM {chat_history_table_name}
     WHERE user_id = ? AND question_id IN (SELECT question_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
     GROUP BY DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+    
+    UNION
+    
+    SELECT MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
+    FROM {task_completions_table_name}
+    WHERE user_id = ? AND task_id IN (
+        SELECT task_id FROM {course_tasks_table_name} 
+        WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
+    )
+    GROUP BY DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+    
     ORDER BY created_at DESC
     """,
-        (user_id, cohort_id),
+        (user_id, cohort_id, user_id, cohort_id),
         fetch_all=True,
     )
 
@@ -1996,28 +2042,29 @@ async def get_cohort_streaks(
         GROUP_CONCAT(t.created_at) as created_ats
     FROM {users_table_name} u
     LEFT JOIN (
+        -- Chat history interactions
         SELECT user_id, MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
         FROM {chat_history_table_name}
         WHERE 1=1 {date_filter} AND question_id IN (SELECT question_id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
         GROUP BY user_id, DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+        
+        UNION
+        
+        -- Task completions
+        SELECT user_id, MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
+        FROM {task_completions_table_name}
+        WHERE 1=1 {date_filter} AND task_id IN (
+            SELECT task_id FROM {course_tasks_table_name} 
+            WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)
+        )
+        GROUP BY user_id, DATE(datetime(created_at, '+5 hours', '+30 minutes'))
+        
         ORDER BY created_at DESC, user_id
     ) t ON u.id = t.user_id
     WHERE u.id IN (
         -- Users who are in the cohort as learners
         SELECT user_id FROM {user_cohorts_table_name} WHERE cohort_id = ? and role = 'learner'
-        UNION
-        -- Users who have any chat history for the cohort tasks
-        SELECT DISTINCT user_id FROM {chat_history_table_name} 
-        WHERE question_id IN (
-            SELECT question_id FROM {questions_table_name} 
-            WHERE task_id IN (
-                SELECT task_id FROM {course_tasks_table_name} 
-                WHERE course_id IN (
-                    SELECT course_id FROM {course_cohorts_table_name} 
-                    WHERE cohort_id = ?
-                )
-            )
-        )
+       
     )
     GROUP BY u.id, u.email, u.first_name, u.middle_name, u.last_name
     """,
