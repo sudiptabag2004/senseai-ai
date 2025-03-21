@@ -500,6 +500,7 @@ class AIChatRequest(BaseModel):
     chat_history: Optional[List[Dict]] = None
     question_id: Optional[int] = None
     user_id: Optional[int] = None
+    audio_data: Optional[str] = None  # Base64 encoded audio data
     # task_context: str
 
 

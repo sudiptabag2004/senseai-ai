@@ -9,6 +9,7 @@ from api.models import TaskAIResponseType, AIChatRequest, TaskType
 from api.llm import run_llm_with_instructor, stream_llm_with_instructor
 from api.settings import settings
 from api.utils.logging import logger
+from api.utils.audio import transcribe_audio
 from api.db import (
     get_question_chat_history_for_user,
     get_question,
@@ -59,6 +60,20 @@ async def ai_response_for_question(request: AIChatRequest):
     question_description = construct_description_from_blocks(question["blocks"])
     question_details = f"""Task:\n```\n{question_description}\n```"""
 
+    # Process audio data if provided
+    user_response = request.user_response
+    if request.audio_data:
+        try:
+            # Transcribe audio to text
+            transcribed_text = await transcribe_audio(request.audio_data)
+            user_response = transcribed_text
+            logger.info(f"Transcribed audio: {transcribed_text}")
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to process audio: {str(e)}"
+            )
+
     chat_history = (
         [
             {
@@ -70,7 +85,7 @@ async def ai_response_for_question(request: AIChatRequest):
         + [
             {
                 "role": "user",
-                "content": request.user_response,
+                "content": user_response,
             }
         ]
     )
