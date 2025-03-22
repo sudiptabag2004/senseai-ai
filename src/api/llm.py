@@ -293,6 +293,7 @@ def stream_llm_with_instructor(
     messages: List,
     response_model: BaseModel,
     max_completion_tokens: int,
+    **kwargs,
 ):
     client = instructor.from_openai(openai.OpenAI(api_key=api_key))
 
@@ -300,6 +301,8 @@ def stream_llm_with_instructor(
 
     if not is_reasoning_model(model):
         model_kwargs["temperature"] = 0
+
+    model_kwargs.update(kwargs)
 
     return client.chat.completions.create_partial(
         model=model,

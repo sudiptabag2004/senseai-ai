@@ -1925,13 +1925,13 @@ async def get_user_active_in_last_n_days(user_id: int, n: int, cohort_id: int):
         fetch_all=True,
     )
 
-    active_days = []
+    active_days = set()
 
     for date, count in activity_per_day:
         if count > 0:
-            active_days.append(date)
+            active_days.add(date)
 
-    return active_days
+    return list(active_days)
 
 
 async def get_user_activity_for_year(user_id: int, year: int):
@@ -1969,9 +1969,12 @@ def get_user_streak_from_usage_dates(user_usage_dates: List[str]) -> int:
     today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
     current_streak = []
 
-    user_usage_dates = [
-        get_date_from_str(date_str, "IST") for date_str in user_usage_dates
-    ]
+    user_usage_dates = sorted(
+        list(
+            set([get_date_from_str(date_str, "IST") for date_str in user_usage_dates])
+        ),
+        reverse=True,
+    )
 
     for i, date in enumerate(user_usage_dates):
         if i == 0 and (today - date).days > 1:
