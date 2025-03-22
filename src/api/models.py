@@ -500,8 +500,7 @@ class AIChatRequest(BaseModel):
     chat_history: Optional[List[Dict]] = None
     question_id: Optional[int] = None
     user_id: Optional[int] = None
-    audio_data: Optional[str] = None  # Base64 encoded audio data
-    # task_context: str
+    response_type: Optional[ChatResponseType] = None
 
 
 class MarkTaskCompletedRequest(BaseModel):
@@ -511,3 +510,14 @@ class MarkTaskCompletedRequest(BaseModel):
 class GetUserStreakResponse(BaseModel):
     streak_count: int
     active_days: List[str]
+
+
+class PresignedUrlRequest(BaseModel):
+    file_type: str
+    content_type: str = "audio/wav"
+
+
+class PresignedUrlResponse(BaseModel):
+    presigned_url: str
+    file_key: str
+    file_uuid: str

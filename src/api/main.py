@@ -13,6 +13,7 @@ from api.routes import (
     cv_review,
     milestone,
     hva,
+    file,
     ai,
 )
 
@@ -27,6 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(file.router, prefix="/file", tags=["file"])
 app.include_router(ai.router, prefix="/ai", tags=["ai"])
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(task.router, prefix="/tasks", tags=["tasks"])
