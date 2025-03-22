@@ -82,7 +82,7 @@ RUN test -f /src/frontend/.streamlit/secrets.prod.toml && rm -f /src/frontend/.s
 RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY=$OPENAI_API_KEY\nBACKEND_URL=$BACKEND_URL" >> /src/frontend/lib/.env
 
 
-RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nGOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> /src/api/.env
+RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nGOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME" >> /src/api/.env
 
 # Clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*

@@ -398,6 +398,7 @@ class UpdateQuestionRequest(BaseModel):
     id: int
     blocks: List[dict]
     answer: str | None
+    input_type: TaskInputType | None
 
 
 class UpdateQuizRequest(BaseModel):
@@ -521,10 +522,6 @@ class PresignedUrlRequest(BaseModel):
 class PresignedUrlResponse(BaseModel):
     presigned_url: str
     file_key: str
-    file_uuid: str
-
-
-class S3FetchPresignedUrlRequest(BaseModel):
     file_uuid: str
 
 

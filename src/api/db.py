@@ -1384,10 +1384,11 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET answer = ? WHERE id = ?
+                UPDATE {questions_table_name} SET answer = ?, input_type = ? WHERE id = ?
                 """,
                 (
                     question["answer"],
+                    str(question["input_type"]),
                     question["id"],
                 ),
             )

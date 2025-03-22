@@ -10,23 +10,21 @@ from api.utils.s3 import generate_s3_uuid, get_audio_upload_s3_key
 from api.models import (
     PresignedUrlRequest,
     PresignedUrlResponse,
-    S3FetchPresignedUrlRequest,
     S3FetchPresignedUrlResponse,
 )
 
 router = APIRouter()
 
 
-@router.post("/presigned-url/create", response_model=PresignedUrlResponse)
+@router.put("/presigned-url/create", response_model=PresignedUrlResponse)
 async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlResponse:
     try:
         s3_client = boto3.client(
-            "s3",
+            "s3", config=boto3.session.Config(signature_version="s3v4")
         )
 
         uuid = generate_s3_uuid()
         key = get_audio_upload_s3_key(uuid)
-
         presigned_url = s3_client.generate_presigned_url(
             "put_object",
             Params={
@@ -52,18 +50,20 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
-@router.post("/presigned-url/get")
+@router.get("/presigned-url/get")
 async def get_download_presigned_url(
-    request: S3FetchPresignedUrlRequest,
+    uuid: str,
 ) -> S3FetchPresignedUrlResponse:
     try:
-        s3_client = boto3.client("s3")
+        s3_client = boto3.client(
+            "s3", config=boto3.session.Config(signature_version="s3v4")
+        )
 
         presigned_url = s3_client.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": settings.s3_bucket_name,
-                "Key": get_audio_upload_s3_key(request.file_uuid),
+                "Key": get_audio_upload_s3_key(uuid),
             },
             ExpiresIn=3600,  # URL expires in 1 hour
         )

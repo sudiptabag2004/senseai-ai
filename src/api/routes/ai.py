@@ -108,10 +108,6 @@ async def ai_response_for_question(request: AIChatRequest):
         + [user_message]
     )
 
-    import ipdb
-
-    ipdb.set_trace()
-
     class Output(BaseModel):
         if question["response_type"] == TaskAIResponseType.CHAT:
             feedback: str = Field(
