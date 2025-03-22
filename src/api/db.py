@@ -1489,8 +1489,8 @@ async def store_messages(
             # Insert the new message
             await cursor.execute(
                 f"""
-            INSERT INTO {chat_history_table_name} (user_id, question_id, role, content, response_type)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO {chat_history_table_name} (user_id, question_id, role, content, response_type, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
                     user_id,
@@ -1498,6 +1498,7 @@ async def store_messages(
                     message.role,
                     message.content,
                     message.response_type,
+                    message.created_at,
                 ),
             )
 

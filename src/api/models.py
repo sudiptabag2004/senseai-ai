@@ -421,6 +421,7 @@ class StoreMessageRequest(BaseModel):
     role: str
     content: str | None
     response_type: ChatResponseType | None = None
+    created_at: datetime
 
 
 class StoreMessagesRequest(BaseModel):
@@ -521,3 +522,11 @@ class PresignedUrlResponse(BaseModel):
     presigned_url: str
     file_key: str
     file_uuid: str
+
+
+class S3FetchPresignedUrlRequest(BaseModel):
+    file_uuid: str
+
+
+class S3FetchPresignedUrlResponse(BaseModel):
+    url: str

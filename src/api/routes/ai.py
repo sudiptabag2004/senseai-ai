@@ -21,6 +21,20 @@ from api.utils.audio import prepare_audio_input_for_ai
 router = APIRouter()
 
 
+def get_user_message_for_audio(uuid: str):
+    audio_data = download_file_from_s3_as_bytes(get_audio_upload_s3_key(uuid))
+
+    return [
+        {
+            "type": "input_audio",
+            "input_audio": {
+                "data": prepare_audio_input_for_ai(audio_data),
+                "format": "wav",
+            },
+        },
+    ]
+
+
 @router.post("/chat")
 async def ai_response_for_question(request: AIChatRequest):
     if request.question_id is None and request.question is None:
@@ -48,6 +62,7 @@ async def ai_response_for_question(request: AIChatRequest):
         chat_history = await get_question_chat_history_for_user(
             request.question_id, request.user_id
         )
+
         # TODO: account for audio in history
         chat_history = [
             {
@@ -61,28 +76,23 @@ async def ai_response_for_question(request: AIChatRequest):
         # TODO: account for audio in history
         chat_history = request.chat_history
 
+    if request.response_type == ChatResponseType.AUDIO:
+        for message in chat_history:
+            if message["role"] != "user":
+                continue
+
+            message["content"] = get_user_message_for_audio(message["content"])
+
     question_description = construct_description_from_blocks(question["blocks"])
     question_details = f"""Task:\n```\n{question_description}\n```"""
 
-    if request.response_type == ChatResponseType.AUDIO:
-        audio_data = download_file_from_s3_as_bytes(
-            get_audio_upload_s3_key(request.user_response)
-        )
+    user_message = (
+        get_user_message_for_audio(request.user_response)
+        if request.response_type == ChatResponseType.AUDIO
+        else request.user_response
+    )
 
-        user_message = {
-            "role": "user",
-            "content": [
-                {
-                    "type": "input_audio",
-                    "input_audio": {
-                        "data": prepare_audio_input_for_ai(audio_data),
-                        "format": "wav",
-                    },
-                },
-            ],
-        }
-    else:
-        user_message = {"role": "user", "content": request.user_response}
+    user_message = {"role": "user", "content": user_message}
 
     if question["response_type"] in [TaskAIResponseType.CHAT, TaskAIResponseType.EXAM]:
         question_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{question['answer']}\n```"""
@@ -97,6 +107,10 @@ async def ai_response_for_question(request: AIChatRequest):
         + chat_history
         + [user_message]
     )
+
+    import ipdb
+
+    ipdb.set_trace()
 
     class Output(BaseModel):
         if question["response_type"] == TaskAIResponseType.CHAT:
