@@ -1072,6 +1072,23 @@ def convert_question_db_to_dict(question) -> Dict:
     }
 
 
+async def get_scorecard(scorecard_id: int) -> Dict:
+    scorecard = await execute_db_operation(
+        f"SELECT id, title, criteria FROM {scorecards_table_name} WHERE id = ?",
+        (scorecard_id,),
+        fetch_one=True,
+    )
+
+    if not scorecard:
+        return None
+
+    return {
+        "id": scorecard[0],
+        "title": scorecard[1],
+        "criteria": json.loads(scorecard[2]),
+    }
+
+
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
@@ -1088,6 +1105,9 @@ async def get_question(question_id: int) -> Dict:
         return None
 
     question = convert_question_db_to_dict(question)
+
+    if question["scorecard_id"] is not None:
+        question["scorecard"] = await get_scorecard(question["scorecard_id"])
 
     question["blocks"] = await fetch_blocks(question_id, "question")
 
@@ -1407,6 +1427,8 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
     org_id = task["org_id"]
 
+    scorecard_uuid_to_id = {}
+
     # Execute all operations in a single transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -1436,21 +1458,25 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
             await store_blocks(cursor, question["blocks"], question_id, "question")
 
             scorecard_id = None
-            if question["scorecard"]:
-                await cursor.execute(
-                    f"""
-                    INSERT INTO {scorecards_table_name} (org_id, title, criteria) VALUES (?, ?, ?)
-                    """,
-                    (
-                        org_id,
-                        question["scorecard"]["title"],
-                        json.dumps(question["scorecard"]["criteria"]),
-                    ),
-                )
-
-                scorecard_id = cursor.lastrowid
-            elif question["scorecard_id"] is not None:
+            if question["scorecard_id"] is not None:
                 scorecard_id = question["scorecard_id"]
+            elif question["scorecard"]:
+                if question["scorecard"]["id"] not in scorecard_uuid_to_id:
+                    await cursor.execute(
+                        f"""
+                        INSERT INTO {scorecards_table_name} (org_id, title, criteria) VALUES (?, ?, ?)
+                        """,
+                        (
+                            org_id,
+                            question["scorecard"]["title"],
+                            json.dumps(question["scorecard"]["criteria"]),
+                        ),
+                    )
+
+                    scorecard_id = cursor.lastrowid
+                    scorecard_uuid_to_id[question["scorecard"]["id"]] = scorecard_id
+                else:
+                    scorecard_id = scorecard_uuid_to_id[question["scorecard"]["id"]]
 
             if scorecard_id is not None:
                 await cursor.execute(
