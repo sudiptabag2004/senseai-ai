@@ -37,6 +37,8 @@ from api.config import (
     group_role_mentor,
     uncategorized_milestone_color,
     task_completions_table_name,
+    scorecards_table_name,
+    question_scorecards_table_name,
 )
 from api.models import (
     LeaderboardViewType,
@@ -410,6 +412,14 @@ async def create_blocks_table(cursor):
             )"""
     )
 
+    await cursor.execute(
+        f"""CREATE INDEX idx_block_task_id ON {blocks_table_name} (task_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_block_question_id ON {blocks_table_name} (question_id)"""
+    )
+
 
 async def create_questions_table(cursor):
     await cursor.execute(
@@ -429,6 +439,49 @@ async def create_questions_table(cursor):
                 is_feedback_shown BOOLEAN,
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_question_task_id ON {questions_table_name} (task_id)"""
+    )
+
+
+async def create_scorecards_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {scorecards_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                criteria TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_scorecard_org_id ON {scorecards_table_name} (org_id)"""
+    )
+
+
+async def create_question_scorecards_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {question_scorecards_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id INTEGER NOT NULL,
+                scorecard_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (scorecard_id) REFERENCES {scorecards_table_name}(id) ON DELETE CASCADE,
+                UNIQUE(question_id, scorecard_id)
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_question_scorecard_question_id ON {question_scorecards_table_name} (question_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_question_scorecard_scorecard_id ON {question_scorecards_table_name} (scorecard_id)"""
     )
 
 
@@ -565,6 +618,12 @@ async def init_db():
             if not await check_table_exists(questions_table_name, cursor):
                 await create_questions_table(cursor)
 
+            if not await check_table_exists(scorecards_table_name, cursor):
+                await create_scorecards_table(cursor)
+
+            if not await check_table_exists(question_scorecards_table_name, cursor):
+                await create_question_scorecards_table(cursor)
+
             if not await check_table_exists(blocks_table_name, cursor):
                 await create_blocks_table(cursor)
 
@@ -614,6 +673,10 @@ async def init_db():
             await create_tasks_table(cursor)
 
             await create_questions_table(cursor)
+
+            await create_scorecards_table(cursor)
+
+            await create_question_scorecards_table(cursor)
 
             await create_blocks_table(cursor)
 
@@ -1005,15 +1068,17 @@ def convert_question_db_to_dict(question) -> Dict:
         "answer": question[2],
         "input_type": question[3],
         "response_type": question[4],
+        "scorecard_id": question[5],
     }
 
 
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
-        SELECT id, type, answer, input_type, response_type
-        FROM {questions_table_name}
-        WHERE id = ?
+        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id
+        FROM {questions_table_name} q
+        LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
+        WHERE q.id = ?
         """,
         (question_id,),
         fetch_one=True,
@@ -1116,7 +1181,7 @@ def construct_description_from_blocks(
 async def get_basic_task_details(task_id: int) -> Dict:
     task = await execute_db_operation(
         f"""
-        SELECT id, title, type, status
+        SELECT id, title, type, status, org_id
         FROM {tasks_table_name}
         WHERE id = ? AND deleted_at IS NULL
         """,
@@ -1132,6 +1197,7 @@ async def get_basic_task_details(task_id: int) -> Dict:
         "title": task[1],
         "type": task[2],
         "status": task[3],
+        "org_id": task[4],
     }
 
 
@@ -1146,8 +1212,9 @@ async def get_task(task_id: int):
     elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
         questions = await execute_db_operation(
             f"""
-            SELECT id, type, answer, input_type, response_type
-            FROM {questions_table_name}
+            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id
+            FROM {questions_table_name} q
+            LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
             WHERE task_id = ? ORDER BY position ASC
             """,
             (task_id,),
@@ -1333,6 +1400,13 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
     if not does_task_exist(task_id):
         return False
 
+    task = await get_basic_task_details(task_id)
+
+    if not task:
+        return False
+
+    org_id = task["org_id"]
+
     # Execute all operations in a single transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -1360,6 +1434,31 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
             question_id = cursor.lastrowid
             await store_blocks(cursor, question["blocks"], question_id, "question")
+
+            scorecard_id = None
+            if question["scorecard"]:
+                await cursor.execute(
+                    f"""
+                    INSERT INTO {scorecards_table_name} (org_id, title, criteria) VALUES (?, ?, ?)
+                    """,
+                    (
+                        org_id,
+                        question["scorecard"]["title"],
+                        json.dumps(question["scorecard"]["criteria"]),
+                    ),
+                )
+
+                scorecard_id = cursor.lastrowid
+            elif question["scorecard_id"] is not None:
+                scorecard_id = question["scorecard_id"]
+
+            if scorecard_id is not None:
+                await cursor.execute(
+                    f"""
+                    INSERT INTO {question_scorecards_table_name} (question_id, scorecard_id) VALUES (?, ?)
+                    """,
+                    (question_id, scorecard_id),
+                )
 
         # Update task status to published
         await cursor.execute(
@@ -4238,3 +4337,20 @@ async def drop_task_completions_table():
         await cursor.execute(f"DROP TABLE IF EXISTS {task_completions_table_name}")
 
         await conn.commit()
+
+
+async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
+    scorecards = await execute_db_operation(
+        f"SELECT id, title, criteria FROM {scorecards_table_name} WHERE org_id = ?",
+        (org_id,),
+        fetch_all=True,
+    )
+
+    return [
+        {
+            "id": scorecard[0],
+            "title": scorecard[1],
+            "criteria": json.loads(scorecard[2]),
+        }
+        for scorecard in scorecards
+    ]

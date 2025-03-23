@@ -190,7 +190,7 @@ class Block(BaseModel):
     id: str
     type: str
     props: Dict
-    content: str | List
+    content: List
     children: List
     position: Optional[int] = (
         None  # not present when sent from frontend at the time of publishing
@@ -236,7 +236,7 @@ class TaskAIResponseType(Enum):
 
 
 class QuestionType(Enum):
-    SUBJECTIVE = "subjective"
+    OPEN_ENDED = "subjective"
     OBJECTIVE = "objective"
 
     def __str__(self):
@@ -251,7 +251,7 @@ class QuestionType(Enum):
 
 class DraftQuestion(BaseModel):
     blocks: List[Block]
-    answer: str
+    answer: str | None
     type: QuestionType
     input_type: TaskInputType
     response_type: TaskAIResponseType
@@ -259,6 +259,7 @@ class DraftQuestion(BaseModel):
 
 class PublishedQuestion(DraftQuestion):
     id: int
+    scorecard_id: Optional[int] = None
 
 
 class QuizTask(Task):
@@ -382,11 +383,33 @@ class PublishLearningMaterialTaskRequest(BaseModel):
     blocks: List[dict]
 
 
+class ScorecardCriterion(BaseModel):
+    name: str
+    description: str
+    min_score: float
+    max_score: float
+
+
+class BaseScorecard(BaseModel):
+    title: str
+    criteria: List[ScorecardCriterion]
+
+
+class NewScorecard(BaseScorecard):
+    id: str
+
+
+class Scorecard(BaseScorecard):
+    id: int
+
+
 class PublishQuestionRequest(DraftQuestion):
     coding_languages: List[str] | None
     generation_model: str | None
     max_attempts: int | None
     is_feedback_shown: bool | None
+    scorecard_id: Optional[int] = None
+    scorecard: Optional[NewScorecard] = None
 
 
 class PublishQuizRequest(BaseModel):

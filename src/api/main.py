@@ -15,6 +15,7 @@ from api.routes import (
     hva,
     file,
     ai,
+    scorecard,
 )
 
 app = FastAPI()
@@ -41,6 +42,7 @@ app.include_router(badge.router, prefix="/badges", tags=["badges"])
 app.include_router(cv_review.router, prefix="/cv_review", tags=["cv_review"])
 app.include_router(tag.router, prefix="/tags", tags=["tags"])
 app.include_router(milestone.router, prefix="/milestones", tags=["milestones"])
+app.include_router(scorecard.router, prefix="/scorecards", tags=["scorecards"])
 app.include_router(hva.router, prefix="/hva", tags=["hva"])
 
 
