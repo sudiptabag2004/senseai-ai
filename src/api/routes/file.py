@@ -20,7 +20,9 @@ router = APIRouter()
 async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlResponse:
     try:
         s3_client = boto3.client(
-            "s3", config=boto3.session.Config(signature_version="s3v4")
+            "s3",
+            region_name="ap-south-1",
+            config=boto3.session.Config(signature_version="s3v4"),
         )
 
         uuid = generate_s3_uuid()
@@ -32,7 +34,7 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
                 "Key": key,
                 "ContentType": request.content_type,
             },
-            ExpiresIn=3600,  # URL expires in 1 hour
+            ExpiresIn=600,  # URL expires in 1 hour
         )
 
         return {
@@ -56,7 +58,9 @@ async def get_download_presigned_url(
 ) -> S3FetchPresignedUrlResponse:
     try:
         s3_client = boto3.client(
-            "s3", config=boto3.session.Config(signature_version="s3v4")
+            "s3",
+            region_name="ap-south-1",
+            config=boto3.session.Config(signature_version="s3v4"),
         )
 
         presigned_url = s3_client.generate_presigned_url(
@@ -65,7 +69,7 @@ async def get_download_presigned_url(
                 "Bucket": settings.s3_bucket_name,
                 "Key": get_audio_upload_s3_key(uuid),
             },
-            ExpiresIn=3600,  # URL expires in 1 hour
+            ExpiresIn=600,  # URL expires in 1 hour
         )
 
         return {"url": presigned_url}
