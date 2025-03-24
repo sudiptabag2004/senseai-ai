@@ -249,12 +249,33 @@ class QuestionType(Enum):
             return self.value == other.value
 
 
+class ScorecardCriterion(BaseModel):
+    name: str
+    description: str
+    min_score: float
+    max_score: float
+
+
+class BaseScorecard(BaseModel):
+    title: str
+    criteria: List[ScorecardCriterion]
+
+
+class NewScorecard(BaseScorecard):
+    id: str | int
+
+
+class Scorecard(BaseScorecard):
+    id: int
+
+
 class DraftQuestion(BaseModel):
     blocks: List[Block]
     answer: str | None
     type: QuestionType
     input_type: TaskInputType
     response_type: TaskAIResponseType
+    scorecard: Optional[NewScorecard] = None
 
 
 class PublishedQuestion(DraftQuestion):
@@ -381,26 +402,6 @@ class CreateDraftTaskResponse(BaseModel):
 class PublishLearningMaterialTaskRequest(BaseModel):
     title: str
     blocks: List[dict]
-
-
-class ScorecardCriterion(BaseModel):
-    name: str
-    description: str
-    min_score: float
-    max_score: float
-
-
-class BaseScorecard(BaseModel):
-    title: str
-    criteria: List[ScorecardCriterion]
-
-
-class NewScorecard(BaseScorecard):
-    id: str
-
-
-class Scorecard(BaseScorecard):
-    id: int
 
 
 class PublishQuestionRequest(DraftQuestion):
