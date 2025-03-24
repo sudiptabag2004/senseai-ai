@@ -50,6 +50,8 @@ COPY src/frontend/.streamlit/config.prod.toml /src/frontend/.streamlit/config.to
 # Remove the /src/lib/.env and .env.aws file if it exists
 RUN test -f /src/frontend/lib/.env && rm -f /src/frontend/lib/.env || true
 RUN test -f /src/frontend/lib/.env.aws && rm -f /src/frontend/lib/.env.aws || true
+RUN test -f /src/api/.env && rm -f /src/api/.env || true
+RUN test -f /src/api/.env.aws && rm -f /src/api/.env.aws || true
 
 # Expose the port on which your FastAPI app listens
 # EXPOSE 8001

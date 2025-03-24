@@ -4,9 +4,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from functools import lru_cache
 
-if "AWS_ACCESS_KEY_ID" not in os.environ:
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    load_dotenv(join(root_dir, ".env.aws"))
+root_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = join(root_dir, ".env.aws")
+if os.path.exists(env_path):
+    load_dotenv(env_path)
 
 
 class Settings(BaseSettings):
