@@ -1396,7 +1396,7 @@ async def does_task_exist(task_id: int) -> bool:
 async def publish_learning_material_task(
     task_id: int, title: str, blocks: List
 ) -> LearningMaterialTask:
-    if not does_task_exist(task_id):
+    if not await does_task_exist(task_id):
         return False
 
     # Execute all operations in a single transaction
@@ -1417,7 +1417,7 @@ async def publish_learning_material_task(
 
 
 async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
-    if not does_task_exist(task_id):
+    if not await does_task_exist(task_id):
         return False
 
     task = await get_basic_task_details(task_id)
@@ -1498,7 +1498,7 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
 
 async def update_quiz(task_id: int, title: str, questions: List[Dict]):
-    if not does_task_exist(task_id):
+    if not await does_task_exist(task_id):
         return False
 
     # Execute all operations in a single transaction
