@@ -16,6 +16,7 @@ demo/db/
 src/db
 scripts
 .env.*
+!.env.*example
 *.pkl
 secrets.toml
 secrets.*.toml

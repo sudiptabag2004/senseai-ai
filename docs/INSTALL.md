@@ -1,15 +1,5 @@
 ## Installation
 
-### Using Docker
-
-```
-docker compose -f docker-compose.ai.dev.yml pull
-docker compose -f docker-compose.ai.dev.yml -p sensai-dev up -d
-```
-
-Once the containers are up, the app will be hosted on http://localhost:8501 and the api will be hosted on http://localhost:8001.
-
-### From source
 - Install `virtualenv`
 - Create a new virtual environment (choose Python3.8+)
   ```
@@ -35,8 +25,8 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
   export PATH="/path/to/poppler/bin:$PATH"
   ```
   You can get the path to poppler using `brew list poppler`
-- Copy `src/frontend/lib/.env.example` to `src/frontend/lib/.env` and set the OpenAI credentials. Refer to the `Frontend` section in [ENV.md](./ENV.md) for more details on the environment variables. 
-- Copy `src/frontend/.streamlit/secrets.example.toml` to `src/frontend/.streamlit/secrets.toml` and set the Google credentials. Refer [this](https://github.com/kajarenc/stauthlib/tree/main) for more details on how to set up the credentials.
+- Copy `src/api/.env.example` to `src/api/.env` and set the OpenAI credentials. Refer to [ENV.md](./ENV.md) for more details on the environment variables. 
+- Copy `src/api/.env.aws.example` to `src/api/.env.aws` and set the AWS credentials.
 - Initialize the database
   ```
   python src/startup.py
@@ -48,12 +38,6 @@ Once the containers are up, the app will be hosted on http://localhost:8501 and 
 
     The api will be hosted on http://localhost:8001.
     The docs will be available on http://localhost:8001/docs
-- Running the app locally
-    ```
-    cd src/frontend; streamlit run home.py
-    ```
-
-    The app will be hosted on http://localhost:8501.
 
 ### Additional steps for contributors
 - Set up `pre-commit` hooks. `pre-commit` should already be installed while installing requirements from the `requirements-dev.txt` file.
