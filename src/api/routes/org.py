@@ -30,13 +30,16 @@ router = APIRouter()
 async def create_organization(
     request: CreateOrganizationRequest,
 ) -> CreateOrganizationResponse:
-    org_id = await create_organization_with_user(
-        request.name,
-        request.slug,
-        request.user_id,
-    )
+    try:
+        org_id = await create_organization_with_user(
+            request.name,
+            request.slug,
+            request.user_id,
+        )
 
-    return {"id": org_id}
+        return {"id": org_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{org_id}")

@@ -3315,6 +3315,16 @@ async def add_user_to_org_by_user_id(
 
 
 async def create_organization_with_user(org_name: str, slug: str, user_id: int):
+    # Check if organization with the given slug already exists
+    existing_org = await execute_db_operation(
+        f"SELECT id FROM {organizations_table_name} WHERE slug = ?",
+        (slug,),
+        fetch_one=True,
+    )
+
+    if existing_org:
+        raise Exception(f"Organization with slug '{slug}' already exists")
+
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
