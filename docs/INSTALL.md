@@ -9,6 +9,11 @@
   ```
   source venv/bin/activate
   ```
+- Clone the repository:
+  ```
+  git clone https://gitlab.com/hvacademy/sensai-ai.git
+  cd sensai-ai
+  ```
 - Install packages
   ```
   pip install -r requirements-dev.txt

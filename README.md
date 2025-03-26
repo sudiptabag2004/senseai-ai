@@ -22,6 +22,3 @@ Use the `Dockerfile` provided to build a docker image and deploy the image to wh
 
 ## Community
 We are building a community of creators, builders, teachers, learners, parents, entrepreneurs, non-profits and volunteers who are excited about the future of AI and education. If you identify as one and want to be part of it, consider [joining our community](https://chat.whatsapp.com/LmiulDbWpcXIgqNK6fZyxe).
-
-Our thinking on how AI can impact Education is summarized in the mindmap below:
-![ai + education thesis](./images/thesis.png)
