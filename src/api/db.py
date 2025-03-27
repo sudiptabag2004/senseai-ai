@@ -4105,7 +4105,7 @@ async def migrate_context_column():
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
-        # await cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN context")
+        await cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN context")
 
         await cursor.execute(
             f"ALTER TABLE {questions_table_name} ADD COLUMN context TEXT"
