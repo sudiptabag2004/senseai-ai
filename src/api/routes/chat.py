@@ -3,7 +3,6 @@ from typing import List, Dict
 from api.db import (
     store_messages as store_messages_in_db,
     get_all_chat_history as get_all_chat_history_from_db,
-    get_user_chat_history_for_tasks as get_user_chat_history_for_tasks_from_db,
     get_task_chat_history_for_user as get_task_chat_history_for_user_from_db,
     delete_all_chat_history as delete_all_chat_history_from_db,
 )
@@ -36,15 +35,6 @@ async def get_user_chat_history_for_task(
 ) -> List[ChatMessage]:
     return await get_task_chat_history_for_user_from_db(
         user_id=user_id, task_id=task_id
-    )
-
-
-@router.get("/user/{user_id}/tasks", response_model=List[Dict])
-async def get_user_chat_history_for_tasks(
-    user_id: int, task_ids: List[int] = Query(...)
-) -> List[Dict]:
-    return await get_user_chat_history_for_tasks_from_db(
-        task_ids=task_ids, user_id=user_id
     )
 
 

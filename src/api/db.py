@@ -378,7 +378,6 @@ async def create_tasks_table(cursor):
                     type TEXT NOT NULL CHECK (type IN ('learning_material', 'quiz', 'exam')),
                     title TEXT NOT NULL,
                     status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
-                    context TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     deleted_at DATETIME,
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
@@ -437,6 +436,7 @@ async def create_questions_table(cursor):
                 deleted_at DATETIME,
                 max_attempts INTEGER,
                 is_feedback_shown BOOLEAN,
+                context TEXT,
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )"""
     )
@@ -755,116 +755,6 @@ async def create_draft_task_for_course(
         return task_id
 
 
-async def store_task(
-    name: str,
-    description: str,
-    answer: str,
-    tags: List[Dict],
-    input_type: str,
-    response_type: str,
-    coding_languages: List[str],
-    generation_model: str,
-    verified: bool,
-    tests: List[dict],
-    org_id: int,
-    context: str,
-    task_type: str,
-    max_attempts: int,
-    is_feedback_shown: bool,
-):
-    coding_language_str = serialise_list_to_str(coding_languages)
-
-    insert_task_query = f"""
-    INSERT INTO {tasks_table_name} 
-    (name, description, answer, input_type, coding_language, generation_model, verified, org_id, response_type, context, type, max_attempts, is_feedback_shown)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """
-    task_params = (
-        name,
-        description,
-        answer,
-        input_type,
-        coding_language_str,
-        generation_model,
-        verified,
-        org_id,
-        response_type,
-        context,
-        task_type,
-        max_attempts,
-        is_feedback_shown,
-    )
-
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Insert task and get its ID
-        await cursor.execute(insert_task_query, task_params)
-        task_id = cursor.lastrowid
-
-        # Insert tags
-        tag_query = (
-            f"INSERT INTO {task_tags_table_name} (task_id, tag_id) VALUES (?, ?)"
-        )
-        tag_params = [(task_id, tag["id"]) for tag in tags]
-        await cursor.executemany(
-            tag_query,
-            tag_params,
-        )
-
-        if tests:
-            # Insert test cases
-            test_query = f"INSERT INTO {tests_table_name} (task_id, input, output, description) VALUES (?, ?, ?, ?)"
-            test_params = [
-                (
-                    task_id,
-                    json.dumps(test["input"]),
-                    test["output"],
-                    test.get("description", None),
-                )
-                for test in tests
-            ]
-            await cursor.executemany(test_query, test_params)
-
-        await conn.commit()
-        return task_id
-
-
-async def update_task(
-    task_id: int,
-    name: str,
-    description: str,
-    answer: str,
-    input_type: str,
-    response_type: str,
-    coding_languages: List[str],
-    context: str,
-    max_attempts: int,
-    is_feedback_shown: bool,
-):
-    coding_language_str = serialise_list_to_str(coding_languages)
-
-    await execute_db_operation(
-        f"""
-    UPDATE {tasks_table_name}
-    SET name = ?, description = ?, answer = ?, input_type = ?, coding_language = ?, response_type = ?, context = ?, max_attempts = ?, is_feedback_shown = ?
-    WHERE id = ?
-    """,
-        (
-            name,
-            description,
-            answer,
-            input_type,
-            coding_language_str,
-            response_type,
-            context,
-            max_attempts,
-            is_feedback_shown,
-            task_id,
-        ),
-    )
-
-
 def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict]:
     return [
         {"input": json.loads(row[0]), "output": row[1], "description": row[2]}
@@ -872,122 +762,23 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
     ]
 
 
-def convert_task_db_to_dict(task, tests=None, has_milestone=False):
-    task_table_attr_max_index = 16
-
-    tag_ids = list(
-        map(int, deserialise_list_from_str(task[task_table_attr_max_index + 1]))
-    )
-    tag_names = deserialise_list_from_str(task[4])
-
-    tags = [{"id": tag_ids[i], "name": tag_names[i]} for i in range(len(tag_ids))]
-
-    task_dict = {
-        "id": task[0],
-        "name": task[1],
-        "description": task[2],
-        "answer": task[3],
-        "tags": tags,
-        "input_type": task[5],
-        "coding_language": deserialise_list_from_str(task[6]),
-        "generation_model": task[7],
-        "verified": bool(task[8]),
-        "timestamp": task[9],
-        "org_id": task[10],
-        "org_name": task[11],
-        "response_type": task[12],
-        "context": task[13],
-        "type": task[14],
-        "max_attempts": task[15],
-        "is_feedback_shown": bool(task[16]),
-    }
-
-    if has_milestone:
-        task_dict["milestone_id"] = task[task_table_attr_max_index + 2]
-        task_dict["milestone_name"] = task[task_table_attr_max_index + 3]
-
-    if tests is not None:
-        task_dict["tests"] = tests
-
-    return task_dict
-
-
-async def get_all_tasks_for_org_or_course(
-    org_id: int = None, course_id: int = None, return_tests: bool = False
-):
-    if org_id is None and course_id is None:
-        raise ValueError("Either org_id or course_id must be provided")
-    if org_id is not None and course_id is not None:
-        raise ValueError("Only one of org_id or course_id can be provided")
-
-    select_query_params = ""
-    has_milestone = False
-    if course_id is not None:
-        select_query_params = f", ct.milestone_id, COALESCE(m.name, '{uncategorized_milestone_name}') as milestone_name"
-        has_milestone = True
-
+async def get_all_learning_material_tasks_for_course(course_id: int):
     query = f"""
-    SELECT t.id, t.name, t.description, t.answer,
-        GROUP_CONCAT(tg.name) as tag_names,
-        t.input_type, t.coding_language, t.generation_model, t.verified, t.timestamp, o.id, o.name as org_name,
-        t.response_type, t.context, t.type, t.max_attempts, t.is_feedback_shown, GROUP_CONCAT(tg.id) as tag_ids{select_query_params}
+    SELECT t.id, t.title, t.type, t.status
     FROM {tasks_table_name} t
-    LEFT JOIN {task_tags_table_name} tt ON t.id = tt.task_id
-    LEFT JOIN {tags_table_name} tg ON tt.tag_id = tg.id
-    LEFT JOIN {organizations_table_name} o ON t.org_id = o.id"""
+    INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+    WHERE ct.course_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}'
+    ORDER BY ct.ordering ASC
+    """
 
-    query_params = ()
-    if org_id is not None:
-        query += " WHERE t.org_id = ? AND t.deleted_at IS NULL"
-        query_params += (org_id,)
-        query += f"""
-        GROUP BY t.id
-        ORDER BY t.timestamp ASC
-        """
-    elif course_id is not None:
-        query += f""" 
-        INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
-        LEFT JOIN {milestones_table_name} m ON ct.milestone_id = m.id
-        WHERE ct.course_id = ? AND t.deleted_at IS NULL
-        GROUP BY t.id
-        ORDER BY ct.ordering ASC
-        """
-        query_params += (course_id,)
+    query_params = (course_id,)
 
     tasks = await execute_db_operation(query, query_params, fetch_all=True)
 
-    tasks_dicts = []
-    for row in tasks:
-        task_id = row[0]
-
-        tests = None
-        if return_tests:
-            # Fetch associated tests for each task
-            tests = await execute_db_operation(
-                f"""
-                SELECT input, output, description FROM {tests_table_name} WHERE task_id = ?
-                """,
-                (task_id,),
-                fetch_all=True,
-            )
-
-            tests = return_test_rows_as_dict(tests)
-
-        tasks_dicts.append(
-            convert_task_db_to_dict(row, tests, has_milestone=has_milestone)
-        )
-
-    return tasks_dicts
-
-
-async def get_all_verified_tasks_for_course(course_id: int, milestone_id: int = None):
-    tasks = await get_all_tasks_for_org_or_course(course_id=course_id)
-    verified_tasks = [task for task in tasks if task["verified"]]
-
-    if milestone_id:
-        return [task for task in verified_tasks if task["milestone_id"] == milestone_id]
-
-    return verified_tasks
+    return [
+        {"id": task[0], "title": task[1], "type": task[2], "status": task[3]}
+        for task in tasks
+    ]
 
 
 async def fetch_blocks(owner_id: int, owner_type: Literal["task", "question"]):
@@ -1069,6 +860,7 @@ def convert_question_db_to_dict(question) -> Dict:
         "input_type": question[3],
         "response_type": question[4],
         "scorecard_id": question[5],
+        "context": question[6],
     }
 
 
@@ -1092,7 +884,7 @@ async def get_scorecard(scorecard_id: int) -> Dict:
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
-        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id
+        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context
         FROM {questions_table_name} q
         LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
         WHERE q.id = ?
@@ -1105,6 +897,9 @@ async def get_question(question_id: int) -> Dict:
         return None
 
     question = convert_question_db_to_dict(question)
+
+    if question["context"]:
+        question["context"] = json.loads(question["context"])
 
     if question["scorecard_id"] is not None:
         question["scorecard"] = await get_scorecard(question["scorecard_id"])
@@ -1232,7 +1027,7 @@ async def get_task(task_id: int):
     elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
         questions = await execute_db_operation(
             f"""
-            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id
+            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context
             FROM {questions_table_name} q
             LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
             WHERE task_id = ? ORDER BY position ASC
@@ -1245,6 +1040,9 @@ async def get_task(task_id: int):
 
         for question in questions:
             question["blocks"] = await fetch_blocks(question["id"], "question")
+            question["context"] = (
+                json.loads(question["context"]) if question["context"] else None
+            )
 
         task_data["questions"] = questions
 
@@ -1438,7 +1236,7 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                INSERT INTO {questions_table_name} (task_id, type, answer, input_type, response_type, coding_language, generation_model, position, max_attempts, is_feedback_shown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO {questions_table_name} (task_id, type, answer, input_type, response_type, coding_language, generation_model, context, position, max_attempts, is_feedback_shown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -1448,6 +1246,7 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
                     str(question["response_type"]),
                     question["coding_languages"],
                     str(question["generation_model"]),
+                    json.dumps(question["context"]) if question["context"] else None,
                     index,
                     question["max_attempts"],
                     question["is_feedback_shown"],
@@ -1509,11 +1308,12 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET answer = ?, input_type = ? WHERE id = ?
+                UPDATE {questions_table_name} SET answer = ?, input_type = ?, context = ? WHERE id = ?
                 """,
                 (
                     question["answer"],
                     str(question["input_type"]),
+                    json.dumps(question["context"]) if question["context"] else None,
                     question["id"],
                 ),
             )
@@ -1750,34 +1550,6 @@ async def get_task_chat_history_for_user(
     )
 
     return [convert_chat_message_to_dict(row) for row in chat_history]
-
-
-async def get_user_chat_history_for_tasks(task_ids: List[int], user_id: int):
-    chat_history = await execute_db_operation(
-        f"""
-    SELECT ch.task_id, t.name, t.description, t.context, ch.id, ch.timestamp, ch.role, ch.content, ch.is_solved, ch.response_type FROM {chat_history_table_name} ch
-    INNER JOIN {tasks_table_name} t ON ch.task_id = t.id
-    WHERE ch.task_id IN ({','.join(map(str, task_ids))}) AND ch.user_id = ?
-    """,
-        (user_id,),
-        fetch_all=True,
-    )
-
-    return [
-        {
-            "task_id": row[0],
-            "task_name": row[1],
-            "task_description": row[2],
-            "task_context": row[3],
-            "chat_id": row[4],
-            "timestamp": row[5],
-            "role": row[6],
-            "content": row[7],
-            "is_solved": bool(row[8]),
-            "response_type": row[9],
-        }
-        for row in chat_history
-    ]
 
 
 async def get_solved_tasks_for_user(
@@ -4135,69 +3907,6 @@ async def get_milestones_for_course(course_id: int):
     ]
 
 
-async def migrate_tasks_table():
-    await execute_db_operation(
-        f"DROP TABLE IF EXISTS temp_tasks",
-        (),
-    )
-
-    await execute_db_operation(
-        f"""CREATE TABLE temp_tasks AS 
-            SELECT id, name, description, answer, input_type, coding_language, 
-            generation_model, verified, timestamp, org_id, response_type, context, 
-            deleted_at, type
-            FROM {tasks_table_name}""",
-        (),
-    )
-
-    await execute_db_operation(
-        f"DROP TABLE {tasks_table_name}",
-        (),
-    )
-
-    await execute_db_operation(
-        f"""CREATE TABLE {tasks_table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            answer TEXT,
-            input_type TEXT,
-            coding_language TEXT,
-            generation_model TEXT,
-            verified BOOLEAN NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            org_id INTEGER NOT NULL,
-            response_type TEXT,
-            context TEXT,
-            deleted_at DATETIME,
-            type TEXT,
-            max_attempts INTEGER,
-            is_feedback_shown BOOLEAN,
-            FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id)
-        )""",
-        (),
-    )
-
-    await execute_db_operation(
-        f"""INSERT INTO {tasks_table_name} 
-            (id, name, description, answer, input_type, coding_language, generation_model, verified, timestamp, org_id, response_type, context, 
-            deleted_at, type, max_attempts, is_feedback_shown)
-            SELECT id, name, description, answer, input_type, coding_language, generation_model, verified, timestamp, org_id, response_type, context, 
-            deleted_at, type, NULL, CASE WHEN type = 'question' THEN true ELSE NULL END FROM temp_tasks""",
-        (),
-    )
-
-    await execute_db_operation(
-        f"DROP TABLE temp_tasks",
-        (),
-    )
-
-    await execute_db_operation(
-        f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)",
-        (),
-    )
-
-
 async def get_user_courses(user_id: int) -> List[Dict]:
     """
     Get all courses for a user based on different roles:
@@ -4390,3 +4099,16 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
         }
         for scorecard in scorecards
     ]
+
+
+async def migrate_context_column():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # await cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN context")
+
+        await cursor.execute(
+            f"ALTER TABLE {questions_table_name} ADD COLUMN context TEXT"
+        )
+
+        await conn.commit()

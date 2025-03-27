@@ -1,15 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
 from api.db import (
-    get_all_tasks_for_org_or_course as get_all_tasks_for_org_or_course_from_db,
     get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
     get_task as get_task_from_db,
     get_scoring_criteria_for_task as get_scoring_criteria_for_task_from_db,
-    store_task as store_task_in_db,
-    update_task as update_task_in_db,
     delete_task as delete_task_in_db,
     delete_tasks as delete_tasks_in_db,
-    get_all_verified_tasks_for_course as get_all_verified_tasks_for_course_from_db,
     get_scoring_criteria_for_tasks as get_scoring_criteria_for_tasks_from_db,
     add_tags_to_task as add_tags_to_task_in_db,
     remove_tags_from_task as remove_tags_from_task_in_db,
@@ -22,6 +18,7 @@ from api.db import (
     publish_quiz as publish_quiz_in_db,
     update_quiz as update_quiz_in_db,
     mark_task_completed as mark_task_completed_in_db,
+    get_all_learning_material_tasks_for_course as get_all_learning_material_tasks_for_course_from_db,
 )
 from api.models import (
     Task,
@@ -45,16 +42,11 @@ from api.models import (
 router = APIRouter()
 
 
-@router.get("/", response_model=List[Task])
-async def get_tasks_for_org(org_id: int, return_tests: bool = False) -> List[Task]:
-    return await get_all_tasks_for_org_or_course_from_db(
-        org_id=org_id, return_tests=return_tests
-    )
-
-
-@router.get("/course/{course_id}/verified")
-async def get_tasks_for_course(course_id: int, milestone_id: int = None) -> List[Task]:
-    return await get_all_verified_tasks_for_course_from_db(course_id, milestone_id)
+@router.get("/course/{course_id}/learning_material")
+async def get_learning_material_tasks_for_course(
+    course_id: int,
+) -> List[Task]:
+    return await get_all_learning_material_tasks_for_course_from_db(course_id)
 
 
 @router.post("/", response_model=CreateDraftTaskResponse)

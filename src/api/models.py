@@ -276,6 +276,7 @@ class DraftQuestion(BaseModel):
     input_type: TaskInputType
     response_type: TaskAIResponseType
     scorecard: Optional[NewScorecard] = None
+    context: Dict | None
 
 
 class PublishedQuestion(DraftQuestion):
@@ -411,6 +412,7 @@ class PublishQuestionRequest(DraftQuestion):
     is_feedback_shown: bool | None
     scorecard_id: Optional[int] = None
     scorecard: Optional[NewScorecard] = None
+    context: Dict | None
 
 
 class PublishQuizRequest(BaseModel):
@@ -423,6 +425,7 @@ class UpdateQuestionRequest(BaseModel):
     blocks: List[dict]
     answer: str | None
     input_type: TaskInputType | None
+    context: Dict | None
 
 
 class UpdateQuizRequest(BaseModel):
