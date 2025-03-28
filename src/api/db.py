@@ -4014,77 +4014,6 @@ async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
     ]
 
 
-async def migrate_chat_history_table():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Drop the existing table if it exists
-        await cursor.execute(f"DROP TABLE IF EXISTS {chat_history_table_name}")
-
-        # Create the new table with question_id instead of task_id
-        await cursor.execute(
-            f"""
-            CREATE TABLE {chat_history_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                question_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT,
-                is_solved BOOLEAN NOT NULL DEFAULT 0,
-                response_type TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
-            )
-        """
-        )
-
-        # Create indices for the new table
-        await cursor.execute(
-            f"""CREATE INDEX idx_chat_history_user_id ON {chat_history_table_name} (user_id)"""
-        )
-        await cursor.execute(
-            f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
-        )
-
-        await conn.commit()
-
-
-async def migrate_chat_history_table():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Drop the existing table if it exists
-        await cursor.execute(f"DROP TABLE IF EXISTS {chat_history_table_name}")
-
-        # Create the new table without is_solved column
-        await cursor.execute(
-            f"""
-            CREATE TABLE {chat_history_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                question_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT,
-                response_type TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id),
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
-            )
-        """
-        )
-
-        # Create indices for the new table
-        await cursor.execute(
-            f"""CREATE INDEX idx_chat_history_user_id ON {chat_history_table_name} (user_id)"""
-        )
-        await cursor.execute(
-            f"""CREATE INDEX idx_chat_history_question_id ON {chat_history_table_name} (question_id)"""
-        )
-
-        await conn.commit()
-
-
 async def drop_task_completions_table():
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -4175,5 +4104,47 @@ async def migrate_task_and_question_tables():
         )
         # Re-enable foreign key constraints after schema modifications are complete
         await cursor.execute(f"PRAGMA foreign_keys = ON")
+
+        await conn.commit()
+
+
+async def migrate_question_answer():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # Fetch all questions with non-null answers
+        questions = await cursor.execute(
+            f"SELECT id, answer FROM {questions_table_name} WHERE answer IS NOT NULL"
+        )
+        questions_data = await questions.fetchall()
+
+        # Prepare updates
+        updates = []
+        for question_id, answer in questions_data:
+            # Create the new answer format
+            new_answer = json.dumps(
+                [
+                    {
+                        "id": "",
+                        "type": "paragraph",
+                        "props": {
+                            "textColor": "default",
+                            "backgroundColor": "default",
+                            "textAlignment": "left",
+                        },
+                        "content": [{"type": "text", "text": answer, "styles": {}}],
+                        "children": [],
+                        "position": None,
+                    }
+                ]
+            )
+
+            updates.append((new_answer, question_id))
+
+        # Update all questions at once
+        if updates:
+            await cursor.executemany(
+                f"UPDATE {questions_table_name} SET answer = ? WHERE id = ?", updates
+            )
 
         await conn.commit()
