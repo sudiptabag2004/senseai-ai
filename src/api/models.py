@@ -238,6 +238,7 @@ class TaskAIResponseType(Enum):
 class QuestionType(Enum):
     OPEN_ENDED = "subjective"
     OBJECTIVE = "objective"
+    CODING = "coding"
 
     def __str__(self):
         return self.value
@@ -271,7 +272,7 @@ class Scorecard(BaseScorecard):
 
 class DraftQuestion(BaseModel):
     blocks: List[Block]
-    answer: str | None
+    answer: List[Block] | None
     type: QuestionType
     input_type: TaskInputType
     response_type: TaskAIResponseType
@@ -423,7 +424,7 @@ class PublishQuizRequest(BaseModel):
 class UpdateQuestionRequest(BaseModel):
     id: int
     blocks: List[dict]
-    answer: str | None
+    answer: List[Block] | None
     input_type: TaskInputType | None
     context: Dict | None
 
@@ -431,18 +432,6 @@ class UpdateQuestionRequest(BaseModel):
 class UpdateQuizRequest(BaseModel):
     title: str
     questions: List[UpdateQuestionRequest]
-
-
-class UpdateTaskRequest(BaseModel):
-    name: str
-    description: str
-    answer: str | None
-    input_type: str | None
-    response_type: str | None
-    coding_languages: List[str] | None
-    context: str | None
-    max_attempts: int | None
-    is_feedback_shown: bool | None
 
 
 class StoreMessageRequest(BaseModel):

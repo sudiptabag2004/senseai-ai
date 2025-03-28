@@ -120,7 +120,8 @@ async def ai_response_for_question(request: AIChatRequest):
     user_message = {"role": "user", "content": user_message}
 
     if question["response_type"] in [TaskAIResponseType.CHAT]:
-        question_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{question['answer']}\n```"""
+        answer_as_prompt = construct_description_from_blocks(question["answer"])
+        question_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{answer_as_prompt}\n```"""
     else:
         scoring_criteria_as_prompt = ""
         for criterion in question["scorecard"]["criteria"]:

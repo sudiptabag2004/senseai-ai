@@ -26,7 +26,6 @@ from api.models import (
     QuizTask,
     LeaderboardViewType,
     PublishQuizRequest,
-    UpdateTaskRequest,
     TaskTagsRequest,
     AddScoringCriteriaToTasksRequest,
     UpdateTaskTestsRequest,
@@ -121,23 +120,6 @@ async def remove_scoring_criteria_from_task(ids: List[int] = Query(...)):
 async def add_scoring_criteria_to_tasks(request: AddScoringCriteriaToTasksRequest):
     await add_scoring_criteria_to_tasks_in_db(
         request.task_ids, request.scoring_criteria
-    )
-    return {"success": True}
-
-
-@router.put("/{task_id}")
-async def update_task(task_id: int, request: UpdateTaskRequest):
-    await update_task_in_db(
-        task_id=task_id,
-        name=request.name,
-        description=request.description,
-        answer=request.answer,
-        input_type=request.input_type,
-        response_type=request.response_type,
-        coding_languages=request.coding_languages,
-        context=request.context,
-        max_attempts=request.max_attempts,
-        is_feedback_shown=request.is_feedback_shown,
     )
     return {"success": True}
 

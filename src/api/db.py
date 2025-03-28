@@ -856,7 +856,7 @@ def convert_question_db_to_dict(question) -> Dict:
     return {
         "id": question[0],
         "type": question[1],
-        "answer": question[2],
+        "answer": json.loads(question[2]) if question[2] else None,
         "input_type": question[3],
         "response_type": question[4],
         "scorecard_id": question[5],
@@ -1241,7 +1241,7 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
                 (
                     task_id,
                     str(question["type"]),
-                    question["answer"],
+                    json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
                     str(question["response_type"]),
                     question["coding_languages"],
@@ -1311,7 +1311,7 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
                 UPDATE {questions_table_name} SET answer = ?, input_type = ?, context = ? WHERE id = ?
                 """,
                 (
-                    question["answer"],
+                    json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
                     json.dumps(question["context"]) if question["context"] else None,
                     question["id"],
