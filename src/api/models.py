@@ -278,6 +278,7 @@ class DraftQuestion(BaseModel):
     response_type: TaskAIResponseType
     scorecard: Optional[NewScorecard] = None
     context: Dict | None
+    coding_languages: List[str] | None
 
 
 class PublishedQuestion(DraftQuestion):
@@ -407,7 +408,6 @@ class PublishLearningMaterialTaskRequest(BaseModel):
 
 
 class PublishQuestionRequest(DraftQuestion):
-    coding_languages: List[str] | None
     generation_model: str | None
     max_attempts: int | None
     is_feedback_shown: bool | None
@@ -424,6 +424,7 @@ class PublishQuizRequest(BaseModel):
 class UpdateQuestionRequest(BaseModel):
     id: int
     blocks: List[dict]
+    coding_languages: List[str] | None
     answer: List[Block] | None
     input_type: TaskInputType | None
     context: Dict | None

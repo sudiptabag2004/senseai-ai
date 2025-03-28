@@ -375,9 +375,9 @@ async def create_tasks_table(cursor):
         f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     org_id INTEGER NOT NULL,
-                    type TEXT NOT NULL CHECK (type IN ('learning_material', 'quiz', 'exam')),
+                    type TEXT NOT NULL,
                     title TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
+                    status TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     deleted_at DATETIME,
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
@@ -425,17 +425,17 @@ async def create_questions_table(cursor):
         f"""CREATE TABLE IF NOT EXISTS {questions_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
-                type TEXT NOT NULL CHECK (type IN ('objective', 'subjective')),
+                type TEXT NOT NULL,
                 answer TEXT,
-                input_type TEXT CHECK (input_type IN ('audio', 'text', 'coding')),
+                input_type TEXT NOT NULL,
                 coding_language TEXT,
                 generation_model TEXT,
-                response_type TEXT,
+                response_type TEXT NOT NULL,
                 position INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME,
                 max_attempts INTEGER,
-                is_feedback_shown BOOLEAN,
+                is_feedback_shown BOOLEAN NOT NULL,
                 context TEXT,
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )"""
@@ -861,6 +861,7 @@ def convert_question_db_to_dict(question) -> Dict:
         "response_type": question[4],
         "scorecard_id": question[5],
         "context": question[6],
+        "coding_languages": json.loads(question[7]) if question[7] else None,
     }
 
 
@@ -884,7 +885,7 @@ async def get_scorecard(scorecard_id: int) -> Dict:
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
-        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context
+        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
         FROM {questions_table_name} q
         LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
         WHERE q.id = ?
@@ -1027,7 +1028,7 @@ async def get_task(task_id: int):
     elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
         questions = await execute_db_operation(
             f"""
-            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context
+            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
             FROM {questions_table_name} q
             LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
             WHERE task_id = ? ORDER BY position ASC
@@ -1244,7 +1245,11 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
                     json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
                     str(question["response_type"]),
-                    question["coding_languages"],
+                    (
+                        json.dumps(question["coding_languages"])
+                        if question["coding_languages"]
+                        else None
+                    ),
                     str(question["generation_model"]),
                     json.dumps(question["context"]) if question["context"] else None,
                     index,
@@ -1308,11 +1313,16 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET answer = ?, input_type = ?, context = ? WHERE id = ?
+                UPDATE {questions_table_name} SET answer = ?, input_type = ?, coding_language = ?, context = ? WHERE id = ?
                 """,
                 (
                     json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
+                    (
+                        json.dumps(question["coding_languages"])
+                        if question["coding_languages"]
+                        else None
+                    ),
                     json.dumps(question["context"]) if question["context"] else None,
                     question["id"],
                 ),
@@ -4101,14 +4111,69 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
     ]
 
 
-async def migrate_context_column():
+async def migrate_task_and_question_tables():
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
-        await cursor.execute(f"ALTER TABLE {tasks_table_name} DROP COLUMN context")
+        # Remove the check constraint from tasks table
+        await cursor.execute(f"PRAGMA foreign_keys = OFF")
+        await cursor.execute(
+            f"CREATE TABLE {tasks_table_name}_temp AS SELECT * FROM {tasks_table_name}"
+        )
+        await cursor.execute(f"DROP TABLE {tasks_table_name}")
+        await cursor.execute(
+            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    org_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    deleted_at DATETIME,
+                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
+                )"""
+        )
+        await cursor.execute(
+            f"INSERT INTO {tasks_table_name} SELECT * FROM {tasks_table_name}_temp"
+        )
+        await cursor.execute(f"DROP TABLE {tasks_table_name}_temp")
+        await cursor.execute(
+            f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)"
+        )
+
+        # Remove the check constraint from questions table
+        await cursor.execute(
+            f"CREATE TABLE {questions_table_name}_temp AS SELECT * FROM {questions_table_name}"
+        )
+        await cursor.execute(f"DROP TABLE {questions_table_name}")
+        await cursor.execute(
+            f"""CREATE TABLE IF NOT EXISTS {questions_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                answer TEXT,
+                input_type TEXT NOT NULL,
+                coding_language TEXT,
+                generation_model TEXT,
+                response_type TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME,
+                max_attempts INTEGER,
+                is_feedback_shown BOOLEAN NOT NULL,
+                context TEXT,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
+            )"""
+        )
 
         await cursor.execute(
-            f"ALTER TABLE {questions_table_name} ADD COLUMN context TEXT"
+            f"INSERT INTO {questions_table_name} SELECT * FROM {questions_table_name}_temp"
         )
+        await cursor.execute(f"DROP TABLE {questions_table_name}_temp")
+        await cursor.execute(
+            f"CREATE INDEX idx_question_task_id ON {questions_table_name} (task_id)"
+        )
+        # Re-enable foreign key constraints after schema modifications are complete
+        await cursor.execute(f"PRAGMA foreign_keys = ON")
 
         await conn.commit()
