@@ -307,6 +307,15 @@ class UserCourseRole(str, Enum):
     LEARNER = "learner"
     MENTOR = "mentor"
 
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, UserCourseRole):
+            return self.value == other.value
+
 
 class Organization(BaseModel):
     id: int

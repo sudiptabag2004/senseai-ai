@@ -1,5 +1,8 @@
+from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
+
+import numpy as np
 from api.db import (
     get_all_cohorts_for_org as get_all_cohorts_for_org_from_db,
     create_cohort as create_cohort_in_db,
@@ -21,7 +24,9 @@ from api.db import (
     get_cohort_analytics_metrics_for_tasks as get_cohort_analytics_metrics_for_tasks_from_db,
     get_cohort_attempt_data_for_tasks as get_cohort_attempt_data_for_tasks_from_db,
     get_cohort_completion as get_cohort_completion_from_db,
+    get_cohort_course_attempt_data as get_cohort_course_attempt_data_from_db,
     get_cohort_streaks as get_cohort_streaks_from_db,
+    get_course as get_course_from_db,
 )
 from api.models import (
     CreateCohortRequest,
@@ -40,6 +45,7 @@ from api.models import (
     LeaderboardViewType,
     Course,
     CourseWithMilestonesAndTasks,
+    UserCourseRole,
 )
 from api.utils.db import get_new_db_connection
 
@@ -206,6 +212,102 @@ async def get_leaderboard_data(cohort_id: int):
         "stats": leaderboard_data,
         "metadata": {
             "num_tasks": num_tasks,
+        },
+    }
+
+
+@router.get("/{cohort_id}/courses/{course_id}/metrics")
+async def get_cohort_metrics_for_course(cohort_id: int, course_id: int):
+    course_data = await get_course_from_db(course_id, only_published=True)
+    cohort_data = await get_cohort_by_id_from_db(cohort_id)
+
+    if not course_data:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    if not cohort_data:
+        raise HTTPException(status_code=404, detail="Cohort not found")
+
+    task_id_to_metadata = {}
+    task_type_counts = defaultdict(int)
+
+    for milestone in course_data["milestones"]:
+        for task in milestone["tasks"]:
+            task_id_to_metadata[task["id"]] = {
+                "milestone_id": milestone["id"],
+                "milestone_name": milestone["name"],
+                "type": task["type"],
+            }
+            task_type_counts[task["type"]] += 1
+
+    learner_ids = [
+        member["id"]
+        for member in cohort_data["members"]
+        if member["role"] == UserCourseRole.LEARNER
+    ]
+
+    task_completions = await get_cohort_completion_from_db(
+        cohort_id, learner_ids, course_id
+    )
+
+    course_attempt_data = await get_cohort_course_attempt_data_from_db(
+        learner_ids, course_id
+    )
+
+    num_tasks = len(task_completions[learner_ids[0]])
+
+    task_type_completions = defaultdict(lambda: defaultdict(int))
+    task_type_completion_rates = defaultdict(list)
+
+    user_data = defaultdict(lambda: defaultdict(int))
+
+    for learner_id in learner_ids:
+        num_tasks_completed = 0
+
+        for task_id, task_completion_data in task_completions[learner_id].items():
+            if task_completion_data["is_complete"]:
+                num_tasks_completed += 1
+                task_type_completions[task_id_to_metadata[task_id]["type"]][
+                    learner_id
+                ] += 1
+
+        user_data[learner_id]["completed"] = num_tasks_completed
+        user_data[learner_id]["completion_percentage"] = num_tasks_completed / num_tasks
+
+        for task_type in task_type_completions.keys():
+            task_type_completion_rates[task_type].append(
+                task_type_completions[task_type][learner_id]
+                / task_type_counts[task_type]
+            )
+
+    is_learner_active = {
+        learner_id: course_attempt_data[learner_id][course_id]["has_attempted"]
+        for learner_id in learner_ids
+    }
+
+    return {
+        "average_completion": np.mean(
+            [
+                user_data[learner_id]["completion_percentage"]
+                for learner_id in learner_ids
+            ]
+        ),
+        "num_tasks": num_tasks,
+        "num_active_learners": sum(is_learner_active.values()),
+        "task_type_metrics": {
+            task_type: {
+                "completion_rate": (
+                    np.mean(task_type_completion_rates[task_type])
+                    if task_type in task_type_completion_rates
+                    else 0
+                ),
+                "count": task_type_counts[task_type],
+                "completions": (
+                    task_type_completions[task_type]
+                    if task_type in task_type_completions
+                    else {learner_id: 0 for learner_id in learner_ids}
+                ),
+            }
+            for task_type in task_type_counts.keys()
         },
     }
 

@@ -1640,13 +1640,16 @@ async def mark_task_completed(task_id: int, user_id: int):
         await conn.commit()
 
 
-async def get_cohort_completion(cohort_id: int, user_ids: List[int]):
+async def get_cohort_completion(
+    cohort_id: int, user_ids: List[int], course_id: int = None
+):
     """
     Retrieves completion data for a user in a specific cohort.
 
     Args:
         cohort_id: The ID of the cohort
         user_ids: The IDs of the users
+        course_id: The ID of the course (optional, if not provided, all courses in the cohort will be considered)
 
     Returns:
         A dictionary mapping task IDs to their completion status:
@@ -1692,15 +1695,22 @@ async def get_cohort_completion(cohort_id: int, user_ids: List[int]):
 
     # Get all tasks for the cohort
     # Get learning material tasks
-    learning_material_tasks = await execute_db_operation(
-        f"""
+    query = f"""
         SELECT DISTINCT t.id
         FROM {tasks_table_name} t
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
         WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}'
-        """,
-        (cohort_id,),
+        """
+    params = (cohort_id,)
+
+    if course_id:
+        query += " AND ct.course_id = ?"
+        params += (course_id,)
+
+    learning_material_tasks = await execute_db_operation(
+        query,
+        params,
         fetch_all=True,
     )
 
@@ -1712,17 +1722,25 @@ async def get_cohort_completion(cohort_id: int, user_ids: List[int]):
             }
 
     # Get quiz and exam task questions
-    quiz_exam_questions = await execute_db_operation(
-        f"""
+    query = f"""
         SELECT DISTINCT t.id as task_id, q.id as question_id
         FROM {tasks_table_name} t
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
         LEFT JOIN {questions_table_name} q ON t.id = q.task_id AND q.deleted_at IS NULL
-        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}'
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}'{
+            " AND ct.course_id = ?" if course_id else ""
+        } 
         ORDER BY t.id, q.position ASC
-        """,
-        (cohort_id,),
+        """
+    params = (cohort_id,)
+
+    if course_id:
+        params += (course_id,)
+
+    quiz_exam_questions = await execute_db_operation(
+        query,
+        params,
         fetch_all=True,
     )
 
@@ -1760,6 +1778,83 @@ async def get_cohort_completion(cohort_id: int, user_ids: List[int]):
             }
 
     return results
+
+
+async def get_cohort_course_attempt_data(cohort_learner_ids: List[int], course_id: int):
+    """
+    Retrieves attempt data for users in a specific cohort, focusing on whether each user
+    has attempted any task from each course assigned to the cohort.
+
+    An attempt is defined as either:
+    1. Having at least one entry in task_completions_table for a learning material task in the course
+    2. Having at least one message in chat_history_table for a question in a quiz/exam task in the course
+
+    Args:
+        cohort_learner_ids: The IDs of the learners in the cohort
+        course_id: The ID of the course to check
+
+    Returns:
+        A dictionary with the following structure:
+        {
+            user_id: {
+                course_id: {
+                    "course_name": str,
+                    "has_attempted": bool,
+                    "last_attempt_date": str or None,
+                    "attempt_count": int
+                }
+            }
+        }
+    """
+    result = defaultdict(dict)
+
+    # Initialize result structure with all courses for all users
+    for user_id in cohort_learner_ids:
+        result[user_id][course_id] = {
+            "has_attempted": False,
+        }
+
+    cohort_learner_ids_str = ",".join(map(str, cohort_learner_ids))
+
+    # Get all learning material tasks attempted for this course
+    task_completions = await execute_db_operation(
+        f"""
+        SELECT DISTINCT tc.user_id
+        FROM {task_completions_table_name} tc
+        JOIN {course_tasks_table_name} ct ON tc.task_id = ct.task_id
+        WHERE tc.user_id IN ({cohort_learner_ids_str}) AND ct.course_id = ?
+        ORDER BY tc.created_at ASC
+        """,
+        (course_id,),
+        fetch_all=True,
+    )
+
+    # Process task completion data
+    for completion in task_completions:
+        user_id = completion[0]
+        result[user_id][course_id]["has_attempted"] = True
+
+    chat_messages = await execute_db_operation(
+        f"""
+        SELECT DISTINCT ch.user_id
+        FROM {chat_history_table_name} ch
+        JOIN {questions_table_name} q ON ch.question_id = q.id
+        JOIN {tasks_table_name} t ON q.task_id = t.id
+        JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
+        WHERE ch.user_id IN ({cohort_learner_ids_str}) AND ct.course_id = ?
+        GROUP BY ch.user_id
+        """,
+        (course_id,),
+        fetch_all=True,
+    )
+
+    # Process chat message data
+    for message_data in chat_messages:
+        user_id = message_data[0]
+        result[user_id][course_id]["has_attempted"] = True
+
+    # Convert defaultdict to regular dict for cleaner response
+    return {user_id: dict(courses) for user_id, courses in result.items()}
 
 
 async def delete_message(message_id: int):
@@ -3660,7 +3755,7 @@ def convert_course_db_to_dict(course: Tuple) -> Dict:
     return result
 
 
-async def get_course(course_id: int) -> Dict:
+async def get_course(course_id: int, only_published: bool = False) -> Dict:
     course = await execute_db_operation(
         f"SELECT id, name FROM {courses_table_name} WHERE id = ?",
         (course_id,),
@@ -3683,6 +3778,11 @@ async def get_course(course_id: int) -> Dict:
             FROM {course_tasks_table_name} ct
             JOIN {tasks_table_name} t ON ct.task_id = t.id
             WHERE ct.course_id = ? AND t.deleted_at IS NULL
+            {
+                "AND t.status = 'published'"
+                if only_published
+                else ""
+            }
             ORDER BY ct.milestone_id, ct.ordering""",
         (course_id,),
         fetch_all=True,
