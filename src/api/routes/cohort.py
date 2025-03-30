@@ -273,7 +273,7 @@ async def get_cohort_metrics_for_course(cohort_id: int, course_id: int):
         user_data[learner_id]["completed"] = num_tasks_completed
         user_data[learner_id]["completion_percentage"] = num_tasks_completed / num_tasks
 
-        for task_type in task_type_completions.keys():
+        for task_type in task_type_counts.keys():
             task_type_completion_rates[task_type].append(
                 task_type_completions[task_type][learner_id]
                 / task_type_counts[task_type]
