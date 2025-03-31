@@ -3685,6 +3685,63 @@ async def update_milestone_orders(milestone_orders: List[Tuple[int, int]]):
     )
 
 
+async def swap_milestone_ordering_for_course(
+    course_id: int, milestone_1_id: int, milestone_2_id: int
+):
+    # First, check if both milestones exist for the course
+    milestone_entries = await execute_db_operation(
+        f"SELECT milestone_id, ordering FROM {course_milestones_table_name} WHERE course_id = ? AND milestone_id IN (?, ?)",
+        (course_id, milestone_1_id, milestone_2_id),
+        fetch_all=True,
+    )
+
+    if len(milestone_entries) != 2:
+        raise ValueError("One or both milestones do not exist for this course")
+
+    # Get the IDs and orderings for the course_milestones entries
+    milestone_1_id, milestone_1_ordering = milestone_entries[0]
+    milestone_2_id, milestone_2_ordering = milestone_entries[1]
+
+    update_params = [
+        (milestone_2_ordering, milestone_1_id),
+        (milestone_1_ordering, milestone_2_id),
+    ]
+
+    await execute_many_db_operation(
+        f"UPDATE {course_milestones_table_name} SET ordering = ? WHERE id = ?",
+        params_list=update_params,
+    )
+
+
+async def swap_task_ordering_for_course(course_id: int, task_1_id: int, task_2_id: int):
+    # First, check if both tasks exist for the course
+    task_entries = await execute_db_operation(
+        f"SELECT task_id, milestone_id, ordering FROM {course_tasks_table_name} WHERE course_id = ? AND task_id IN (?, ?)",
+        (course_id, task_1_id, task_2_id),
+        fetch_all=True,
+    )
+
+    if len(task_entries) != 2:
+        raise ValueError("One or both tasks do not exist for this course")
+
+    # Get the IDs and orderings for the course_tasks entries
+    task_1_id, task_1_milestone_id, task_1_ordering = task_entries[0]
+    task_2_id, task_2_milestone_id, task_2_ordering = task_entries[1]
+
+    if task_1_milestone_id != task_2_milestone_id:
+        raise ValueError("Tasks are not in the same milestone")
+
+    update_params = [
+        (task_2_ordering, task_1_id),
+        (task_1_ordering, task_2_id),
+    ]
+
+    await execute_many_db_operation(
+        f"UPDATE {course_tasks_table_name} SET ordering = ? WHERE id = ?",
+        params_list=update_params,
+    )
+
+
 async def remove_scoring_criteria_from_task(scoring_criteria_ids: List[int]):
     if not scoring_criteria_ids:
         return

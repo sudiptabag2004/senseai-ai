@@ -16,6 +16,8 @@ from api.db import (
     add_milestone_to_course as add_milestone_to_course_in_db,
     update_milestone_orders as update_milestone_orders_in_db,
     get_course as get_course_from_db,
+    swap_milestone_ordering_for_course as swap_milestone_ordering_for_course_in_db,
+    swap_task_ordering_for_course as swap_task_ordering_for_course_in_db,
 )
 from api.models import (
     CreateCourseRequest,
@@ -31,6 +33,8 @@ from api.models import (
     CourseWithMilestonesAndTasks,
     AddMilestoneToCourseRequest,
     AddMilestoneToCourseResponse,
+    SwapMilestoneOrderingRequest,
+    SwapTaskOrderingRequest,
 )
 
 router = APIRouter()
@@ -121,4 +125,22 @@ async def get_tasks_for_course(course_id: int) -> List[Dict]:
 @router.put("/{course_id}")
 async def update_course_name(course_id: int, request: UpdateCourseNameRequest):
     await update_course_name_in_db(course_id, request.name)
+    return {"success": True}
+
+
+@router.put("/{course_id}/milestones/swap")
+async def swap_milestone_ordering(
+    course_id: int, request: SwapMilestoneOrderingRequest
+):
+    await swap_milestone_ordering_for_course_in_db(
+        course_id, request.milestone_1_id, request.milestone_2_id
+    )
+    return {"success": True}
+
+
+@router.put("/{course_id}/tasks/swap")
+async def swap_task_ordering(course_id: int, request: SwapTaskOrderingRequest):
+    await swap_task_ordering_for_course_in_db(
+        course_id, request.task_1_id, request.task_2_id
+    )
     return {"success": True}

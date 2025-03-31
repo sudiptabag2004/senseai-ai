@@ -553,3 +553,13 @@ class PresignedUrlResponse(BaseModel):
 
 class S3FetchPresignedUrlResponse(BaseModel):
     url: str
+
+
+class SwapMilestoneOrderingRequest(BaseModel):
+    milestone_1_id: int
+    milestone_2_id: int
+
+
+class SwapTaskOrderingRequest(BaseModel):
+    task_1_id: int
+    task_2_id: int
