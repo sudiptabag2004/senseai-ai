@@ -245,6 +245,9 @@ async def get_cohort_metrics_for_course(cohort_id: int, course_id: int):
         if member["role"] == UserCourseRole.LEARNER
     ]
 
+    if not learner_ids:
+        return {}
+
     task_completions = await get_cohort_completion_from_db(
         cohort_id, learner_ids, course_id
     )

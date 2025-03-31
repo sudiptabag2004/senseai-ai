@@ -3762,6 +3762,9 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
         fetch_one=True,
     )
 
+    if not course:
+        return None
+
     # Fix the milestones query to match the actual schema
     milestones = await execute_db_operation(
         f"""SELECT m.id, m.name, m.color, cm.ordering 
