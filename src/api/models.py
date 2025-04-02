@@ -292,6 +292,7 @@ class QuizTask(Task):
 
 class MilestoneTask(Task):
     ordering: int
+    num_questions: int | None
 
 
 class MilestoneWithTasks(Milestone):

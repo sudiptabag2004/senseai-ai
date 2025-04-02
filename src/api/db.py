@@ -1704,7 +1704,7 @@ async def get_cohort_completion(
         """
     params = (cohort_id,)
 
-    if course_id:
+    if course_id is not None:
         query += " AND ct.course_id = ?"
         params += (course_id,)
 
@@ -1735,7 +1735,7 @@ async def get_cohort_completion(
         """
     params = (cohort_id,)
 
-    if course_id:
+    if course_id is not None:
         params += (course_id,)
 
     quiz_exam_questions = await execute_db_operation(
@@ -3834,7 +3834,11 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
 
     # Fetch all tasks for this course
     tasks = await execute_db_operation(
-        f"""SELECT t.id, t.title, t.type, t.status, ct.milestone_id, ct.ordering
+        f"""SELECT t.id, t.title, t.type, t.status, ct.milestone_id, ct.ordering,
+            (CASE WHEN t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') THEN 
+                (SELECT COUNT(*) FROM {questions_table_name} q 
+                 WHERE q.task_id = t.id)
+             ELSE NULL END) as num_questions
             FROM {course_tasks_table_name} ct
             JOIN {tasks_table_name} t ON ct.task_id = t.id
             WHERE ct.course_id = ? AND t.deleted_at IS NULL
@@ -3860,6 +3864,7 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
                 "type": task[2],
                 "status": task[3],
                 "ordering": task[5],
+                "num_questions": task[6],
             }
         )
 
