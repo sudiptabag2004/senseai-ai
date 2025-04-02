@@ -376,6 +376,7 @@ async def create_tasks_table(cursor):
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     org_id INTEGER NOT NULL,
                     type TEXT NOT NULL,
+                    blocks TEXT,
                     title TEXT NOT NULL,
                     status TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -389,43 +390,13 @@ async def create_tasks_table(cursor):
     )
 
 
-async def create_blocks_table(cursor):
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {blocks_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER,
-                question_id INTEGER,
-                parent_id INTEGER,
-                type TEXT NOT NULL,
-                properties TEXT NOT NULL DEFAULT '{{}}',
-                content TEXT,
-                position INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (parent_id) REFERENCES {blocks_table_name}(id) ON DELETE CASCADE,
-                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                CHECK (
-                    (task_id IS NULL AND question_id IS NOT NULL) OR
-                    (task_id IS NOT NULL AND question_id IS NULL)
-                )
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_block_task_id ON {blocks_table_name} (task_id)"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_block_question_id ON {blocks_table_name} (question_id)"""
-    )
-
-
 async def create_questions_table(cursor):
     await cursor.execute(
         f"""CREATE TABLE IF NOT EXISTS {questions_table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id INTEGER NOT NULL,
                 type TEXT NOT NULL,
+                blocks TEXT,
                 answer TEXT,
                 input_type TEXT NOT NULL,
                 coding_language TEXT,
@@ -624,9 +595,6 @@ async def init_db():
             if not await check_table_exists(question_scorecards_table_name, cursor):
                 await create_question_scorecards_table(cursor)
 
-            if not await check_table_exists(blocks_table_name, cursor):
-                await create_blocks_table(cursor)
-
             if not await check_table_exists(task_scoring_criteria_table_name, cursor):
                 await create_task_scoring_criteria_table(cursor)
 
@@ -677,8 +645,6 @@ async def init_db():
             await create_scorecards_table(cursor)
 
             await create_question_scorecards_table(cursor)
-
-            await create_blocks_table(cursor)
 
             await create_task_scoring_criteria_table(cursor)
 
@@ -809,7 +775,9 @@ async def fetch_blocks(owner_id: int, owner_type: Literal["task", "question"]):
 
         # Parse properties from JSON
         try:
-            properties = json.loads(properties_json) if properties_json else {}
+            properties = json.loads(properties_json)
+            if not properties:
+                properties = {}
         except:
             properties = {}
 
@@ -856,12 +824,13 @@ def convert_question_db_to_dict(question) -> Dict:
     return {
         "id": question[0],
         "type": question[1],
-        "answer": json.loads(question[2]) if question[2] else None,
-        "input_type": question[3],
-        "response_type": question[4],
-        "scorecard_id": question[5],
-        "context": question[6],
-        "coding_languages": json.loads(question[7]) if question[7] else None,
+        "blocks": json.loads(question[2]) if question[2] else [],
+        "answer": json.loads(question[3]) if question[3] else None,
+        "input_type": question[4],
+        "response_type": question[5],
+        "scorecard_id": question[6],
+        "context": json.loads(question[7]) if question[7] else None,
+        "coding_languages": json.loads(question[8]) if question[8] else None,
     }
 
 
@@ -885,7 +854,7 @@ async def get_scorecard(scorecard_id: int) -> Dict:
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
-        SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
+        SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
         FROM {questions_table_name} q
         LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
         WHERE q.id = ?
@@ -899,13 +868,8 @@ async def get_question(question_id: int) -> Dict:
 
     question = convert_question_db_to_dict(question)
 
-    if question["context"]:
-        question["context"] = json.loads(question["context"])
-
     if question["scorecard_id"] is not None:
         question["scorecard"] = await get_scorecard(question["scorecard_id"])
-
-    question["blocks"] = await fetch_blocks(question_id, "question")
 
     return question
 
@@ -1024,11 +988,18 @@ async def get_task(task_id: int):
         return None
 
     if task_data["type"] == TaskType.LEARNING_MATERIAL:
-        task_data["blocks"] = await fetch_blocks(task_id, "task")
+        result = await execute_db_operation(
+            f"SELECT blocks FROM {tasks_table_name} WHERE id = ?",
+            (task_id,),
+            fetch_one=True,
+        )
+
+        task_data["blocks"] = json.loads(result[0]) if result[0] else []
+
     elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
         questions = await execute_db_operation(
             f"""
-            SELECT q.id, q.type, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
+            SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
             FROM {questions_table_name} q
             LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
             WHERE task_id = ? ORDER BY position ASC
@@ -1037,145 +1008,11 @@ async def get_task(task_id: int):
             fetch_all=True,
         )
 
-        questions = [convert_question_db_to_dict(question) for question in questions]
-
-        for question in questions:
-            question["blocks"] = await fetch_blocks(question["id"], "question")
-            question["context"] = (
-                json.loads(question["context"]) if question["context"] else None
-            )
-
-        task_data["questions"] = questions
+        task_data["questions"] = [
+            convert_question_db_to_dict(question) for question in questions
+        ]
 
     return task_data
-
-
-async def store_blocks(
-    cursor, blocks: List[Dict], owner_id: int, owner_type: Literal["task", "question"]
-):
-    # Prepare all blocks in advance with a flattened structure
-    all_block_operations = []
-    client_id_to_temp_id = {}
-    next_temp_id = 1  # Start with 1 as temporary IDs
-
-    # First pass: generate temporary IDs for all blocks to establish parent-child relationships
-    def generate_temp_ids(blocks_list, parent_temp_id=None):
-        nonlocal next_temp_id
-
-        for block in blocks_list:
-            client_id = block.get("id")
-            temp_id = next_temp_id
-            next_temp_id += 1
-
-            if client_id:
-                client_id_to_temp_id[client_id] = temp_id
-
-            # Store mapping of temp_id -> (block data, parent_temp_id)
-            yield (temp_id, block, parent_temp_id)
-
-            # Process children
-            if "children" in block and block["children"]:
-                yield from generate_temp_ids(block["children"], temp_id)
-
-    # Generate temp IDs and collect all blocks
-    flattened_blocks = list(generate_temp_ids(blocks))
-
-    # Group blocks by parent to calculate correct position within each parent's children
-    blocks_by_parent = defaultdict(list)
-    for temp_id, _, parent_temp_id in flattened_blocks:
-        blocks_by_parent[parent_temp_id].append(temp_id)
-
-    # Second pass: prepare all insert operations
-    for temp_id, block, parent_temp_id in flattened_blocks:
-        block_type = block.get("type", "paragraph")
-
-        # Handle block properties
-        props = block.get("props", {})
-        if not props and "properties" in block:
-            props = block.get("properties", {})
-
-        # Store client ID in properties
-        client_id = block.get("id")
-        if client_id:
-            props_with_id = props.copy() if props else {}
-            props_with_id["client_id"] = client_id
-            properties_json = json.dumps(props_with_id)
-        else:
-            properties_json = json.dumps(props)
-
-        # Handle content based on type
-        content = None
-        if isinstance(block.get("content"), str):
-            content = block.get("content")
-        elif isinstance(block.get("content"), list):
-            content = json.dumps(block.get("content"))
-        elif block.get("content") is not None:
-            content = json.dumps(block.get("content"))
-
-        # Child blocks - position is relative to siblings with the same parent
-        position = blocks_by_parent.get(parent_temp_id, []).index(temp_id)
-
-        owner_id_param = "task_id" if owner_type == "task" else "question_id"
-
-        # Create insert operation
-        insert_query = f"""INSERT INTO {blocks_table_name} ({owner_id_param}, parent_id, type, properties, content, position) VALUES (?, ?, ?, ?, ?, ?)"""
-
-        # For parent_id, we'll use NULL for root blocks
-        parent_id_param = (
-            None if parent_temp_id is None else f"TEMP_ID_{parent_temp_id}"
-        )
-
-        # Add operation with temp ID as tag
-        all_block_operations.append(
-            (
-                insert_query,
-                (
-                    owner_id,
-                    parent_id_param,
-                    block_type,
-                    properties_json,
-                    content,
-                    position,
-                ),
-                f"TEMP_ID_{temp_id}",
-            )
-        )
-
-    # If we have no blocks to insert, just return success
-    if not all_block_operations:
-        return
-
-    # Delete any existing blocks for this task to avoid duplicates
-    await cursor.execute(
-        f"""
-        DELETE FROM {blocks_table_name}
-        WHERE {owner_id_param} = ?
-        """,
-        (owner_id,),
-    )
-
-    # Execute each insert and keep track of the real DB IDs
-    temp_id_to_db_id = {}
-
-    for query, params, temp_id_tag in all_block_operations:
-        # Replace parent_id parameter with real DB ID if it's a reference
-        final_params = list(params)
-        if (
-            params[1]
-            and isinstance(params[1], str)
-            and params[1].startswith("TEMP_ID_")
-        ):
-            parent_temp_id = int(params[1].replace("TEMP_ID_", ""))
-            parent_db_id = temp_id_to_db_id.get(parent_temp_id)
-            final_params[1] = parent_db_id
-
-        # Execute the insert
-        await cursor.execute(query, tuple(final_params))
-
-        # Get the inserted ID and map it to the temp ID
-        db_id = cursor.lastrowid
-        temp_id = int(temp_id_tag.replace("TEMP_ID_", ""))
-        temp_id_to_db_id[temp_id] = db_id
 
 
 async def does_task_exist(task_id: int) -> bool:
@@ -1192,6 +1029,16 @@ async def does_task_exist(task_id: int) -> bool:
     return task is not None
 
 
+def prepare_blocks_for_publish(blocks: List[Dict]) -> List[Dict]:
+    for index, block in enumerate(blocks):
+        if "id" not in block or block["id"] is None:
+            block["id"] = str(uuid.uuid4())
+
+        block["position"] = index
+
+    return blocks
+
+
 async def publish_learning_material_task(
     task_id: int, title: str, blocks: List
 ) -> LearningMaterialTask:
@@ -1202,12 +1049,14 @@ async def publish_learning_material_task(
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
-        await store_blocks(cursor, blocks, task_id, "task")
-
-        # Update task status to published
         await cursor.execute(
-            f"UPDATE {tasks_table_name} SET status = ?, title = ? WHERE id = ?",
-            (str(TaskStatus.PUBLISHED), title, task_id),
+            f"UPDATE {tasks_table_name} SET blocks = ?, status = ?, title = ? WHERE id = ?",
+            (
+                json.dumps(prepare_blocks_for_publish(blocks)),
+                str(TaskStatus.PUBLISHED),
+                title,
+                task_id,
+            ),
         )
 
         await conn.commit()
@@ -1237,11 +1086,12 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                INSERT INTO {questions_table_name} (task_id, type, answer, input_type, response_type, coding_language, generation_model, context, position, max_attempts, is_feedback_shown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO {questions_table_name} (task_id, type, blocks, answer, input_type, response_type, coding_language, generation_model, context, position, max_attempts, is_feedback_shown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
                     str(question["type"]),
+                    json.dumps(prepare_blocks_for_publish(question["blocks"])),
                     json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
                     str(question["response_type"]),
@@ -1259,7 +1109,6 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
             )
 
             question_id = cursor.lastrowid
-            await store_blocks(cursor, question["blocks"], question_id, "question")
 
             scorecard_id = None
             if question["scorecard_id"] is not None:
@@ -1313,9 +1162,10 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET answer = ?, input_type = ?, coding_language = ?, context = ? WHERE id = ?
+                UPDATE {questions_table_name} SET blocks = ?, answer = ?, input_type = ?, coding_language = ?, context = ? WHERE id = ?
                 """,
                 (
+                    json.dumps(prepare_blocks_for_publish(question["blocks"])),
                     json.dumps(question["answer"]) if question["answer"] else None,
                     str(question["input_type"]),
                     (
@@ -1327,8 +1177,6 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
                     question["id"],
                 ),
             )
-
-            await store_blocks(cursor, question["blocks"], question["id"], "question")
 
         # Update task status to published
         await cursor.execute(
@@ -4205,111 +4053,80 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
     ]
 
 
-async def migrate_task_and_question_tables():
+async def migrate_tasks_and_question_blocks():
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
-        # Remove the check constraint from tasks table
-        await cursor.execute(f"PRAGMA foreign_keys = OFF")
-        await cursor.execute(
-            f"CREATE TABLE {tasks_table_name}_temp AS SELECT * FROM {tasks_table_name}"
-        )
-        await cursor.execute(f"DROP TABLE {tasks_table_name}")
-        await cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {tasks_table_name} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    org_id INTEGER NOT NULL,
-                    type TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    deleted_at DATETIME,
-                    FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
-                )"""
-        )
-        await cursor.execute(
-            f"INSERT INTO {tasks_table_name} SELECT * FROM {tasks_table_name}_temp"
-        )
-        await cursor.execute(f"DROP TABLE {tasks_table_name}_temp")
-        await cursor.execute(
-            f"CREATE INDEX idx_task_org_id ON {tasks_table_name} (org_id)"
+        # Check if blocks column exists in tasks table, if not add it
+        tasks_columns = await execute_db_operation(
+            "PRAGMA table_info(tasks)",
+            fetch_all=True,
         )
 
-        # Remove the check constraint from questions table
-        await cursor.execute(
-            f"CREATE TABLE {questions_table_name}_temp AS SELECT * FROM {questions_table_name}"
-        )
-        await cursor.execute(f"DROP TABLE {questions_table_name}")
-        await cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {questions_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                type TEXT NOT NULL,
-                answer TEXT,
-                input_type TEXT NOT NULL,
-                coding_language TEXT,
-                generation_model TEXT,
-                response_type TEXT NOT NULL,
-                position INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                deleted_at DATETIME,
-                max_attempts INTEGER,
-                is_feedback_shown BOOLEAN NOT NULL,
-                context TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
-            )"""
-        )
-
-        await cursor.execute(
-            f"INSERT INTO {questions_table_name} SELECT * FROM {questions_table_name}_temp"
-        )
-        await cursor.execute(f"DROP TABLE {questions_table_name}_temp")
-        await cursor.execute(
-            f"CREATE INDEX idx_question_task_id ON {questions_table_name} (task_id)"
-        )
-        # Re-enable foreign key constraints after schema modifications are complete
-        await cursor.execute(f"PRAGMA foreign_keys = ON")
-
-        await conn.commit()
-
-
-async def migrate_question_answer():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Fetch all questions with non-null answers
-        questions = await cursor.execute(
-            f"SELECT id, answer FROM {questions_table_name} WHERE answer IS NOT NULL"
-        )
-        questions_data = await questions.fetchall()
-
-        # Prepare updates
-        updates = []
-        for question_id, answer in questions_data:
-            # Create the new answer format
-            new_answer = json.dumps(
-                [
-                    {
-                        "id": "",
-                        "type": "paragraph",
-                        "props": {
-                            "textColor": "default",
-                            "backgroundColor": "default",
-                            "textAlignment": "left",
-                        },
-                        "content": [{"type": "text", "text": answer, "styles": {}}],
-                        "children": [],
-                        "position": None,
-                    }
-                ]
+        tasks_columns_names = [column[1] for column in tasks_columns]
+        if "blocks" not in tasks_columns_names:
+            await cursor.execute(
+                f"ALTER TABLE {tasks_table_name} ADD COLUMN blocks TEXT"
             )
 
-            updates.append((new_answer, question_id))
+        # Check if blocks column exists in questions table, if not add it
+        questions_columns = await execute_db_operation(
+            "PRAGMA table_info(questions)",
+            fetch_all=True,
+        )
 
-        # Update all questions at once
-        if updates:
-            await cursor.executemany(
-                f"UPDATE {questions_table_name} SET answer = ? WHERE id = ?", updates
+        questions_columns_names = [column[1] for column in questions_columns]
+        if "blocks" not in questions_columns_names:
+            await cursor.execute(
+                f"ALTER TABLE {questions_table_name} ADD COLUMN blocks TEXT"
             )
+
+        # First, migrate tasks
+        tasks = await execute_db_operation(
+            f"SELECT id, type FROM {tasks_table_name} WHERE deleted_at IS NULL",
+            fetch_all=True,
+        )
+
+        for task in tasks:
+            task_id = task[0]
+            task_type = task[1]
+
+            if task_type != TaskType.LEARNING_MATERIAL:
+                continue
+
+            # Fetch blocks for this task
+            blocks = await fetch_blocks(task_id, "task")
+
+            if blocks:
+                # Update the task with the blocks
+                await cursor.execute(
+                    f"UPDATE {tasks_table_name} SET blocks = ? WHERE id = ?",
+                    (json.dumps(blocks), task_id),
+                )
+
+        # Next, migrate questions
+        questions = await execute_db_operation(
+            f"SELECT id FROM {questions_table_name}",
+            fetch_all=True,
+        )
+
+        for question in questions:
+            question_id = question[0]
+            # Fetch blocks for this question
+            blocks = await fetch_blocks(question_id, "question")
+
+            if blocks:
+                # Convert blocks to JSON string
+                blocks_json = json.dumps(blocks)
+
+                # Update the question with the blocks
+                await cursor.execute(
+                    f"UPDATE {questions_table_name} SET blocks = ? WHERE id = ?",
+                    (blocks_json, question_id),
+                )
+
+        # Drop the blocks table as it's no longer needed after migration
+        if await check_table_exists(blocks_table_name, cursor):
+            await cursor.execute(f"DROP TABLE {blocks_table_name}")
 
         await conn.commit()

@@ -187,14 +187,15 @@ class Task(BaseModel):
 
 
 class Block(BaseModel):
-    id: str
+    id: Optional[str] = None
     type: str
-    props: Dict
+    props: Optional[Dict] = {}
     content: List
-    children: List
+    children: Optional[List] = []
     position: Optional[int] = (
         None  # not present when sent from frontend at the time of publishing
     )
+    styles: Optional[Dict] = None
 
 
 class LearningMaterialTask(Task):
