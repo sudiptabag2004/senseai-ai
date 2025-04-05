@@ -258,6 +258,9 @@ async def get_cohort_metrics_for_course(cohort_id: int, course_id: int):
 
     num_tasks = len(task_completions[learner_ids[0]])
 
+    if not num_tasks:
+        return {}
+
     task_type_completions = defaultdict(lambda: defaultdict(int))
     task_type_completion_rates = defaultdict(list)
 
