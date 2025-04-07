@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     s3_bucket_name: str
     s3_folder_name: str
 
-    model_config = SettingsConfigDict(env_file="api/.env")
+    model_config = SettingsConfigDict(env_file=join(root_dir, ".env"))
 
 
 @lru_cache

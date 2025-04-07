@@ -1718,10 +1718,25 @@ async def update_message_timestamp(message_id: int, new_timestamp: datetime):
     )
 
 
-async def delete_user_chat_history_for_task(task_id: int, user_id: int):
+async def delete_user_chat_history_for_task(question_id: int, user_id: int):
     await execute_db_operation(
-        f"DELETE FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?",
-        (task_id, user_id),
+        f"DELETE FROM {chat_history_table_name} WHERE question_id = ? AND user_id = ?",
+        (question_id, user_id),
+    )
+
+
+async def delete_completion_history_for_task(
+    task_id: int, question_id: int, user_id: int
+):
+    if task_id is not None:
+        await execute_db_operation(
+            f"DELETE FROM {chat_history_table_name} WHERE task_id = ? AND user_id = ?",
+            (task_id, user_id),
+        )
+
+    await execute_db_operation(
+        f"DELETE FROM {chat_history_table_name} WHERE question_id = ? AND user_id = ?",
+        (question_id, user_id),
     )
 
 

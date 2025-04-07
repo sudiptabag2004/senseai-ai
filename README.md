@@ -17,6 +17,33 @@ To learn more about making a contribution to SensAI, please see our [Contributin
 ## Installation
 Refer to the [INSTALL.md](./docs/INSTALL.md) file for instructions on how to install and run the backend locally.
 
+## Testing
+SensAI uses pytest for testing the API endpoints and measuring code coverage. To run the tests and generate coverage reports, follow these instructions:
+
+### Installing Test Dependencies
+```bash
+pip install -r requirements-dev.txt
+```
+
+### Running Tests
+To run all tests and generate a coverage report:
+```bash
+./scripts/run_tests.sh
+```
+
+To run only unit tests:
+```bash
+./scripts/run_unit_tests.sh
+```
+
+To run only integration tests:
+```bash
+./scripts/run_integration_tests.sh
+```
+
+### Coverage Reports
+After running the full test suite with `run_tests.sh`, a HTML coverage report will be generated in the `coverage_html` directory. Open `coverage_html/index.html` in your browser to view the report.
+
 <!-- ## Deployment
 Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD). -->
 

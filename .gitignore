@@ -20,3 +20,4 @@ scripts
 *.pkl
 secrets.toml
 secrets.*.toml
+coverage_html
