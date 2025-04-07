@@ -10,9 +10,10 @@ test:
   before_script:
     - pip install -r requirements-dev.txt
     - pip install codecov
+    - cp src/api/.env.example src/api/.env
   script:
     - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml
-    - codecov
+    - codecov -f coverage.xml
   artifacts:
     paths:
       - coverage.xml
