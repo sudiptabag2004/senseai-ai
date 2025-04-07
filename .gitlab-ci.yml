@@ -1,7 +1,25 @@
 stages:
+  - test
   - build
   - deploy-dev
   - deploy-demo
+
+test:
+  stage: test
+  image: python:3.10
+  before_script:
+    - pip install -r requirements-dev.txt
+    - pip install codecov
+  script:
+    - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml
+    - codecov
+  artifacts:
+    paths:
+      - coverage.xml
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
 build:
   stage: build

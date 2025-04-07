@@ -1,5 +1,7 @@
 # SensAI backend
 
+[![codecov](https://codecov.io/gl/hvacademy/sensai-ai/branch/main/graph/badge.svg)](https://codecov.io/gl/hvacademy/sensai-ai)
+
 SensAI is an AI-first Learning Management System (LMS) which enables educators to help them teacher smarter and reach further. SensAI coaches your students through questions that develop deeper thinking—just like you would, but for every student and all the time. This repository is the backend for SensAI. The frontend repository can be found [here](https://gitlab.com/hvacademy/sensai-frontend).
 
 If you are using SensAI and have any feedback for us or want any help with using SensAI, please consider [joining our community](https://chat.whatsapp.com/LmiulDbWpcXIgqNK6fZyxe) of AI + Education builders and reaching out to us.
@@ -43,6 +45,9 @@ To run only integration tests:
 
 ### Coverage Reports
 After running the full test suite with `run_tests.sh`, a HTML coverage report will be generated in the `coverage_html` directory. Open `coverage_html/index.html` in your browser to view the report.
+
+### CodeCov Integration
+This project is integrated with [CodeCov](https://codecov.io) for continuous monitoring of code coverage. Coverage reports are automatically generated and uploaded to CodeCov when tests are run in the GitLab CI pipeline. The CodeCov badge at the top of this README shows the current coverage status.
 
 <!-- ## Deployment
 Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD). -->
