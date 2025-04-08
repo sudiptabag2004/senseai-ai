@@ -238,18 +238,19 @@ async def ai_response_for_question(request: AIChatRequest):
     parser = PydanticOutputParser(pydantic_object=Output)
     format_instructions = parser.get_format_instructions()
 
-    if request.task_type in [TaskType.EXAM, TaskType.QUIZ] and question["context"]:
+    if request.task_type in [TaskType.EXAM, TaskType.QUIZ]:
         knowledge_base = None
 
-        linked_learning_material_ids = question["context"]["linkedMaterialIds"]
-        knowledge_blocks = question["context"]["blocks"]
+        if question["context"]:
+            linked_learning_material_ids = question["context"]["linkedMaterialIds"]
+            knowledge_blocks = question["context"]["blocks"]
 
-        if linked_learning_material_ids:
-            for id in linked_learning_material_ids:
-                blocks = await fetch_blocks(int(id), "task")
-                knowledge_blocks += blocks
+            if linked_learning_material_ids:
+                for id in linked_learning_material_ids:
+                    blocks = await fetch_blocks(int(id), "task")
+                    knowledge_blocks += blocks
 
-        knowledge_base = construct_description_from_blocks(knowledge_blocks)
+            knowledge_base = construct_description_from_blocks(knowledge_blocks)
 
         context_instructions = ""
         if knowledge_base:
