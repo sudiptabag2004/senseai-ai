@@ -4019,6 +4019,7 @@ async def get_user_courses(user_id: int) -> List[Dict]:
 
         # Dictionary to track user's role in each course
         course_roles = {}
+        course_to_cohort = {}
 
         # Add courses from user's cohorts with their roles
         for cohort in user_cohorts:
@@ -4028,6 +4029,8 @@ async def get_user_courses(user_id: int) -> List[Dict]:
             cohort_courses = await get_courses_for_cohort(cohort_id)
             for course in cohort_courses:
                 course_id = course["id"]
+                course_to_cohort[course_id] = cohort_id
+
                 # Only update role if not already an admin/owner
                 if course_id not in course_roles or course_roles[course_id] not in [
                     "admin",
@@ -4065,6 +4068,10 @@ async def get_user_courses(user_id: int) -> List[Dict]:
             if course_row:
                 course_dict = convert_course_db_to_dict(course_row)
                 course_dict["role"] = role  # Add user's role to the course dictionary
+
+                if role == group_role_learner:
+                    course_dict["cohort_id"] = course_to_cohort[course_id]
+
                 courses.append(course_dict)
 
         return courses

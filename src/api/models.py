@@ -330,6 +330,7 @@ class Organization(BaseModel):
 class UserCourse(Course):
     role: UserCourseRole
     org: Organization
+    cohort_id: Optional[int] = None
 
 
 class AddCourseToCohortsRequest(BaseModel):
