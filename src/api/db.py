@@ -2156,7 +2156,37 @@ async def insert_or_return_user(
     return user
 
 
-async def add_members_to_cohort(cohort_id: int, emails: List[str], roles: List[str]):
+async def add_members_to_cohort(
+    cohort_id: int, org_slug: str, emails: List[str], roles: List[str]
+):
+    # Check if cohort belongs to the organization
+    cohort_exists = await execute_db_operation(
+        f"""
+        SELECT 1 FROM {cohorts_table_name} WHERE id = ? AND org_id = (SELECT id FROM {organizations_table_name} WHERE slug = ?)
+        """,
+        (cohort_id, org_slug),
+        fetch_one=True,
+    )
+
+    if not cohort_exists:
+        raise Exception("Cohort does not belong to this organization")
+
+    # Check if any of the emails is an admin for the org
+    admin_emails = await execute_db_operation(
+        f"""
+        SELECT email FROM {users_table_name} u
+        JOIN {user_organizations_table_name} uo ON u.id = uo.user_id
+        WHERE uo.org_id = (SELECT id FROM {organizations_table_name} WHERE slug = ?)
+        AND (uo.role = 'admin' OR uo.role = 'owner')
+        AND u.email IN ({','.join(['?' for _ in emails])})
+        """,
+        (org_slug, *emails),
+        fetch_all=True,
+    )
+
+    if admin_emails:
+        raise Exception(f"Cannot add an admin to the cohort.")
+
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 

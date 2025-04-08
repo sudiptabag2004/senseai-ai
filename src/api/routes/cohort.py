@@ -74,10 +74,16 @@ async def get_cohort_by_id(cohort_id: int) -> Dict:
 @router.post("/{cohort_id}/members")
 async def add_members_to_cohort(cohort_id: int, request: AddMembersToCohortRequest):
     try:
-        await add_members_to_cohort_in_db(cohort_id, request.emails, request.roles)
+        await add_members_to_cohort_in_db(
+            cohort_id, request.org_slug, request.emails, request.roles
+        )
         return {"success": True}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        if "User already exists in cohort" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
+        elif "Cannot add an admin to the cohort" in str(e):
+            raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{cohort_id}/groups")
