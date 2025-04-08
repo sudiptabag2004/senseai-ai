@@ -84,7 +84,8 @@ class CreateCohortResponse(BaseModel):
 
 
 class AddMembersToCohortRequest(BaseModel):
-    org_slug: str
+    org_slug: Optional[str] = None
+    org_id: Optional[int] = None
     emails: List[str]
     roles: List[str]
 

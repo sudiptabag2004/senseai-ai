@@ -2157,14 +2157,38 @@ async def insert_or_return_user(
 
 
 async def add_members_to_cohort(
-    cohort_id: int, org_slug: str, emails: List[str], roles: List[str]
+    cohort_id: int, org_slug: str, org_id: int, emails: List[str], roles: List[str]
 ):
+    if org_slug is None and org_id is None:
+        raise Exception("Either org_slug or org_id must be provided")
+
+    if org_slug is not None:
+        org_id = await execute_db_operation(
+            f"SELECT id FROM {organizations_table_name} WHERE slug = ?",
+            (org_slug,),
+            fetch_one=True,
+        )
+
+        if org_id is None:
+            raise Exception("Organization not found")
+
+        org_id = org_id[0]
+    else:
+        org = await execute_db_operation(
+            f"SELECT id FROM {organizations_table_name} WHERE id = ?",
+            (org_id,),
+            fetch_one=True,
+        )
+
+        if org is None:
+            raise Exception("Organization not found")
+
     # Check if cohort belongs to the organization
     cohort_exists = await execute_db_operation(
         f"""
-        SELECT 1 FROM {cohorts_table_name} WHERE id = ? AND org_id = (SELECT id FROM {organizations_table_name} WHERE slug = ?)
+        SELECT 1 FROM {cohorts_table_name} WHERE id = ? AND org_id = ?
         """,
-        (cohort_id, org_slug),
+        (cohort_id, org_id),
         fetch_one=True,
     )
 
@@ -2176,11 +2200,11 @@ async def add_members_to_cohort(
         f"""
         SELECT email FROM {users_table_name} u
         JOIN {user_organizations_table_name} uo ON u.id = uo.user_id
-        WHERE uo.org_id = (SELECT id FROM {organizations_table_name} WHERE slug = ?)
+        WHERE uo.org_id = ?
         AND (uo.role = 'admin' OR uo.role = 'owner')
         AND u.email IN ({','.join(['?' for _ in emails])})
         """,
-        (org_slug, *emails),
+        (org_id, *emails),
         fetch_all=True,
     )
 

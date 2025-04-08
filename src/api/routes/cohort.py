@@ -75,7 +75,7 @@ async def get_cohort_by_id(cohort_id: int) -> Dict:
 async def add_members_to_cohort(cohort_id: int, request: AddMembersToCohortRequest):
     try:
         await add_members_to_cohort_in_db(
-            cohort_id, request.org_slug, request.emails, request.roles
+            cohort_id, request.org_slug, request.org_id, request.emails, request.roles
         )
         return {"success": True}
     except Exception as e:
