@@ -192,7 +192,7 @@ class Block(BaseModel):
     id: Optional[str] = None
     type: str
     props: Optional[Dict] = {}
-    content: List
+    content: Optional[List] = None
     children: Optional[List] = []
     position: Optional[int] = (
         None  # not present when sent from frontend at the time of publishing

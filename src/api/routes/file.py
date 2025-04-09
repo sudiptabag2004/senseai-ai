@@ -6,7 +6,11 @@ import boto3
 from botocore.exceptions import ClientError
 from api.settings import settings
 from api.utils.logging import logger
-from api.utils.s3 import generate_s3_uuid, get_audio_upload_s3_key
+from api.utils.s3 import (
+    generate_s3_uuid,
+    get_audio_upload_s3_key,
+    get_image_upload_s3_key,
+)
 from api.models import (
     PresignedUrlRequest,
     PresignedUrlResponse,
@@ -26,7 +30,16 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
         )
 
         uuid = generate_s3_uuid()
-        key = get_audio_upload_s3_key(uuid)
+
+        if request.file_type == "audio":
+            key = get_audio_upload_s3_key(uuid)
+        elif request.file_type == "image":
+            key = get_image_upload_s3_key(uuid)
+        else:
+            raise HTTPException(
+                status_code=400, detail="Invalid file type. Must be audio or image"
+            )
+
         presigned_url = s3_client.generate_presigned_url(
             "put_object",
             Params={
@@ -55,6 +68,7 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
 @router.get("/presigned-url/get")
 async def get_download_presigned_url(
     uuid: str,
+    file_type: str,
 ) -> S3FetchPresignedUrlResponse:
     try:
         s3_client = boto3.client(
@@ -63,11 +77,20 @@ async def get_download_presigned_url(
             config=boto3.session.Config(signature_version="s3v4"),
         )
 
+        if file_type == "audio":
+            key = get_audio_upload_s3_key(uuid)
+        elif file_type == "image":
+            key = get_image_upload_s3_key(uuid)
+        else:
+            raise HTTPException(
+                status_code=400, detail="Invalid file type. Must be audio or image"
+            )
+
         presigned_url = s3_client.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": settings.s3_bucket_name,
-                "Key": get_audio_upload_s3_key(uuid),
+                "Key": key,
             },
             ExpiresIn=600,  # URL expires in 1 hour
         )
