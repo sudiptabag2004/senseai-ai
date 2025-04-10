@@ -548,7 +548,6 @@ class GetUserStreakResponse(BaseModel):
 
 
 class PresignedUrlRequest(BaseModel):
-    file_type: str
     content_type: str = "audio/wav"
 
 

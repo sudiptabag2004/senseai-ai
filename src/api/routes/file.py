@@ -8,8 +8,7 @@ from api.settings import settings
 from api.utils.logging import logger
 from api.utils.s3 import (
     generate_s3_uuid,
-    get_audio_upload_s3_key,
-    get_image_upload_s3_key,
+    get_media_upload_s3_key,
 )
 from api.models import (
     PresignedUrlRequest,
@@ -30,15 +29,7 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
         )
 
         uuid = generate_s3_uuid()
-
-        if request.file_type == "audio":
-            key = get_audio_upload_s3_key(uuid)
-        elif request.file_type == "image":
-            key = get_image_upload_s3_key(uuid)
-        else:
-            raise HTTPException(
-                status_code=400, detail="Invalid file type. Must be audio or image"
-            )
+        key = get_media_upload_s3_key(uuid, request.content_type.split("/")[1])
 
         presigned_url = s3_client.generate_presigned_url(
             "put_object",
@@ -68,7 +59,7 @@ async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlRespons
 @router.get("/presigned-url/get")
 async def get_download_presigned_url(
     uuid: str,
-    file_type: str,
+    file_extension: str,
 ) -> S3FetchPresignedUrlResponse:
     try:
         s3_client = boto3.client(
@@ -77,14 +68,7 @@ async def get_download_presigned_url(
             config=boto3.session.Config(signature_version="s3v4"),
         )
 
-        if file_type == "audio":
-            key = get_audio_upload_s3_key(uuid)
-        elif file_type == "image":
-            key = get_image_upload_s3_key(uuid)
-        else:
-            raise HTTPException(
-                status_code=400, detail="Invalid file type. Must be audio or image"
-            )
+        key = get_media_upload_s3_key(uuid, file_extension)
 
         presigned_url = s3_client.generate_presigned_url(
             "get_object",

@@ -4206,3 +4206,15 @@ async def migrate_tasks_and_question_blocks():
             await cursor.execute(f"DROP TABLE {blocks_table_name}")
 
         await conn.commit()
+
+
+async def undo_task_delete(task_id: int):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"UPDATE {tasks_table_name} SET deleted_at = NULL WHERE id = ?",
+            (task_id,),
+        )
+
+        await conn.commit()

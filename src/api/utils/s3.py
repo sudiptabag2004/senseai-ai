@@ -68,21 +68,13 @@ def download_file_from_s3_as_bytes(key: str):
     return response["Body"].read()
 
 
-def get_audio_upload_s3_dir():
-    return join(settings.s3_folder_name, "media", "audio")
-
-
-def get_image_upload_s3_dir():
-    return join(settings.s3_folder_name, "media", "image")
-
-
 def generate_s3_uuid():
     return str(uuid.uuid4())
 
 
-def get_audio_upload_s3_key(uuid: str):
-    return join(get_audio_upload_s3_dir(), f"{uuid}.wav")
+def get_media_upload_s3_dir():
+    return join(settings.s3_folder_name, "media")
 
 
-def get_image_upload_s3_key(uuid: str):
-    return join(get_image_upload_s3_dir(), f"{uuid}.png")
+def get_media_upload_s3_key(uuid: str, extension: str):
+    return join(get_media_upload_s3_dir(), f"{uuid}.{extension}")

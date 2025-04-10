@@ -18,14 +18,14 @@ from api.db import (
     fetch_blocks,
     get_task,
 )
-from api.utils.s3 import download_file_from_s3_as_bytes, get_audio_upload_s3_key
+from api.utils.s3 import download_file_from_s3_as_bytes, get_media_upload_s3_key
 from api.utils.audio import prepare_audio_input_for_ai
 
 router = APIRouter()
 
 
 def get_user_message_for_audio(uuid: str):
-    audio_data = download_file_from_s3_as_bytes(get_audio_upload_s3_key(uuid))
+    audio_data = download_file_from_s3_as_bytes(get_media_upload_s3_key(uuid, "wav"))
 
     return [
         {
