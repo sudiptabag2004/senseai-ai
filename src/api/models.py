@@ -186,6 +186,7 @@ class Task(BaseModel):
     title: str
     type: TaskType
     status: TaskStatus
+    scheduled_publish_at: datetime | None
 
 
 class Block(BaseModel):
@@ -419,6 +420,7 @@ class CreateDraftTaskResponse(BaseModel):
 class PublishLearningMaterialTaskRequest(BaseModel):
     title: str
     blocks: List[dict]
+    scheduled_publish_at: datetime | None
 
 
 class PublishQuestionRequest(DraftQuestion):
@@ -433,6 +435,7 @@ class PublishQuestionRequest(DraftQuestion):
 class PublishQuizRequest(BaseModel):
     title: str
     questions: List[PublishQuestionRequest]
+    scheduled_publish_at: datetime | None
 
 
 class UpdateQuestionRequest(BaseModel):
@@ -447,6 +450,7 @@ class UpdateQuestionRequest(BaseModel):
 class UpdateQuizRequest(BaseModel):
     title: str
     questions: List[UpdateQuestionRequest]
+    scheduled_publish_at: datetime | None
 
 
 class StoreMessageRequest(BaseModel):

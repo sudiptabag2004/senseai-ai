@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import (
@@ -17,8 +18,18 @@ from api.routes import (
     ai,
     scorecard,
 )
+from api.scheduler import scheduler
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+
+app = FastAPI(lifespan=lifespan)
+
 
 # Add CORS middleware to allow cross-origin requests (for frontend to access backend)
 app.add_middleware(

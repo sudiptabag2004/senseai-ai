@@ -381,6 +381,7 @@ async def create_tasks_table(cursor):
                     status TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     deleted_at DATETIME,
+                    scheduled_publish_at DATETIME,
                     FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
                 )"""
     )
@@ -961,7 +962,7 @@ def construct_description_from_blocks(
 async def get_basic_task_details(task_id: int) -> Dict:
     task = await execute_db_operation(
         f"""
-        SELECT id, title, type, status, org_id
+        SELECT id, title, type, status, org_id, scheduled_publish_at
         FROM {tasks_table_name}
         WHERE id = ? AND deleted_at IS NULL
         """,
@@ -978,6 +979,7 @@ async def get_basic_task_details(task_id: int) -> Dict:
         "type": task[2],
         "status": task[3],
         "org_id": task[4],
+        "scheduled_publish_at": task[5],
     }
 
 
@@ -1040,7 +1042,7 @@ def prepare_blocks_for_publish(blocks: List[Dict]) -> List[Dict]:
 
 
 async def publish_learning_material_task(
-    task_id: int, title: str, blocks: List
+    task_id: int, title: str, blocks: List[Dict], scheduled_publish_at: datetime
 ) -> LearningMaterialTask:
     if not await does_task_exist(task_id):
         return False
@@ -1050,11 +1052,12 @@ async def publish_learning_material_task(
         cursor = await conn.cursor()
 
         await cursor.execute(
-            f"UPDATE {tasks_table_name} SET blocks = ?, status = ?, title = ? WHERE id = ?",
+            f"UPDATE {tasks_table_name} SET blocks = ?, status = ?, title = ?, scheduled_publish_at = ? WHERE id = ?",
             (
                 json.dumps(prepare_blocks_for_publish(blocks)),
                 str(TaskStatus.PUBLISHED),
                 title,
+                scheduled_publish_at,
                 task_id,
             ),
         )
@@ -1064,7 +1067,9 @@ async def publish_learning_material_task(
         return await get_task(task_id)
 
 
-async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
+async def publish_quiz(
+    task_id: int, title: str, questions: List[Dict], scheduled_publish_at: datetime
+):
     if not await does_task_exist(task_id):
         return False
 
@@ -1141,8 +1146,8 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
 
         # Update task status to published
         await cursor.execute(
-            f"UPDATE {tasks_table_name} SET status = ?, title = ? WHERE id = ?",
-            (str(TaskStatus.PUBLISHED), title, task_id),
+            f"UPDATE {tasks_table_name} SET status = ?, title = ?, scheduled_publish_at = ? WHERE id = ?",
+            (str(TaskStatus.PUBLISHED), title, scheduled_publish_at, task_id),
         )
 
         await conn.commit()
@@ -1150,7 +1155,9 @@ async def publish_quiz(task_id: int, title: str, questions: List[Dict]):
         return await get_task(task_id)
 
 
-async def update_quiz(task_id: int, title: str, questions: List[Dict]):
+async def update_quiz(
+    task_id: int, title: str, questions: List[Dict], scheduled_publish_at: datetime
+):
     if not await does_task_exist(task_id):
         return False
 
@@ -1180,8 +1187,8 @@ async def update_quiz(task_id: int, title: str, questions: List[Dict]):
 
         # Update task status to published
         await cursor.execute(
-            f"UPDATE {tasks_table_name} SET title = ? WHERE id = ?",
-            (title, task_id),
+            f"UPDATE {tasks_table_name} SET title = ?, scheduled_publish_at = ? WHERE id = ?",
+            (title, scheduled_publish_at, task_id),
         )
 
         await conn.commit()
@@ -3751,7 +3758,7 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
 
     # Fetch all tasks for this course
     tasks = await execute_db_operation(
-        f"""SELECT t.id, t.title, t.type, t.status, ct.milestone_id, ct.ordering,
+        f"""SELECT t.id, t.title, t.type, t.status, t.scheduled_publish_at, ct.milestone_id, ct.ordering,
             (CASE WHEN t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') THEN 
                 (SELECT COUNT(*) FROM {questions_table_name} q 
                  WHERE q.task_id = t.id)
@@ -3760,7 +3767,7 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
             JOIN {tasks_table_name} t ON ct.task_id = t.id
             WHERE ct.course_id = ? AND t.deleted_at IS NULL
             {
-                "AND t.status = 'published'"
+                "AND t.status = 'published' AND t.scheduled_publish_at IS NULL"
                 if only_published
                 else ""
             }
@@ -3772,7 +3779,7 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
     # Group tasks by milestone_id
     tasks_by_milestone = defaultdict(list)
     for task in tasks:
-        milestone_id = task[4]
+        milestone_id = task[5]
 
         tasks_by_milestone[milestone_id].append(
             {
@@ -3780,8 +3787,9 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
                 "title": task[1],
                 "type": task[2],
                 "status": task[3],
-                "ordering": task[5],
-                "num_questions": task[6],
+                "scheduled_publish_at": task[4],
+                "ordering": task[6],
+                "num_questions": task[7],
             }
         )
 
@@ -4129,85 +4137,6 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
     ]
 
 
-async def migrate_tasks_and_question_blocks():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Check if blocks column exists in tasks table, if not add it
-        tasks_columns = await execute_db_operation(
-            "PRAGMA table_info(tasks)",
-            fetch_all=True,
-        )
-
-        tasks_columns_names = [column[1] for column in tasks_columns]
-        if "blocks" not in tasks_columns_names:
-            await cursor.execute(
-                f"ALTER TABLE {tasks_table_name} ADD COLUMN blocks TEXT"
-            )
-
-        # Check if blocks column exists in questions table, if not add it
-        questions_columns = await execute_db_operation(
-            "PRAGMA table_info(questions)",
-            fetch_all=True,
-        )
-
-        questions_columns_names = [column[1] for column in questions_columns]
-        if "blocks" not in questions_columns_names:
-            await cursor.execute(
-                f"ALTER TABLE {questions_table_name} ADD COLUMN blocks TEXT"
-            )
-
-        # First, migrate tasks
-        tasks = await execute_db_operation(
-            f"SELECT id, type FROM {tasks_table_name} WHERE deleted_at IS NULL",
-            fetch_all=True,
-        )
-
-        for task in tasks:
-            task_id = task[0]
-            task_type = task[1]
-
-            if task_type != TaskType.LEARNING_MATERIAL:
-                continue
-
-            # Fetch blocks for this task
-            blocks = await fetch_blocks(task_id, "task")
-
-            if blocks:
-                # Update the task with the blocks
-                await cursor.execute(
-                    f"UPDATE {tasks_table_name} SET blocks = ? WHERE id = ?",
-                    (json.dumps(blocks), task_id),
-                )
-
-        # Next, migrate questions
-        questions = await execute_db_operation(
-            f"SELECT id FROM {questions_table_name}",
-            fetch_all=True,
-        )
-
-        for question in questions:
-            question_id = question[0]
-            # Fetch blocks for this question
-            blocks = await fetch_blocks(question_id, "question")
-
-            if blocks:
-                # Convert blocks to JSON string
-                blocks_json = json.dumps(blocks)
-
-                # Update the question with the blocks
-                await cursor.execute(
-                    f"UPDATE {questions_table_name} SET blocks = ? WHERE id = ?",
-                    (blocks_json, question_id),
-                )
-
-        # Drop the blocks table as it's no longer needed after migration
-        if await check_table_exists(blocks_table_name, cursor):
-            await cursor.execute(f"DROP TABLE {blocks_table_name}")
-
-        await conn.commit()
-
-
 async def undo_task_delete(task_id: int):
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -4218,3 +4147,40 @@ async def undo_task_delete(task_id: int):
         )
 
         await conn.commit()
+
+
+async def publish_scheduled_tasks():
+    """Publish all tasks whose scheduled time has arrived"""
+    current_time = datetime.now()
+    # Ensure we're using UTC time for consistency
+    current_time = datetime.now(timezone.utc)
+
+    # Get all tasks that should be published now
+    tasks = await execute_db_operation(
+        f"""
+        UPDATE {tasks_table_name}
+        SET scheduled_publish_at = NULL
+        WHERE status = 'published'
+        AND scheduled_publish_at IS NOT NULL
+        AND scheduled_publish_at <= ?
+        RETURNING id
+        """,
+        (current_time,),
+        fetch_all=True,
+    )
+
+    return [task[0] for task in tasks] if tasks else []
+
+
+async def migrate_tasks_table():
+    """Add scheduled_publish_at column if it doesn't exist"""
+    columns = await execute_db_operation(
+        f"PRAGMA table_info({tasks_table_name})",
+        fetch_all=True,
+    )
+
+    columns_names = [column[1] for column in columns]
+    if "scheduled_publish_at" not in columns_names:
+        await execute_db_operation(
+            f"ALTER TABLE {tasks_table_name} ADD COLUMN scheduled_publish_at DATETIME"
+        )

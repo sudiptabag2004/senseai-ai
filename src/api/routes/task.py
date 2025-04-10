@@ -67,7 +67,7 @@ async def publish_learning_material_task(
     task_id: int, request: PublishLearningMaterialTaskRequest
 ) -> LearningMaterialTask:
     result = await publish_learning_material_task_in_db(
-        task_id, request.title, request.blocks
+        task_id, request.title, request.blocks, request.scheduled_publish_at
     )
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -80,6 +80,7 @@ async def publish_quiz(task_id: int, request: PublishQuizRequest) -> QuizTask:
         task_id=task_id,
         title=request.title,
         questions=request.questions,
+        scheduled_publish_at=request.scheduled_publish_at,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -92,6 +93,7 @@ async def update_quiz(task_id: int, request: UpdateQuizRequest) -> QuizTask:
         task_id=task_id,
         title=request.title,
         questions=request.questions,
+        scheduled_publish_at=request.scheduled_publish_at,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
