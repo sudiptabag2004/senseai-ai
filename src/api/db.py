@@ -1555,7 +1555,7 @@ async def get_cohort_completion(
         FROM {tasks_table_name} t
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
-        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}'
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL
         """
     params = (cohort_id,)
 
@@ -1583,7 +1583,7 @@ async def get_cohort_completion(
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
         LEFT JOIN {questions_table_name} q ON t.id = q.task_id AND q.deleted_at IS NULL
-        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}'{
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL{
             " AND ct.course_id = ?" if course_id else ""
         } 
         ORDER BY t.id, q.position ASC
@@ -3767,7 +3767,7 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
             JOIN {tasks_table_name} t ON ct.task_id = t.id
             WHERE ct.course_id = ? AND t.deleted_at IS NULL
             {
-                "AND t.status = 'published' AND t.scheduled_publish_at IS NULL"
+                f"AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL"
                 if only_published
                 else ""
             }
@@ -4160,7 +4160,7 @@ async def publish_scheduled_tasks():
         f"""
         UPDATE {tasks_table_name}
         SET scheduled_publish_at = NULL
-        WHERE status = 'published'
+        WHERE status = '{TaskStatus.PUBLISHED}'
         AND scheduled_publish_at IS NOT NULL
         AND scheduled_publish_at <= ?
         RETURNING id
