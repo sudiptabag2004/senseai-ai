@@ -4235,7 +4235,7 @@ async def add_generated_course_modules(
             ]
         )
         module_id = await add_milestone_to_course(
-            course_id, module["module_name"], color, org_id
+            course_id, module["name"], color, org_id
         )
         module_ids.append(module_id)
 
@@ -4265,10 +4265,10 @@ def convert_content_to_blocks(content: str) -> List[Dict]:
 async def add_generated_learning_material(task_id: int, task_details: Dict):
     await publish_learning_material_task(
         task_id,
-        task_details["task_name"],
+        task_details["name"],
         convert_content_to_blocks(task_details["details"]["content"]),
         None,
-        TaskStatus.DRAFT,
+        TaskStatus.PUBLISHED,  # TEMP: turn to draft later
     )
 
 
@@ -4293,7 +4293,15 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
             else TaskAIResponseType.REPORT
         )
         question["generation_model"] = None
-        question["context"] = None
+        question["context"] = (
+            {
+                "blocks": prepare_blocks_for_publish(
+                    convert_content_to_blocks(question["context"])
+                )
+            }
+            if question["context"]
+            else None
+        )
         question["max_attempts"] = 1 if task_details["type"] == TaskType.EXAM else None
         question["is_feedback_shown"] = (
             True if task_details["type"] == TaskType.QUIZ else False
@@ -4305,15 +4313,15 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
 
     await publish_quiz(
         task_id,
-        task_details["task_name"],
+        task_details["name"],
         task_details["details"]["questions"],
         None,
-        TaskStatus.DRAFT,
+        TaskStatus.PUBLISHED,  # TEMP: turn to draft later
     )
 
 
 async def add_generated_course(course_id: int, org_id: int, course_details: Dict):
-    await update_course_name(course_id, course_details["course_name"])
+    await update_course_name(course_id, course_details["name"])
 
     module_ids = await add_generated_course_modules(
         course_id, org_id, course_details["modules"]
@@ -4323,7 +4331,7 @@ async def add_generated_course(course_id: int, org_id: int, course_details: Dict
         for concept in module["concepts"]:
             for task in concept["tasks"]:
                 task_id = await create_draft_task_for_course(
-                    task["task_name"],
+                    task["name"],
                     task["type"],
                     org_id,
                     course_id,
