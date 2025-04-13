@@ -1,0 +1,1684 @@
+{
+    "course_name": "Achieving Personal Transformation",
+    "modules": [
+        {
+            "module_name": "Understanding Yourself and Defining Your 'Who'",
+            "id": 7,
+            "concepts": [
+                {
+                    "concept_name": "Self-Identity and the 'Who'",
+                    "description": "Understanding your identity, strengths, values, and passions as the foundation for setting ambitious goals.",
+                    "tasks": [
+                        {
+                            "task_name": "Defining Self-Identity",
+                            "type": "learning_material",
+                            "description": "A learning material explaining the importance of self-awareness and how to identify your strengths, values, and passions.",
+                            "details": {
+                                "content": "Understanding your identity is crucial for personal transformation. This involves reflecting on your strengths, values, and passions. Self-awareness serves as the foundation for setting ambitious goals. \n\nWhen thinking about your identity, consider these questions:\n\n*   **Visionary:** Can you see beyond today and imagine what's possible?\n*   **Courageous:** Are you willing to step into the unknown with confidence?\n*   **Optimistic:** Do you believe no challenge is too big?\n*   **Resilient:** Can you view setbacks as stepping stones?\n*   **Adaptable:** Can you adjust your approach while staying focused?\n*   **Disciplined:** Can you take daily action, even when motivation fades?\n*   **Strategic:** Can you break big goals into actionable steps?\n*   **Inspired:** Do you find purpose in the journey, not just the outcome?\n*   **Relentless:** Can you keep going, no matter what?\n*   **Grounded:** Can you stay balanced in body, mind, and spirit?\n*   **Agile:** Can you change strategies while staying committed to the goal?\n*   **Reflective:** Can you continuously learn, adjust, and improve?\n*   **Bold:** Can you think and act beyond conventional limits?\n*   **Tenacious:** Can you persist when others quit?\n*   **Expansive:** Can you see opportunity where others see limitation?\n\nAlso, think about what other descriptors apply to you and the person you wish to be. Success isn't just about what you achieve\u2014it's about WHO you become."
+                            }
+                        },
+                        {
+                            "task_name": "Self-Reflection Quiz",
+                            "type": "quiz",
+                            "description": "A quiz to assess the learner's understanding of their own strengths, values, and passions.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on your strengths. Describe three key strengths that define you and provide specific examples of how you've demonstrated these strengths in your life or work.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Self-Assessment of Strengths",
+                                            "criteria": [
+                                                {
+                                                    "name": "Identification of Strengths",
+                                                    "description": "Clearly identifies three key personal strengths.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Specific Examples",
+                                                    "description": "Provides specific and relevant examples to support each strength.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Clarity and Insight",
+                                                    "description": "Demonstrates clear understanding and insightful reflection on personal strengths.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Consider your values. What are the three most important values that guide your decisions and actions? Explain why these values are significant to you.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Values Clarification",
+                                            "criteria": [
+                                                {
+                                                    "name": "Identification of Core Values",
+                                                    "description": "Clearly identifies three core values that guide personal decisions.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Explanation of Significance",
+                                                    "description": "Provides a thoughtful explanation of why these values are personally significant.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Connection to Actions",
+                                                    "description": "Connects the stated values to actual decisions and actions.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Explore your passions. What activities or pursuits make you feel most alive and engaged? Describe how you can incorporate these passions more fully into your daily life.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Passion Integration",
+                                            "criteria": [
+                                                {
+                                                    "name": "Identification of Passions",
+                                                    "description": "Clearly identifies activities or pursuits that evoke strong engagement and passion.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Plan for Integration",
+                                                    "description": "Describes a realistic and actionable plan for incorporating these passions into daily life.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Enthusiasm and Commitment",
+                                                    "description": "Expresses enthusiasm and commitment towards pursuing these passions.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "task_name": "Identity Exam",
+                            "type": "quiz",
+                            "description": "A final exam to test the learner's complete understanding of self-identity.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on your strengths, values, and passions. How do these elements contribute to your self-identity?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Self-Identity Assessment",
+                                            "criteria": [
+                                                {
+                                                    "name": "Clarity of Self-Awareness",
+                                                    "description": "Demonstrates a clear understanding of one's own strengths, values, and passions.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Depth of Reflection",
+                                                    "description": "Provides thoughtful and insightful reflections on the interplay between strengths, values, and passions.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Relevance to Goals",
+                                                    "description": "Connects self-identity to the setting of ambitious goals.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Consider the qualities of a 'Visionary', 'Courageous', and 'Optimistic' individual.  How can embodying these traits influence your approach to personal transformation and achieving the impossible?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Personal Transformation Readiness",
+                                            "criteria": [
+                                                {
+                                                    "name": "Understanding of Traits",
+                                                    "description": "Demonstrates an understanding of the significance of traits such as visionary, courageous and optimistic in influencing personal transformation.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Application to Personal Growth",
+                                                    "description": "Ability to provide specific examples of how one would consciously adopt these traits and how those traits would improve the status quo.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Commitment to Change",
+                                                    "description": "Displays a strong commitment to adopt and implement the transformation in their own personal and professional environment.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on the idea of 'shifting your mindset' to achieve the impossible. Describe a situation where you successfully reframed a challenge to achieve a positive outcome. What steps can you take to intentionally adopt a more constructive narrative in your life?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Mindset Transformation",
+                                            "criteria": [
+                                                {
+                                                    "name": "Demonstrates Mindset Awareness",
+                                                    "description": "Demonstrates awareness of fixed vs growth mindsets. Understands how a mindset can influence behavior.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Demonstrates Change",
+                                                    "description": "Ability to provide specific examples of how they would consciously transform fixed mindsets to growth mindsets in their daily routine.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Commitment to Change",
+                                                    "description": "Displays a strong commitment to adopt and implement the mindset transformations in their own personal and professional environment.",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "The Person You Wish to Be",
+                    "description": "Explore the qualities needed to become the person you aspire to be and how those qualities relate to achieving your goals.",
+                    "tasks": [
+                        {
+                            "task_name": "Qualities of a High Achiever",
+                            "type": "learning_material",
+                            "description": "A learning material discussing the qualities of visionary, courageous, optimistic, resilient, adaptable, disciplined, strategic, inspired, relentless, grounded, agile, reflective, bold, tenacious and expansive individuals.",
+                            "details": {
+                                "content": "To become the person you wish to be, it's helpful to cultivate certain qualities. Here are some of them:\n\n*   **Visionary** - See beyond today and imagine what's possible.\n*   **Courageous** - Step into the unknown with confidence.\n*   **Optimistic** - Believe no challenge is too big.\n*   **Resilient** - View setbacks as stepping stones.\n*   **Adaptable** - Adjust your approach while staying focused.\n*   **Disciplined** - Take daily action, even when motivation fades.\n*   **Strategic** - Break big goals into actionable steps.\n*   **Inspired** - Find purpose in the journey, not just the outcome.\n*   **Relentless** - Keep going, no matter what.\n*   **Grounded** - Stay balanced in body, mind, and spirit.\n*   **Agile** - Change strategies while staying committed to the goal.\n*   **Reflective** - Continuously learn, adjust, and improve.\n*   **Bold** - Think and act beyond conventional limits.\n*   **Tenacious** - Persist when others quit.\n*   **Expansive** - See opportunity where others see limitation."
+                            }
+                        },
+                        {
+                            "task_name": "Ideal Self Quiz",
+                            "type": "quiz",
+                            "description": "A quiz asking the learner to identify the qualities they need to develop in order to achieve their goals.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on your strengths, values, and passions. What qualities do you need to cultivate to become the person who can achieve your 'stretch' goals?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Personal Qualities Assessment",
+                                            "criteria": [
+                                                {
+                                                    "name": "Self-Awareness",
+                                                    "description": "Demonstrates a clear understanding of personal strengths, values, and passions.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Alignment with Goals",
+                                                    "description": "Identifies qualities that directly support the achievement of 'stretch' goals.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Actionable Insights",
+                                                    "description": "Provides specific and actionable insights into personal development areas.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which of the following qualities is most important for overcoming setbacks and viewing them as learning opportunities?",
+                                        "correct_answer": "Resilience",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the material, what is the benefit of adopting an expansive mindset?",
+                                        "correct_answer": "Believing anything is possible",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "How can the qualities of being 'strategic' and 'disciplined' help in breaking down big goals into actionable steps and taking daily action, even when motivation fades?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Strategic Discipline Assessment",
+                                            "criteria": [
+                                                {
+                                                    "name": "Goal Breakdown",
+                                                    "description": "Effectively breaks down a large goal into smaller, manageable steps.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Action Planning",
+                                                    "description": "Creates a realistic and actionable plan for daily progress.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Motivation Strategies",
+                                                    "description": "Identifies strategies to maintain discipline even when motivation is low.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on a situation where you faced a significant challenge. Which qualities (e.g., courage, adaptability, tenacity) did you rely on most, and how did they help you overcome the challenge?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Challenge Overcoming Qualities",
+                                            "criteria": [
+                                                {
+                                                    "name": "Identification of Qualities",
+                                                    "description": "Accurately identifies the qualities used to overcome the challenge.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Relevance to Situation",
+                                                    "description": "Explains how the identified qualities were specifically relevant to the challenge.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Impact on Outcome",
+                                                    "description": "Articulates the positive impact of these qualities on the outcome.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Embracing a Top-Down Approach",
+                    "description": "Understanding the top-down approach and how it can help you define where you want to be, and grow beyond your comfort zone.",
+                    "tasks": [
+                        {
+                            "task_name": "Top-Down vs Bottom-Up",
+                            "type": "learning_material",
+                            "description": "A learning material explaining the difference between the Top-Down (Anything is Possible) and Bottom-Up (Playing it Safe) approaches to goal setting.",
+                            "details": {
+                                "content": "There are two primary approaches to goal setting: the Bottom-Up Approach (Playing It Safe) and the Top-Down Approach (The 'Anything is Possible' Approach).\n\n**Bottom-Up Approach (Playing It Safe):**\n\n*   Starts with what you have today \u2013 resources, skills, and existing opportunities.\n*   Feels comfortable and manageable but keeps you in familiar territory.\n*   Limits ambition because it focuses on what seems \u201crealistic.\u201d\n*   Keeps you in the zone of mediocrity!\n\n**Top-Down Approach (The \u2018Anything is Possible' Approach):**\n\n*   Starts with who/where you want to be, not who/where you are today\n*   Forces you to think differently, stretch beyond comfort, and grow\n*   Requires optimism and belief in your ability to figure things out\n*   Demands bold action and trust in the process\n\nThe key difference lies in perspective. The bottom-up approach is limited by your current circumstances, while the top-down approach is driven by your vision of what's possible. To embrace the 'Anything is Possible' approach, stop asking \"Can I?\" and start by asking WHO SHOULD I BE? And then asking \"How can I?\u201d The answer to 'How?' is \u201cYES!\u201d It is not about \u201chow?\u201d and ONLY about \u201cWHO?\u201d"
+                            }
+                        },
+                        {
+                            "task_name": "Approach Quiz",
+                            "type": "quiz",
+                            "description": "A quiz testing understanding of when to use each approach. ",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which approach to goal setting starts with identifying who you want to be and stretches beyond your current comfort zone?",
+                                        "correct_answer": "Top-Down Approach",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which approach to goal setting focuses on what seems realistic and manageable based on your current resources and skills?",
+                                        "correct_answer": "Bottoms-Up Approach",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which approach encourages you to ask 'Who should I be?' instead of 'Can I?'?",
+                                        "correct_answer": "Top-Down Approach",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which approach is more likely to keep you in your comfort zone and familiar territory?",
+                                        "correct_answer": "Bottoms-Up Approach",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which approach requires a strong belief in your ability to figure things out and demands bold action?",
+                                        "correct_answer": "Top-Down Approach",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "module_name": "Setting 'STRETCH, RAISE-THE-BAR' Measurable Goals",
+            "id": 8,
+            "concepts": [
+                {
+                    "concept_name": "Clarifying Your 'Why'",
+                    "description": "Understanding your motivations for pursuing a goal to fuel determination and commitment.",
+                    "tasks": [
+                        {
+                            "task_name": "Finding Your Motivation",
+                            "type": "learning_material",
+                            "description": "A learning material discussing how to identify your core motivations and how they relate to your goals.",
+                            "details": {
+                                "content": "Clarifying your motivations for pursuing a goal is essential to fuel your determination and commitment. Knowing your 'why' enhances your resilience in the face of challenges.\n\nTo clarify your motivations, consider the following questions:\n\n1.  What do I wish to achieve any objective?\n2.  Why is achieving this objective important to me?\n3.  How does this objective align with my core values and long-term aspirations?\n4.  What impact will achieving this objective have on my personal and professional life?\n5.  How will achieving this objective make me feel, and why is that feeling important?\n6.  What are the potential benefits of achieving this objective, and who else will benefit from it?\n7.  How does achieving this objective contribute to my overall sense of purpose and fulfillment?\n\nReflecting on these questions will help you articulate a clear and compelling 'why' that will drive you forward, even when faced with obstacles and setbacks. Remember, your 'why' is your compass, guiding you towards your desired destination."
+                            }
+                        },
+                        {
+                            "task_name": "Motivation Quiz",
+                            "type": "quiz",
+                            "description": "A quiz to help learners clarify their motivations and assess their commitment levels.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on your strengths, values, and passions. How do these aspects of your identity motivate you to pursue your goals?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Self-Awareness and Motivation",
+                                            "criteria": [
+                                                {
+                                                    "name": "Clarity of Self-Reflection",
+                                                    "description": "The answer clearly articulates the learner's strengths, values, and passions.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Connection to Goals",
+                                                    "description": "The answer effectively connects the learner's self-identity to their motivations for pursuing specific goals.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Depth of Insight",
+                                                    "description": "The answer demonstrates a deep and thoughtful understanding of the learner's own motivations.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Consider the 'Why' behind your objectives. How does understanding your motivations fuel your determination and commitment to overcome challenges?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Motivation and Resilience",
+                                            "criteria": [
+                                                {
+                                                    "name": "Understanding of Motivation",
+                                                    "description": "The answer shows a clear understanding of the role of motivation in achieving goals.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Articulation of Resilience",
+                                                    "description": "The answer effectively explains how strong motivation can build resilience in the face of challenges.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Personal Connection",
+                                                    "description": "The answer includes personal insights or examples that demonstrate the learner's understanding.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Reflect on instances where you avoided bold goals due to comfort, fear of failure, lack of clarity, social resistance or immediate pressures. How can you reframe your mindset to embrace the mindset that anything is possible?",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Overcoming Fear",
+                                            "criteria": [
+                                                {
+                                                    "name": "Addressing Avoidance",
+                                                    "description": "The answer includes all of instances where the learner avoided bold goals.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Reframe Mindset",
+                                                    "description": "The answer includes reframing the mindset to 'anything is possible'.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Action Plan",
+                                                    "description": "The answer provides an action plan to overcome fear.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Complete the following sentence.\n\nSuccess is not just about what we ________ but who we ________.",
+                                        "correct_answer": "achieve,become",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Defining Objectives with Clarity and Specificity",
+                    "description": "The process of defining an objective with precision.",
+                    "tasks": [
+                        {
+                            "task_name": "SMART Goals Explained",
+                            "type": "learning_material",
+                            "description": "A learning material explaining how to create SMART (Specific, Measurable, Achievable, Relevant, Time-bound) goals.",
+                            "details": {
+                                "content": "Define your objective with precision. Objectives must be Specific, Measurable, Achievable, Relevant and Time-bound (SMART), allowing you to track your progress. Absolute clarity regarding the objective is needed. \n\nSpecific: Clearly define what you want to achieve. Instead of saying \"I want to improve my health,\" specify \"I want to lose 10 pounds.\"\n\nMeasurable: Establish concrete criteria for measuring progress. For example, \"I will track my weight loss weekly using a scale.\"\n\nAchievable: Set goals that are challenging yet attainable. \"I will lose 10 pounds in 2 months by following a balanced diet and exercising regularly.\"\n\nRelevant: Ensure your goals align with your values and long-term objectives. \"Losing weight will improve my overall health and well-being, allowing me to participate more fully in activities I enjoy.\"\n\nTime-Bound: Set a deadline for achieving your goal. \"I will achieve my weight loss goal by [Date].\"\n\nObjectives must follow the 'ANYTHING is POSSIBLE, RAISE-THE-BAR / STRETCH' principle."
+                            }
+                        },
+                        {
+                            "task_name": "Goal Setting Worksheet",
+                            "type": "learning_material",
+                            "description": "Worksheet to work through setting clear objectives for the learner to track",
+                            "details": {
+                                "content": "## Goal Setting Worksheet\n\nThis worksheet is designed to help you define and set clear, specific, and actionable goals. By working through the following sections, you'll clarify your objectives, understand your motivations, and create a plan to achieve your personal transformation.\n\n### 1. Understanding Your Identity\n\n*   **WHO (Am I?)**: Reflect on your strengths, values, and passions.\n    *   What are you good at?\n    *   What do you care about?\n    *   What activities make you feel alive and engaged?\n\n*   **Who do I wish to be?**: Envision the person you aspire to become.\n    *   What qualities do they possess?\n    *   What impact do they have?\n    *   What does their daily life look like?\n\n### 2. Defining Your Objectives\n\n*   **WHY? (Do I wish to achieve any objective?)**: Clarify your motivations for pursuing a goal. Knowing your 'why' fuels your determination and commitment, making you more resilient in the face of challenges.\n    *   Why is this goal important to you?\n    *   How will achieving this goal impact your life?\n    *   What deeper values does this goal align with?\n\n### 3. Clarity and Specificity\n\n*   **WHAT? (Details of all the tasks/actions to be completed to achieve the objective)**: Define your objective with precision. Absolute clarity regarding the objective is needed.\n    *   Specific: What exactly do you want to achieve?\n    *   Measurable: How will you track your progress?\n    *   Achievable: Is the goal realistic and attainable?\n    *   Relevant: Does the goal align with your values and overall objectives?\n    *   Time-bound: When do you want to achieve this goal?\n\n### 4. Planning and Execution\n\n*   **HOW? (How will I achieve the objective?)**: List and track every single task to be completed!\n    *   Break down your goal into smaller, manageable steps.\n    *   Identify the resources and support you'll need.\n    *   Create a timeline for completing each task.\n\n### 5. Scheduling and Support\n\n*   **WHEN? (Scheduling and completion)**: Time estimation for all tasks!\n    *   Schedule time each day to work on your goal.\n    *   Track your progress and make adjustments as needed.\n    *   Celebrate your accomplishments along the way.\n*   **WHO ELSE WITH? (All the support that might be needed in achieving the objective!)**\n    *   Identify the people who can support you.\n    *   Seek guidance from mentors, coaches, or peers.\n    *   Join a community of like-minded individuals.\n\nBy completing this worksheet, you'll have a clearer understanding of your goals and a solid plan to achieve them. Remember, setting stretch objectives is about believing that anything is possible and pushing yourself beyond your comfort zone. Embrace the journey, stay focused, and celebrate your successes along the way."
+                            }
+                        },
+                        {
+                            "task_name": "Goal Setting Exam",
+                            "type": "quiz",
+                            "description": "An exam testing the learner on how to construct effective goals for themself.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What does the acronym SMART stand for in the context of goal setting?",
+                                        "correct_answer": "Specific, Measurable, Achievable, Relevant, Time-bound",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the reference material, what is the primary benefit of knowing your 'why' when pursuing a goal?",
+                                        "correct_answer": "Fuels your determination and commitment, making you more resilient in the face of challenges",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What is the recommendation regarding the use of pen and paper in the context of defining and achieving an objective?",
+                                        "correct_answer": "Writing, using pen and paper is MOST beneficial!",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What kind of objectives should one set to achieve breakthroughs, according to the reference material?",
+                                        "correct_answer": "Stretch Objectives",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the reference material, what mindset should one embrace to solve a problem?",
+                                        "correct_answer": "Anything is possible",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Breaking Down Goals into Actionable Tasks (The 'What')",
+                    "description": "Listing and tracking every single task needed to achieve the objective.",
+                    "tasks": [
+                        {
+                            "task_name": "Task Breakdown",
+                            "type": "learning_material",
+                            "description": "A learning material explaining the process of breaking down goals into smaller, manageable tasks.",
+                            "details": {
+                                "content": "To effectively achieve objectives, it's crucial to detail all the tasks and actions required. This involves meticulously listing and tracking every single task that needs to be completed. This comprehensive approach ensures that no step is overlooked and that progress can be monitored effectively.\n\nBy breaking down the overall objective into smaller, actionable tasks, you create a roadmap that guides you through the process. Each task represents a milestone, and completing it brings you closer to your ultimate goal. This method not only simplifies the objective but also makes it more achievable by providing a clear and structured plan of action.\n\nScheduling and estimating the time required for each task are integral components of this process. By allocating specific timeframes for each activity, you can manage your time efficiently and ensure that deadlines are met. This also allows you to prioritize tasks based on their importance and urgency, optimizing your productivity and minimizing potential delays."
+                            }
+                        },
+                        {
+                            "task_name": "Task Breakdown Exercise",
+                            "type": "quiz",
+                            "description": "A quiz where students must breakdown a given goal into a series of actionable tasks.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Consider you have an objective to launch a new product in the market. Detail all the tasks/actions to be completed to achieve the objective. Be as comprehensive as possible.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Task Breakdown Scorecard",
+                                            "criteria": [
+                                                {
+                                                    "name": "Completeness",
+                                                    "description": "All the tasks necessary for launching a new product are listed",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Accuracy",
+                                                    "description": "All the tasks are correctly described and are practically feasible",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Granularity",
+                                                    "description": "Tasks are broken down to a sufficient level of detail",
+                                                    "min_score": 0,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Planning and Prioritizing (The 'How')",
+                    "description": "Planning, prioritizing, mind-mapping, and identifying the 80/20 rule to achieve the objective.",
+                    "tasks": [
+                        {
+                            "task_name": "Effective Planning Strategies",
+                            "type": "learning_material",
+                            "description": "A learning material discussing different planning and prioritization techniques like mind-mapping and the 80/20 rule.",
+                            "details": {
+                                "content": "Once you have clarity on 'WHO' you want to be and 'WHY' you want to achieve your objectives, the next step is figuring out 'HOW' you will achieve them. This involves planning, prioritizing, and employing strategies to manage your tasks effectively.\n\n**Planning & Prioritizing**\nEffective planning involves:\n\n1.  **Breaking Down Objectives:** Divide large goals into smaller, manageable tasks.\n2.  **Sequencing:** Determine the order in which tasks should be completed.\n3.  **Resource Allocation:** Identify and allocate the necessary resources for each task.\n\nPrioritizing involves:\n\n1.  **Identifying Importance:** Determine which tasks are most critical to achieving your objectives.\n2.  **Urgency Assessment:** Evaluate the time sensitivity of each task.\n3.  **Task Selection:** Focus on tasks that provide the most significant impact with the least amount of effort.\n\n**Mind-Mapping**\nMind-mapping is a visual technique used to organize information. It starts with a central idea and branches out to related topics, tasks, and subtasks. It helps in:\n\n1.  **Visualizing Complex Tasks:** Simplify complex objectives into manageable components.\n2.  **Identifying Relationships:** Understand how different tasks relate to each other.\n3.  **Generating Ideas:** Encourage creative problem-solving and innovative approaches.\n\n**The 80/20 Rule**\nThe 80/20 rule, also known as the Pareto Principle, states that approximately 80% of the effects come from 20% of the causes. In the context of achieving objectives, this means that 20% of your efforts will yield 80% of your results. To apply this:\n\n1.  **Identify Key Tasks:** Determine which tasks are the most impactful.\n2.  **Focus on High-Yield Activities:** Prioritize these tasks to maximize efficiency.\n3.  **Minimize Time on Low-Yield Tasks:** Reduce or eliminate time spent on activities that do not contribute significantly to your goals.\n\nBy focusing on the 'HOW', you create a roadmap for success, ensuring that your efforts are directed effectively toward your objectives."
+                            }
+                        },
+                        {
+                            "task_name": "Planning Application",
+                            "type": "quiz",
+                            "description": "A quiz that tests the learner's ability to use planning and prioritizing tools effectively.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the material, what is the relationship between setting the objective and determining the 'HOW'?",
+                                        "correct_answer": "The HOW does not need to be known while setting the objective. This comes AFTER setting the objective.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What is the suggested tool for planning and execution as per the reference material?",
+                                        "correct_answer": "Writing, using pen and paper",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Scheduling and Time Estimation (The 'When')",
+                    "description": "Creating a realistic schedule and estimating the time needed for all tasks.",
+                    "tasks": [
+                        {
+                            "task_name": "Time Management Techniques",
+                            "type": "learning_material",
+                            "description": "A learning material on time management and scheduling techniques.",
+                            "details": {
+                                "content": "The fifth key component to setting objectives is WHEN: Scheduling and completion; Time estimation for all tasks! Without proper time estimation, it will be difficult to complete the objective."
+                            }
+                        },
+                        {
+                            "task_name": "Schedule Creation Quiz",
+                            "type": "quiz",
+                            "description": "A quiz asking learners to create a realistic schedule for achieving a specific goal.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Imagine you have a big project due in 3 months that requires a lot of your time and effort. Based on what you have learned, create a schedule that incorporates all tasks and estimate the time for each one. Be as detailed as possible in your answer.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Schedule Creation",
+                                            "criteria": [
+                                                {
+                                                    "name": "Realism",
+                                                    "description": "The schedule is realistic and accounts for the available time and resources.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Completeness",
+                                                    "description": "All relevant tasks and subtasks are included in the schedule.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Time estimation",
+                                                    "description": "Good estimation of time taken to do each task",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Prioritization",
+                                                    "description": "Correct task prioritization is performed",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Securing Support Systems (The 'Who Else With')",
+                    "description": "Identifying and securing the support needed to achieve the objective.",
+                    "tasks": [
+                        {
+                            "task_name": "Building a Support Network",
+                            "type": "learning_material",
+                            "description": "A learning material discussing how to identify and build a support network.",
+                            "details": {
+                                "content": "To achieve ambitious objectives, it's essential to recognize that you don't have to do it alone. Enlisting support can significantly increase your chances of success. Here's how to identify and build a robust support network:\n\n1.  **Identify Areas Where You Need Support**: Begin by pinpointing the specific areas where you need assistance. This could be:\n *   **Skills or Knowledge**: Do you lack certain skills or knowledge necessary for your objective?\n *   **Emotional Support**: Do you need encouragement, motivation, or a listening ear?\n *   **Practical Assistance**: Do you require help with tasks, resources, or connections?\n\n2.  **Determine Potential Supporters**: Consider individuals who can provide the support you need. Think about:\n *   **Family and Friends**: They often offer unconditional support and understanding.\n *   **Mentors and Role Models**: They can provide guidance, advice, and insights based on their experiences.\n *   **Colleagues and Peers**: They can offer collaboration, feedback, and shared learning.\n *   **Experts and Professionals**: They possess specialized knowledge and skills relevant to your objective.\n\n3.  **Assess Your Existing Relationships**: Evaluate your current relationships and determine which ones can be strengthened to provide the necessary support. Consider:\n*   **Trust and Reliability**: Can you rely on these individuals to follow through on their commitments?\n*   **Shared Values**: Do they share your values and understand your vision?\n*   **Communication**: Can you openly and honestly communicate with them?\n\n4.  **Build New Connections**: Don't hesitate to seek out new relationships to expand your support network. Attend industry events, join relevant groups, or reach out to individuals whose work you admire.\n\n5.  **Clearly Communicate Your Needs**: Be specific about the support you require. Explain your objective, the challenges you're facing, and how they can help. For example, you might say, \"I'm working on a new project, and I'd appreciate your feedback on my ideas.\"\n\n6.  **Offer Reciprocal Support**: Support is a two-way street. Be willing to offer your assistance and expertise to others. This fosters a sense of mutual respect and strengthens your relationships.\n\n7.  **Maintain Regular Communication**: Stay in touch with your support network, even when you don't need immediate help. Regular communication builds stronger relationships and ensures that your supporters are aware of your progress and challenges.\n\n8.  **Express Gratitude**: Acknowledge and appreciate the support you receive. A simple \"thank you\" can go a long way in strengthening relationships and encouraging continued support.\n\n9.  **Set Boundaries**: While it's important to be open to support, also set boundaries to protect your time and energy. Politely decline assistance when necessary and be clear about your availability.\n\n10. **Embrace Vulnerability**: Building a support network requires vulnerability. Be willing to share your struggles, ask for help, and admit when you don't know something. This fosters authenticity and strengthens connections.\nBy actively building and nurturing a support network, you create a safety net that empowers you to take risks, overcome challenges, and achieve your stretch objectives."
+                            }
+                        },
+                        {
+                            "task_name": "Support System Identification",
+                            "type": "quiz",
+                            "description": "A quiz to help learners identify the support systems needed to achieve their goals.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the material, what is the primary purpose of identifying and securing support systems?",
+                                        "correct_answer": "To aid in achieving the objective",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What does the acronym SMART stands for when referring to objectives?",
+                                        "correct_answer": "Specific, Measurable, Achievable, Relevant, Time-bound",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the text, what kind of clarity is needed regarding the objective?",
+                                        "correct_answer": "Absolute Clarity",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "module_name": "Adopting an 'ANYTHING IS POSSIBLE' Attitude",
+            "id": 9,
+            "concepts": [
+                {
+                    "concept_name": "The Power of Stretch Objectives",
+                    "description": "Understanding how believing anything is possible leads to breakthroughs.",
+                    "tasks": [
+                        {
+                            "task_name": "Stretch Objectives Defined",
+                            "type": "learning_material",
+                            "description": "A learning material explaining the power and importance of setting stretch objectives.",
+                            "details": {
+                                "content": "The greatest breakthroughs happen when we believe anything is possible. The known keeps us in the past-bold ambitions drive us forward. Success is not just about what we achieve but who we become. \n\nWhy Do Most People Avoid Bold Goals?\n\nComfort - Staying in familiar territory feels safe\nFear of Failure \u2013 Past disappointments create hesitation\nLack of Clarity \u2013 Big goals feel overwhelming without a clear path\nSocial Resistance \u2013 Others may discourage unconventional dreams\nImmediate Pressures \u2013 Daily demands distract from long-term vision\nRemember: The past is a place of reference, not residence!\n\nSolution?\n\nEmbrace the mindset that anything is possible\nBecome the person with the qualities needed to thrive in uncertainty\nDedicate time DAILY for the future! Predict the future! Plan for it!"
+                            }
+                        },
+                        {
+                            "task_name": "Objectives Quiz",
+                            "type": "quiz",
+                            "description": "A quiz testing the learner on the importance of stretch goals",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What is the key principle behind achieving breakthroughs, as highlighted in the material?",
+                                        "correct_answer": "Believing anything is possible",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What should success be defined by, according to the materials provided?",
+                                        "correct_answer": "Who we become",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the materials, what does a Bottoms-Up approach do?",
+                                        "correct_answer": "Keeps you in the zone of mediocrity",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Overcoming the Fear of Bold Goals",
+                    "description": "Identifying and overcoming the reasons people avoid bold goals.",
+                    "tasks": [
+                        {
+                            "task_name": "Identifying Fears",
+                            "type": "learning_material",
+                            "description": "A learning material discussing common reasons people avoid setting bold goals (comfort, fear of failure, lack of clarity, social resistance, immediate pressures).",
+                            "details": {
+                                "content": "There are several reasons why most people avoid setting bold goals:\n\n*   **Comfort** - Staying in familiar territory feels safe.\n*   **Fear of Failure** \u2013 Past disappointments create hesitation.\n*   **Lack of Clarity** \u2013 Big goals feel overwhelming without a clear path.\n*   **Social Resistance** \u2013 Others may discourage unconventional dreams.\n*   **Immediate Pressures** \u2013 Daily demands distract from long-term vision.\n\nRemember: The past is a place of reference, not residence!"
+                            }
+                        },
+                        {
+                            "task_name": "Fear Overcoming Strategies",
+                            "type": "learning_material",
+                            "description": "A learning material discussing how to overcome these fears, embracing a 'anything is possible' mindset, becoming the person you need to be, and dedicating time to the future.",
+                            "details": {
+                                "content": "To overcome the fear of bold goals, consider the following strategies:\n\n1.  Embrace the mindset that anything is possible. This belief serves as the foundation for achieving great things.\n2.  Become the person with the qualities needed to thrive in uncertainty. Here are some qualities that one needs to possess:\n    *   Visionary - See beyond today and imagine what's possible\n    *   Courageous - Step into the unknown with confidence\n    *   Optimistic - Believe no challenge is too big\n    *   Resilient - View setbacks as stepping stones\n    *   Adaptable - Adjust your approach while staying focused\n    *   Disciplined - Take daily action, even when motivation fades\n    *   Strategic - Break big goals into actionable steps\n    *   Inspired - Find purpose in the journey, not just the outcome\n    *   Relentless - Keep going, no matter what\n    *   Grounded - Stay balanced in body, mind, and spirit\n    *   Agile - Change strategies while staying committed to the goal\n    *   Reflective - Continuously learn, adjust, and improve\n    *   Bold - Think and act beyond conventional limits\n    *   Tenacious - Persist when others quit\n    *   Expansive - See opportunity where others see limitation\n3.  Dedicate time DAILY for the future! Predict the future! Plan for it!"
+                            }
+                        },
+                        {
+                            "task_name": "Fear Quiz",
+                            "type": "quiz",
+                            "description": "A quiz testing the learners on identifying fears of pursuing goals",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which of the following is NOT mentioned as a common reason people avoid setting bold goals?",
+                                        "correct_answer": "Fear of success",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What mindset should one embrace to overcome the fear of bold goals, according to the material?",
+                                        "correct_answer": "Anything is possible",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the text, what should one dedicate time to daily in order to overcome the fear of bold goals?",
+                                        "correct_answer": "Planning for the future",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What does 'Social Resistance' refer to, in the context of avoiding bold goals?",
+                                        "correct_answer": "Discouragement from others",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the material, what kind of pressure distracts from long term vision?",
+                                        "correct_answer": "Immediate pressures",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Shifting Your Mindset to Achieve the Impossible",
+                    "description": "Adopting a new perspective to overcome challenges and achieve ambitious goals.",
+                    "tasks": [
+                        {
+                            "task_name": "Perspective Shifting Techniques",
+                            "type": "learning_material",
+                            "description": "A learning material explaining how to shift from a realistic to a possible mindset, focusing on creation instead of limitations, and reframing fear of failure.",
+                            "details": {
+                                "content": "To achieve the impossible, it's essential to transform your thinking by asking different questions. Instead of focusing on what's realistic, ask what's truly possible. This shift opens up new avenues for achievement and innovation.\n\nShift from a mindset of scarcity - 'What do I have?' - to one of creation - 'Who do I need to be?' and 'What do I need to create?' This encourages proactive thinking and fosters creativity in problem-solving. (FPS:PNP 5:1)\n\nInstead of saying, 'I don't know how,' embrace the belief that 'I'll figure it out.' This mindset empowers you to explore new possibilities and learn from experiences.\n\nChange 'What if I fail?' to 'What if I succeed beyond my wildest dreams?' This positive framing can motivate you to take risks and pursue ambitious goals.\n\nRecognize that the way you frame challenges can determine your ability to overcome them. A constructive perspective can lead to innovative solutions. Introspect on the Narrative and adopt a useful one!\n\nAdopt an expansive mindset that believes anything is possible. This belief serves as the foundation for achieving great things."
+                            }
+                        },
+                        {
+                            "task_name": "Shift Exam",
+                            "type": "quiz",
+                            "description": "An exam testing a student's understanding of how to shift their mindset",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What should you shift from a mindset of scarcity to?",
+                                        "correct_answer": "one of creation",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Instead of saying, 'I don't know how,' embrace the belief that:",
+                                        "correct_answer": "'I'll figure it out'",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Change 'What if I fail?' to:",
+                                        "correct_answer": "'What if I succeed beyond my wildest dreams?'",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What should you adopt so that you have a constructive perspective that can lead to innovative solutions?",
+                                        "correct_answer": "a useful Narrative",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Adopt an expansive mindset that believes:",
+                                        "correct_answer": "anything is possible",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Maintaining Alignment: Staying Whole",
+                    "description": "Questions to consider in order to stay aligned.",
+                    "tasks": [
+                        {
+                            "task_name": "Staying Whole",
+                            "type": "learning_material",
+                            "description": "A learning material explaining how to stay aligned with goals through maintaining: mindset & vision, action & execution, resilience & emotional strength and balance & well-being.",
+                            "details": {
+                                "content": "To stay aligned with your goals, it is important to maintain:\n\n1.  Mindset & Vision:\n*   Am I thinking big enough, or am I limiting myself?\n*   Am I using time DAILY to plan for the future 1/2/3/5/10 years?\n*   Am I approaching challenges with optimism and curiosity?\n*   Am I allowing myself to dream and yet have my feet firmly on the ground? (Past- place of reference only, not residence)\n*   Am I defining success with an appropriate blend of internal and external parameters?\n\n2.  Action & Execution\n*   Am I making progress daily, even if it's small? (DAILY GROWTH CHECKLIST)\n*   Am I focused on solutions instead of obstacles? (FPS:PNP 5:1)\n*   Am I embracing flexibility and adjusting strategies when needed? (Lead and Lag Measures)\n*   Am I taking actions aligned with long-term success, not just short-term comfort? (Values and Goals alignment)\n*   WHO I am is demonstrated in HOW I do WHATEVER I do!\nHow I do ONE thing is how I do EVERYTHING!\n\n3.  Resilience & Emotional Strength\n*   Am I taking ownership and responsibility for everything in my life? (HappYness Helix vs Unhappiness Slide)\n*   Am I treating setbacks as learning opportunities? (Learning to walk)\n*   Am I seeing discomfort as a sign of expansion rather than something to avoid? (it is difficult, effortful, almost impossible until it is easy, effortless and one's own nature)\n*   Am I surrounding myself with people who encourage me?\nWhat belief do I need to strengthen to better support\n\n4.  Balance & Well-Being\n*   Am I taking care of my body, mind, and spirit? (Cannot paint without a canvas)\n*   Am I allowing space for rest and reflection without guilt? (Airplane, oxygen mask)\n*   Am I finding joy in the process, not just the outcome? (100% in the moment, FLOW)\n*   Do I have daily rituals that keep me centered? (Ritual is mindful; habit is mindless! Ritual is useful, habits need to be checked periodically)\n\nAchieving big goals isn't about doing more it's about being more, and DOING"
+                            }
+                        },
+                        {
+                            "task_name": "Staying Whole Quiz",
+                            "type": "quiz",
+                            "description": "A quiz testing the learner on the questions needed to be asked in order to stay aligned.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I thinking big enough, or am I limiting myself? (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I using time DAILY to plan for the future - 1/2/3/5/10 years? (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I approaching challenges with optimism and curiosity? (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I allowing myself to dream and yet have my feet firmly on the ground? (Past- place of reference only, not residence) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I defining success with an appropriate blend of internal and external parameters? (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I making progress daily, even if it's small? (DAILY GROWTH CHECKLIST) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I focused on solutions instead of obstacles? (FPS:PNP 5:1) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I embracing flexibility and adjusting strategies when needed? (Lead and Lag Measures) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I taking actions aligned with long-term success, not just short-term comfort? (Values and Goals alignment) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "WHO I am is demonstrated in HOW I do WHATEVER I do! (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I taking ownership and responsibility for everything in my life? (HappYness Helix vs Unhappiness Slide) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I treating setbacks as learning opportunities? (Learning to walk) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I seeing discomfort as a sign of expansion rather than something to avoid? (it is difficult, effortful, almost impossible until it is easy, effortless and one's own nature) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I surrounding myself with people who encourage (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I taking care of my body, mind, and spirit? (Cannot paint without a canvas) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I allowing space for rest and reflection without guilt? (Airplane, oxygen mask) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Am I finding joy in the process, not just the outcome? (100% in the moment, FLOW) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Do I have daily rituals that keep me centered? (Ritual is mindful; habit is mindless! Ritual is useful, habits need to be checked periodically) (Yes/No)",
+                                        "correct_answer": "Yes",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "module_name": "Creating Actionable Strategies: Lessons from Achievers",
+            "id": 10,
+            "concepts": [
+                {
+                    "concept_name": "Visionaries Who Saw Beyond Reality",
+                    "description": "Examining examples of visionaries who achieved the impossible.",
+                    "tasks": [
+                        {
+                            "task_name": "Nandan Nilekani Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Nandan Nilekani and the Aadhaar project in India.",
+                            "details": {
+                                "content": "Nandan Nilekani \u2013 Aadhaar & UPI (India)\n\nChallenge: India lacked a unified digital identity system, hindering financial inclusion.\n\nAction: Led the Aadhaar (UIDAI) project, creating biometric-based digital identity for over a billion Indians.\n\nImpact: Aadhaar enabled UPI, revolutionizing digital payments and financial inclusion.\n\nTraits: Visionary, Problem-Solver, Resilient, Adaptive"
+                            }
+                        },
+                        {
+                            "task_name": "Elon Musk Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Elon Musk and SpaceX & Tesla in the USA.",
+                            "details": {
+                                "content": "## Elon Musk \n\n### Challenge:\nSpace travel and electric cars were considered impractical for private companies.\n\n### Action:\nFounded SpaceX (reusable rockets) & Tesla (mass electric vehicles).\n\n### Impact:\nSpaceX reduced launch costs & Tesla led the global EV revolution.\n\n### Traits:\nFearless, Persistent, Innovative, Unconventional Thinker"
+                            }
+                        },
+                        {
+                            "task_name": "Visionary Case Study Exam",
+                            "type": "quiz",
+                            "description": "A final exam testing the learners understanding of all the visionary case studies.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which of the following best describes the challenge that Nandan Nilekani addressed in India?",
+                                        "correct_answer": "Lack of a unified digital identity system hindering financial inclusion.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the name of the project led by Nandan Nilekani to create a biometric-based digital identity for over a billion Indians?",
+                                        "correct_answer": "Aadhaar (UIDAI)",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the impact of the Aadhaar project on digital payments in India?",
+                                        "correct_answer": "Enabled UPI, revolutionizing digital payments and financial inclusion.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which of the following traits are associated with Nandan Nilekani?",
+                                        "correct_answer": "Visionary, Problem-Solver, Resilient, Adaptive",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the main challenge that Elon Musk aimed to address with SpaceX and Tesla?",
+                                        "correct_answer": "The perception that space travel and electric cars were impractical for private companies.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What actions did Elon Musk take to overcome the challenges in the space travel and electric car industries?",
+                                        "correct_answer": "Founded SpaceX (reusable rockets) & Tesla (mass electric vehicles).",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What has been the overall impact of SpaceX and Tesla on their respective industries?",
+                                        "correct_answer": "SpaceX reduced launch costs & Tesla led the global EV revolution.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which traits are most closely associated with Elon Musk?",
+                                        "correct_answer": "Fearless, Persistent, Innovative, Unconventional Thinker",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Turning Failure Into Breakthroughs",
+                    "description": "Examining examples of individuals and organizations that turned failure into success.",
+                    "tasks": [
+                        {
+                            "task_name": "Thomas Edison Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Thomas Edison and the invention of the light bulb.",
+                            "details": {
+                                "content": "Thomas Edison's relentless pursuit of the light bulb is a testament to the power of perseverance. Despite thousands of failed attempts, Edison and his team at Menlo Park continued to experiment and iterate. Each failure was seen as a learning opportunity, a step closer to understanding what would ultimately work. This iterative process was crucial to Edison's success. He meticulously documented each experiment, analyzed the results, and used that knowledge to refine his approach. Edison's determination was unwavering, fueled by his belief that he could find a way to create a practical and affordable electric light. His famous quote, 'I have not failed. I've just found 10,000 ways that won't work,' encapsulates his attitude towards setbacks. This experimental approach transformed the world."
+                            }
+                        },
+                        {
+                            "task_name": "ISRO Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of ISRO's Mars Orbiter Mission (Mangalyaan).",
+                            "details": {
+                                "content": "## ISRO \u2013 India's Space Program (India)\n\n**Challenge:** India's space program started with minimal resources in a fishing village.\n\n**Action:** Scientists like Dr. Vikram Sarabhai & Dr. APJ Abdul Kalam persisted despite setbacks.\n\n**Impact:** Achieved Mangalyaan (Mars Orbiter Mission) on the first attempt, at 1/10th the cost of NASA.\n\n**Traits:** Resourceful, Resilient, Frugal Innovators"
+                            }
+                        },
+                        {
+                            "task_name": "Failure Case Study Exam",
+                            "type": "quiz",
+                            "description": "A final exam to test the learner on turning failures into breakthroughs.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the primary challenge that ISRO faced when initiating India's space program?",
+                                        "correct_answer": "Limited resources and a lack of established infrastructure, starting in a fishing village.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the key action taken by Thomas Edison that eventually led to the invention of the light bulb?",
+                                        "correct_answer": "He relentlessly continued to experiment and improve his designs, learning from each failure.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What key trait did ISRO and Thomas Edison share in overcoming their respective challenges?",
+                                        "correct_answer": "Resilience and a determination to keep experimenting and improving despite numerous setbacks.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the cost advantage that ISRO's Mangalyaan (Mars Orbiter Mission) had over NASA's mission?",
+                                        "correct_answer": "ISRO's mission cost was approximately one-tenth of NASA's mission cost.",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Overcoming Limits & Proving the Impossible",
+                    "description": "Examining examples of individuals and organizations that overcame limitations and achieved the impossible.",
+                    "tasks": [
+                        {
+                            "task_name": "Roger Bannister Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Roger Bannister breaking the 4-minute mile.",
+                            "details": {
+                                "content": "In the mid-20th century, scientists believed that a human could not run a mile in under 4 minutes. Roger Bannister challenged this perception by employing mental visualization and strategic training. In 1954, he broke the 4-minute mile barrier, inspiring generations of athletes. Roger Bannister's story showcases mental strength, confidence, and determination."
+                            }
+                        },
+                        {
+                            "task_name": "Rama's Bridge Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Rama's Bridge (Ram Setu) from the Ramayana.",
+                            "details": {
+                                "content": "Rama's Bridge - The Ramayana (India)\n\nChallenge: Crossing the ocean to Lanka seemed impossible.\nAction: Lord Rama's vanara army built a floating bridge (Ram Setu) through faith and teamwork.\nImpact: Enabled victory over Ravana, changing the course of history.\nTraits: Faith, Leadership, Teamwork."
+                            }
+                        },
+                        {
+                            "task_name": "Limit Case Study Exam",
+                            "type": "quiz",
+                            "description": "An exam to test the learner on all limit case studies.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the primary challenge that scientists faced regarding the 4-minute mile before Roger Bannister?",
+                                        "correct_answer": "Scientists believed a human could not run a mile in under 4 minutes.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What methods did Roger Bannister use to break the 4-minute mile?",
+                                        "correct_answer": "Mental visualization and strategic training.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the impact of Roger Bannister breaking the 4-minute mile?",
+                                        "correct_answer": "Broke the barrier in 1954, inspiring generations of athletes.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which traits are associated with Roger Bannister's success in breaking the 4-minute mile?",
+                                        "correct_answer": "Mental Strength, Confidence, Determination",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the reference material, what action enabled Lord Rama's vanara army to build a floating bridge (Ram Setu)?",
+                                        "correct_answer": "Through faith and teamwork.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What impact did the construction of Rama's Bridge (Ram Setu) have?",
+                                        "correct_answer": "Enabled victory over Ravana, changing the course of history.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What traits are associated with the story of Rama's Bridge (Ram Setu)?",
+                                        "correct_answer": "Faith, Leadership, Teamwork",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Reinventing Industries & Breaking the Mold",
+                    "description": "Examining examples of individuals and organizations that reinvented industries and broke the mold.",
+                    "tasks": [
+                        {
+                            "task_name": "Alibaba Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Jack Ma and the creation of Alibaba.",
+                            "details": {
+                                "content": "Alibaba Case Study: E-Commerce Revolution (China)\n\nChallenge: China had no e-commerce industry in the 1990s.\n\nAction: Jack Ma founded Alibaba, connecting small businesses with consumers online.\n\nImpact: Today, Alibaba is one of the largest e-commerce platforms in the world.\n\nTraits: Risk-Taker, Entrepreneurial, Visionary"
+                            }
+                        },
+                        {
+                            "task_name": "Walt Disney Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of Walt Disney and the creation of animated films.",
+                            "details": {
+                                "content": "Walt Disney Case Study: \n\nChallenge: People believed full-length animated movies wouldn't work.\nAction: Invested heavily in Snow White and the Seven Dwarfs.\nImpact: Created the modern animation industry.\nTraits: Creative, Determined, Bold"
+                            }
+                        },
+                        {
+                            "task_name": "Reinvention Case Study Exam",
+                            "type": "quiz",
+                            "description": "An exam to test the learner's understanding of all reinvention case studies",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the main challenge Homi Bhabha faced when establishing India's nuclear program?",
+                                        "correct_answer": "India lacked indigenous nuclear technology post-independence.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What action did Homi Bhabha take to address the challenge of India lacking indigenous nuclear technology?",
+                                        "correct_answer": "Established India's atomic energy program, securing self-reliance.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the main challenge that Jack Ma and Alibaba faced in China during the 1990s?",
+                                        "correct_answer": "China had no e-commerce industry in the 1990s.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What action did Jack Ma take to address the challenge of China lacking an e-commerce industry?",
+                                        "correct_answer": "Jack Ma founded Alibaba, connecting small businesses with consumers online.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the primary challenge that Walt Disney faced when considering full-length animated films?",
+                                        "correct_answer": "People believed full-length animated movies wouldn't work.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What action did Walt Disney take to address the skepticism surrounding full-length animated movies?",
+                                        "correct_answer": "Invested heavily in Snow White and the Seven Dwarfs.",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Making the Future Happen Today",
+                    "description": "Examining examples of individuals and organizations that made the future happen today.",
+                    "tasks": [
+                        {
+                            "task_name": "The Wright Brothers Case Study",
+                            "type": "learning_material",
+                            "description": "A case study of the Wright Brothers and the invention of the airplane.",
+                            "details": {
+                                "content": "## The Wright Brothers \u2013 First Flight (USA)\n\n### Challenge:\nHuman flight was thought to be impossible.\n\n### Action:\nThe Wright brothers repeated trial-and-error experiments.\n\n### Impact:\nThe Wright brothers built the first successful airplane, revolutionizing transport.\n\n### Traits:\nThe Wright brothers were Experimental, Tenacious, and Visionary."
+                            }
+                        },
+                        {
+                            "task_name": "Making the Future Case Study Exam",
+                            "type": "quiz",
+                            "description": "An exam to test the learner's understanding on all 'making the future' case studies.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the primary challenge the Wright Brothers faced?",
+                                        "correct_answer": "Human flight was thought to be impossible.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the action that the Wright Brothers took to overcome the challenge of human flight?",
+                                        "correct_answer": "Repeated trial-and-error experiments.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What was the impact of the Wright Brothers' successful experiments?",
+                                        "correct_answer": "Built the first successful airplane, revolutionizing transport.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which traits best describe the Wright Brothers?",
+                                        "correct_answer": "Experimental, Tenacious, Visionary",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "module_name": "Conclusion: Achieving Your Personal Transformation",
+            "id": 11,
+            "concepts": [
+                {
+                    "concept_name": "Key Takeaways and Inspiration",
+                    "description": "Reviewing the key takeaways from the course and using them for inspiration.",
+                    "tasks": [
+                        {
+                            "task_name": "Review of Core Principles",
+                            "type": "learning_material",
+                            "description": "A learning material summarizing the core principles taught in the course (Mindset, Goals, Action, Attitude).",
+                            "details": {
+                                "content": "Here's a review of the core principles:\n\n1. Mindset Matters:\n   - Success starts with believing the impossible is possible.\n\n2. Failure Is a Step Forward:\n   - Every great achievement comes after multiple failures.\n\n3. The First Step Feels Hardest:\n   - But once you break a barrier, others follow.\n\n4. Push Beyond Conventional Thinking:\n   - The world changes when someone dares to challenge it.\n\n5. Take Action Despite Doubt:\n   - Most breakthroughs happen when people ignore limitations."
+                            }
+                        },
+                        {
+                            "task_name": "Applying the Principles",
+                            "type": "quiz",
+                            "description": "A quiz testing the learners understanding of the core principles.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Which of the following best describes the 'Mindset Matters' principle for achieving the impossible?",
+                                        "correct_answer": "Success starts with believing the impossible is possible.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the key takeaways, what should one consider failure to be?",
+                                        "correct_answer": "A Step Forward",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What happens once you break a barrier, according to the key takeaways?",
+                                        "correct_answer": "Others follow.",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "What kind of thinking should one push beyond to change the world?",
+                                        "correct_answer": "Conventional Thinking",
+                                        "scorecard": null
+                                    },
+                                    {
+                                        "question_type": "objective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "According to the key takeaways, when do most breakthroughs happen?",
+                                        "correct_answer": "When people ignore limitations.",
+                                        "scorecard": null
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "concept_name": "Personal Transformation Project",
+                    "description": "A capstone project where learners apply everything they have learned in the course to create a plan for their own personal transformation.",
+                    "tasks": [
+                        {
+                            "task_name": "Project Requirements",
+                            "type": "learning_material",
+                            "description": "A learning material outlining the requirements for the final personal transformation plan.",
+                            "details": {
+                                "content": "For the personal transformation project, you will be creating a comprehensive plan to achieve a significant personal goal. This project is designed to allow you to integrate and apply the concepts and strategies we've covered throughout this course. Here are the key requirements for your plan:\n\n1.  **Define Your Objective (The 'WHAT'):**\n    *   Clearly articulate the personal transformation you wish to achieve. This should be a specific, measurable goal that reflects your aspirations for personal growth.\n    *   Consider using the \"STRETCH, RAISE-THE-BAR\" framework to set an ambitious yet attainable goal. \n2.  **Self-Assessment (The 'WHO'):**\n    *   Reflect on your current state, including your strengths, values, and passions. Use this self-awareness as the foundation for your transformation.\n    *   Identify the qualities and characteristics you need to embody to achieve your objective. Explore the descriptors listed like Visionary, Courageous, Optimistic, Resilient, Adaptable, Disciplined, Strategic, Inspired, Relentless, Grounded, Agile, Reflective, Bold, Tenacious and Expansive, that will help you become the person you wish to be.\n3.  **Motivation (The 'WHY'):**\n    *   Explain your motivations for pursuing this goal. Connect your personal transformation to a deeper sense of purpose and meaning.\n    *   Articulate how achieving this goal will contribute to your overall well-being and fulfillment.\n4.  **Action Plan (The 'HOW'):**\n    *   Develop a detailed action plan outlining the specific tasks and activities required to achieve your objective.\n    *   Break down your goal into actionable steps, prioritizing tasks based on their impact and urgency.\n    *   Consider adopting a Top-Down Approach (The \u2018Anything is Possible' Approach) instead of Bottoms-Up Approach (Playing It Safe).\n5.  **Timeline (The 'WHEN'):**\n    *   Create a realistic timeline for completing each task, setting deadlines to maintain momentum and track progress.\n6.  **Support System (The 'WHO ELSE WITH'):**\n    *   Identify the resources and support systems you will need to achieve your goal. This may include mentors, peers, or professional guidance.\n7.  **Embracing the Right Mindset:**\n    *   Cultivate a mindset that embraces possibility, resilience, and continuous learning. Adopt an \"ANYTHING IS POSSIBLE\u201d attitude, shifting your perspective to overcome challenges.\n    *   Behave like a Visionary, Problem-Solver, Resilient and Adaptive person.\n    *   Focus on creation by shifting from 'What do I have?' to 'Who do I need to be?' and 'What do I need to create?'\n    *   Commit to big beliefs and pursue bold goals.\n8.  **Staying Whole:**\n    *   Balance ambition with well-being, ensuring that your pursuit of personal transformation is sustainable and fulfilling.\n    *   Take care of your body, mind and spirit.\n    *   Find joy in the process, not just the outcome.\n9. **Overcoming Limits**\n* Review the global stories, traits and lessons in the reference material and how these stories provide inspiration, \n* Review the Wright Brothers example and the ISRO (India's Space Program) example for inspiration."
+                            }
+                        },
+                        {
+                            "task_name": "Project Submission",
+                            "type": "quiz",
+                            "description": "The submission and evaluation of the personal transformation plan.",
+                            "details": {
+                                "questions": [
+                                    {
+                                        "question_type": "subjective",
+                                        "answer_type": "text",
+                                        "coding_languages": null,
+                                        "content": "Submit your Personal Transformation Plan, detailing how you will apply the principles and strategies learned in this course to achieve a significant personal goal. Include specific, measurable, achievable, relevant, and time-bound (SMART) objectives, and actionable steps.",
+                                        "correct_answer": null,
+                                        "scorecard": {
+                                            "title": "Personal Transformation Plan Evaluation",
+                                            "criteria": [
+                                                {
+                                                    "name": "Goal Clarity",
+                                                    "description": "The goal is clearly defined and aligned with personal values and aspirations.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Actionable Steps",
+                                                    "description": "The plan includes specific, actionable steps that can be realistically implemented.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "SMART Objectives",
+                                                    "description": "Objectives are Specific, Measurable, Achievable, Relevant, and Time-bound.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Personal Growth",
+                                                    "description": "The plan demonstrates a commitment to personal growth and development.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                },
+                                                {
+                                                    "name": "Overall Quality",
+                                                    "description": "The plan is well-organized, thoughtful, and demonstrates a clear understanding of the course material.",
+                                                    "min_score": 1,
+                                                    "max_score": 5
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
