@@ -4297,7 +4297,8 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
             {
                 "blocks": prepare_blocks_for_publish(
                     convert_content_to_blocks(question["context"])
-                )
+                ),
+                "linkedMaterialIds": None,
             }
             if question["context"]
             else None

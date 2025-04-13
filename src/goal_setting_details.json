@@ -2,15 +2,15 @@
     "course_name": "Achieving Personal Transformation",
     "modules": [
         {
-            "module_name": "Understanding Yourself and Defining Your 'Who'",
+            "name": "Understanding Yourself and Defining Your 'Who'",
             "id": 7,
             "concepts": [
                 {
-                    "concept_name": "Self-Identity and the 'Who'",
+                    "name": "Self-Identity and the 'Who'",
                     "description": "Understanding your identity, strengths, values, and passions as the foundation for setting ambitious goals.",
                     "tasks": [
                         {
-                            "task_name": "Defining Self-Identity",
+                            "name": "Defining Self-Identity",
                             "type": "learning_material",
                             "description": "A learning material explaining the importance of self-awareness and how to identify your strengths, values, and passions.",
                             "details": {
@@ -18,7 +18,7 @@
                             }
                         },
                         {
-                            "task_name": "Self-Reflection Quiz",
+                            "name": "Self-Reflection Quiz",
                             "type": "quiz",
                             "description": "A quiz to assess the learner's understanding of their own strengths, values, and passions.",
                             "details": {
@@ -117,7 +117,7 @@
                             }
                         },
                         {
-                            "task_name": "Identity Exam",
+                            "name": "Identity Exam",
                             "type": "quiz",
                             "description": "A final exam to test the learner's complete understanding of self-identity.",
                             "details": {
@@ -218,11 +218,11 @@
                     ]
                 },
                 {
-                    "concept_name": "The Person You Wish to Be",
+                    "name": "The Person You Wish to Be",
                     "description": "Explore the qualities needed to become the person you aspire to be and how those qualities relate to achieving your goals.",
                     "tasks": [
                         {
-                            "task_name": "Qualities of a High Achiever",
+                            "name": "Qualities of a High Achiever",
                             "type": "learning_material",
                             "description": "A learning material discussing the qualities of visionary, courageous, optimistic, resilient, adaptable, disciplined, strategic, inspired, relentless, grounded, agile, reflective, bold, tenacious and expansive individuals.",
                             "details": {
@@ -230,7 +230,7 @@
                             }
                         },
                         {
-                            "task_name": "Ideal Self Quiz",
+                            "name": "Ideal Self Quiz",
                             "type": "quiz",
                             "description": "A quiz asking the learner to identify the qualities they need to develop in order to achieve their goals.",
                             "details": {
@@ -347,11 +347,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Embracing a Top-Down Approach",
+                    "name": "Embracing a Top-Down Approach",
                     "description": "Understanding the top-down approach and how it can help you define where you want to be, and grow beyond your comfort zone.",
                     "tasks": [
                         {
-                            "task_name": "Top-Down vs Bottom-Up",
+                            "name": "Top-Down vs Bottom-Up",
                             "type": "learning_material",
                             "description": "A learning material explaining the difference between the Top-Down (Anything is Possible) and Bottom-Up (Playing it Safe) approaches to goal setting.",
                             "details": {
@@ -359,7 +359,7 @@
                             }
                         },
                         {
-                            "task_name": "Approach Quiz",
+                            "name": "Approach Quiz",
                             "type": "quiz",
                             "description": "A quiz testing understanding of when to use each approach. ",
                             "details": {
@@ -412,15 +412,15 @@
             ]
         },
         {
-            "module_name": "Setting 'STRETCH, RAISE-THE-BAR' Measurable Goals",
+            "name": "Setting 'STRETCH, RAISE-THE-BAR' Measurable Goals",
             "id": 8,
             "concepts": [
                 {
-                    "concept_name": "Clarifying Your 'Why'",
+                    "name": "Clarifying Your 'Why'",
                     "description": "Understanding your motivations for pursuing a goal to fuel determination and commitment.",
                     "tasks": [
                         {
-                            "task_name": "Finding Your Motivation",
+                            "name": "Finding Your Motivation",
                             "type": "learning_material",
                             "description": "A learning material discussing how to identify your core motivations and how they relate to your goals.",
                             "details": {
@@ -428,7 +428,7 @@
                             }
                         },
                         {
-                            "task_name": "Motivation Quiz",
+                            "name": "Motivation Quiz",
                             "type": "quiz",
                             "description": "A quiz to help learners clarify their motivations and assess their commitment levels.",
                             "details": {
@@ -537,11 +537,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Defining Objectives with Clarity and Specificity",
+                    "name": "Defining Objectives with Clarity and Specificity",
                     "description": "The process of defining an objective with precision.",
                     "tasks": [
                         {
-                            "task_name": "SMART Goals Explained",
+                            "name": "SMART Goals Explained",
                             "type": "learning_material",
                             "description": "A learning material explaining how to create SMART (Specific, Measurable, Achievable, Relevant, Time-bound) goals.",
                             "details": {
@@ -549,7 +549,7 @@
                             }
                         },
                         {
-                            "task_name": "Goal Setting Worksheet",
+                            "name": "Goal Setting Worksheet",
                             "type": "learning_material",
                             "description": "Worksheet to work through setting clear objectives for the learner to track",
                             "details": {
@@ -557,7 +557,7 @@
                             }
                         },
                         {
-                            "task_name": "Goal Setting Exam",
+                            "name": "Goal Setting Exam",
                             "type": "quiz",
                             "description": "An exam testing the learner on how to construct effective goals for themself.",
                             "details": {
@@ -608,11 +608,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Breaking Down Goals into Actionable Tasks (The 'What')",
+                    "name": "Breaking Down Goals into Actionable Tasks (The 'What')",
                     "description": "Listing and tracking every single task needed to achieve the objective.",
                     "tasks": [
                         {
-                            "task_name": "Task Breakdown",
+                            "name": "Task Breakdown",
                             "type": "learning_material",
                             "description": "A learning material explaining the process of breaking down goals into smaller, manageable tasks.",
                             "details": {
@@ -620,7 +620,7 @@
                             }
                         },
                         {
-                            "task_name": "Task Breakdown Exercise",
+                            "name": "Task Breakdown Exercise",
                             "type": "quiz",
                             "description": "A quiz where students must breakdown a given goal into a series of actionable tasks.",
                             "details": {
@@ -661,11 +661,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Planning and Prioritizing (The 'How')",
+                    "name": "Planning and Prioritizing (The 'How')",
                     "description": "Planning, prioritizing, mind-mapping, and identifying the 80/20 rule to achieve the objective.",
                     "tasks": [
                         {
-                            "task_name": "Effective Planning Strategies",
+                            "name": "Effective Planning Strategies",
                             "type": "learning_material",
                             "description": "A learning material discussing different planning and prioritization techniques like mind-mapping and the 80/20 rule.",
                             "details": {
@@ -673,7 +673,7 @@
                             }
                         },
                         {
-                            "task_name": "Planning Application",
+                            "name": "Planning Application",
                             "type": "quiz",
                             "description": "A quiz that tests the learner's ability to use planning and prioritizing tools effectively.",
                             "details": {
@@ -700,11 +700,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Scheduling and Time Estimation (The 'When')",
+                    "name": "Scheduling and Time Estimation (The 'When')",
                     "description": "Creating a realistic schedule and estimating the time needed for all tasks.",
                     "tasks": [
                         {
-                            "task_name": "Time Management Techniques",
+                            "name": "Time Management Techniques",
                             "type": "learning_material",
                             "description": "A learning material on time management and scheduling techniques.",
                             "details": {
@@ -712,7 +712,7 @@
                             }
                         },
                         {
-                            "task_name": "Schedule Creation Quiz",
+                            "name": "Schedule Creation Quiz",
                             "type": "quiz",
                             "description": "A quiz asking learners to create a realistic schedule for achieving a specific goal.",
                             "details": {
@@ -759,11 +759,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Securing Support Systems (The 'Who Else With')",
+                    "name": "Securing Support Systems (The 'Who Else With')",
                     "description": "Identifying and securing the support needed to achieve the objective.",
                     "tasks": [
                         {
-                            "task_name": "Building a Support Network",
+                            "name": "Building a Support Network",
                             "type": "learning_material",
                             "description": "A learning material discussing how to identify and build a support network.",
                             "details": {
@@ -771,7 +771,7 @@
                             }
                         },
                         {
-                            "task_name": "Support System Identification",
+                            "name": "Support System Identification",
                             "type": "quiz",
                             "description": "A quiz to help learners identify the support systems needed to achieve their goals.",
                             "details": {
@@ -808,15 +808,15 @@
             ]
         },
         {
-            "module_name": "Adopting an 'ANYTHING IS POSSIBLE' Attitude",
+            "name": "Adopting an 'ANYTHING IS POSSIBLE' Attitude",
             "id": 9,
             "concepts": [
                 {
-                    "concept_name": "The Power of Stretch Objectives",
+                    "name": "The Power of Stretch Objectives",
                     "description": "Understanding how believing anything is possible leads to breakthroughs.",
                     "tasks": [
                         {
-                            "task_name": "Stretch Objectives Defined",
+                            "name": "Stretch Objectives Defined",
                             "type": "learning_material",
                             "description": "A learning material explaining the power and importance of setting stretch objectives.",
                             "details": {
@@ -824,7 +824,7 @@
                             }
                         },
                         {
-                            "task_name": "Objectives Quiz",
+                            "name": "Objectives Quiz",
                             "type": "quiz",
                             "description": "A quiz testing the learner on the importance of stretch goals",
                             "details": {
@@ -859,11 +859,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Overcoming the Fear of Bold Goals",
+                    "name": "Overcoming the Fear of Bold Goals",
                     "description": "Identifying and overcoming the reasons people avoid bold goals.",
                     "tasks": [
                         {
-                            "task_name": "Identifying Fears",
+                            "name": "Identifying Fears",
                             "type": "learning_material",
                             "description": "A learning material discussing common reasons people avoid setting bold goals (comfort, fear of failure, lack of clarity, social resistance, immediate pressures).",
                             "details": {
@@ -871,7 +871,7 @@
                             }
                         },
                         {
-                            "task_name": "Fear Overcoming Strategies",
+                            "name": "Fear Overcoming Strategies",
                             "type": "learning_material",
                             "description": "A learning material discussing how to overcome these fears, embracing a 'anything is possible' mindset, becoming the person you need to be, and dedicating time to the future.",
                             "details": {
@@ -879,7 +879,7 @@
                             }
                         },
                         {
-                            "task_name": "Fear Quiz",
+                            "name": "Fear Quiz",
                             "type": "quiz",
                             "description": "A quiz testing the learners on identifying fears of pursuing goals",
                             "details": {
@@ -930,11 +930,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Shifting Your Mindset to Achieve the Impossible",
+                    "name": "Shifting Your Mindset to Achieve the Impossible",
                     "description": "Adopting a new perspective to overcome challenges and achieve ambitious goals.",
                     "tasks": [
                         {
-                            "task_name": "Perspective Shifting Techniques",
+                            "name": "Perspective Shifting Techniques",
                             "type": "learning_material",
                             "description": "A learning material explaining how to shift from a realistic to a possible mindset, focusing on creation instead of limitations, and reframing fear of failure.",
                             "details": {
@@ -942,7 +942,7 @@
                             }
                         },
                         {
-                            "task_name": "Shift Exam",
+                            "name": "Shift Exam",
                             "type": "quiz",
                             "description": "An exam testing a student's understanding of how to shift their mindset",
                             "details": {
@@ -993,11 +993,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Maintaining Alignment: Staying Whole",
+                    "name": "Maintaining Alignment: Staying Whole",
                     "description": "Questions to consider in order to stay aligned.",
                     "tasks": [
                         {
-                            "task_name": "Staying Whole",
+                            "name": "Staying Whole",
                             "type": "learning_material",
                             "description": "A learning material explaining how to stay aligned with goals through maintaining: mindset & vision, action & execution, resilience & emotional strength and balance & well-being.",
                             "details": {
@@ -1005,7 +1005,7 @@
                             }
                         },
                         {
-                            "task_name": "Staying Whole Quiz",
+                            "name": "Staying Whole Quiz",
                             "type": "quiz",
                             "description": "A quiz testing the learner on the questions needed to be asked in order to stay aligned.",
                             "details": {
@@ -1162,15 +1162,15 @@
             ]
         },
         {
-            "module_name": "Creating Actionable Strategies: Lessons from Achievers",
+            "name": "Creating Actionable Strategies: Lessons from Achievers",
             "id": 10,
             "concepts": [
                 {
-                    "concept_name": "Visionaries Who Saw Beyond Reality",
+                    "name": "Visionaries Who Saw Beyond Reality",
                     "description": "Examining examples of visionaries who achieved the impossible.",
                     "tasks": [
                         {
-                            "task_name": "Nandan Nilekani Case Study",
+                            "name": "Nandan Nilekani Case Study",
                             "type": "learning_material",
                             "description": "A case study of Nandan Nilekani and the Aadhaar project in India.",
                             "details": {
@@ -1178,7 +1178,7 @@
                             }
                         },
                         {
-                            "task_name": "Elon Musk Case Study",
+                            "name": "Elon Musk Case Study",
                             "type": "learning_material",
                             "description": "A case study of Elon Musk and SpaceX & Tesla in the USA.",
                             "details": {
@@ -1186,7 +1186,7 @@
                             }
                         },
                         {
-                            "task_name": "Visionary Case Study Exam",
+                            "name": "Visionary Case Study Exam",
                             "type": "quiz",
                             "description": "A final exam testing the learners understanding of all the visionary case studies.",
                             "details": {
@@ -1261,11 +1261,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Turning Failure Into Breakthroughs",
+                    "name": "Turning Failure Into Breakthroughs",
                     "description": "Examining examples of individuals and organizations that turned failure into success.",
                     "tasks": [
                         {
-                            "task_name": "Thomas Edison Case Study",
+                            "name": "Thomas Edison Case Study",
                             "type": "learning_material",
                             "description": "A case study of Thomas Edison and the invention of the light bulb.",
                             "details": {
@@ -1273,7 +1273,7 @@
                             }
                         },
                         {
-                            "task_name": "ISRO Case Study",
+                            "name": "ISRO Case Study",
                             "type": "learning_material",
                             "description": "A case study of ISRO's Mars Orbiter Mission (Mangalyaan).",
                             "details": {
@@ -1281,7 +1281,7 @@
                             }
                         },
                         {
-                            "task_name": "Failure Case Study Exam",
+                            "name": "Failure Case Study Exam",
                             "type": "quiz",
                             "description": "A final exam to test the learner on turning failures into breakthroughs.",
                             "details": {
@@ -1324,11 +1324,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Overcoming Limits & Proving the Impossible",
+                    "name": "Overcoming Limits & Proving the Impossible",
                     "description": "Examining examples of individuals and organizations that overcame limitations and achieved the impossible.",
                     "tasks": [
                         {
-                            "task_name": "Roger Bannister Case Study",
+                            "name": "Roger Bannister Case Study",
                             "type": "learning_material",
                             "description": "A case study of Roger Bannister breaking the 4-minute mile.",
                             "details": {
@@ -1336,7 +1336,7 @@
                             }
                         },
                         {
-                            "task_name": "Rama's Bridge Case Study",
+                            "name": "Rama's Bridge Case Study",
                             "type": "learning_material",
                             "description": "A case study of Rama's Bridge (Ram Setu) from the Ramayana.",
                             "details": {
@@ -1344,7 +1344,7 @@
                             }
                         },
                         {
-                            "task_name": "Limit Case Study Exam",
+                            "name": "Limit Case Study Exam",
                             "type": "quiz",
                             "description": "An exam to test the learner on all limit case studies.",
                             "details": {
@@ -1411,11 +1411,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Reinventing Industries & Breaking the Mold",
+                    "name": "Reinventing Industries & Breaking the Mold",
                     "description": "Examining examples of individuals and organizations that reinvented industries and broke the mold.",
                     "tasks": [
                         {
-                            "task_name": "Alibaba Case Study",
+                            "name": "Alibaba Case Study",
                             "type": "learning_material",
                             "description": "A case study of Jack Ma and the creation of Alibaba.",
                             "details": {
@@ -1423,7 +1423,7 @@
                             }
                         },
                         {
-                            "task_name": "Walt Disney Case Study",
+                            "name": "Walt Disney Case Study",
                             "type": "learning_material",
                             "description": "A case study of Walt Disney and the creation of animated films.",
                             "details": {
@@ -1431,7 +1431,7 @@
                             }
                         },
                         {
-                            "task_name": "Reinvention Case Study Exam",
+                            "name": "Reinvention Case Study Exam",
                             "type": "quiz",
                             "description": "An exam to test the learner's understanding of all reinvention case studies",
                             "details": {
@@ -1490,11 +1490,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Making the Future Happen Today",
+                    "name": "Making the Future Happen Today",
                     "description": "Examining examples of individuals and organizations that made the future happen today.",
                     "tasks": [
                         {
-                            "task_name": "The Wright Brothers Case Study",
+                            "name": "The Wright Brothers Case Study",
                             "type": "learning_material",
                             "description": "A case study of the Wright Brothers and the invention of the airplane.",
                             "details": {
@@ -1502,7 +1502,7 @@
                             }
                         },
                         {
-                            "task_name": "Making the Future Case Study Exam",
+                            "name": "Making the Future Case Study Exam",
                             "type": "quiz",
                             "description": "An exam to test the learner's understanding on all 'making the future' case studies.",
                             "details": {
@@ -1547,15 +1547,15 @@
             ]
         },
         {
-            "module_name": "Conclusion: Achieving Your Personal Transformation",
+            "name": "Conclusion: Achieving Your Personal Transformation",
             "id": 11,
             "concepts": [
                 {
-                    "concept_name": "Key Takeaways and Inspiration",
+                    "name": "Key Takeaways and Inspiration",
                     "description": "Reviewing the key takeaways from the course and using them for inspiration.",
                     "tasks": [
                         {
-                            "task_name": "Review of Core Principles",
+                            "name": "Review of Core Principles",
                             "type": "learning_material",
                             "description": "A learning material summarizing the core principles taught in the course (Mindset, Goals, Action, Attitude).",
                             "details": {
@@ -1563,7 +1563,7 @@
                             }
                         },
                         {
-                            "task_name": "Applying the Principles",
+                            "name": "Applying the Principles",
                             "type": "quiz",
                             "description": "A quiz testing the learners understanding of the core principles.",
                             "details": {
@@ -1614,11 +1614,11 @@
                     ]
                 },
                 {
-                    "concept_name": "Personal Transformation Project",
+                    "name": "Personal Transformation Project",
                     "description": "A capstone project where learners apply everything they have learned in the course to create a plan for their own personal transformation.",
                     "tasks": [
                         {
-                            "task_name": "Project Requirements",
+                            "name": "Project Requirements",
                             "type": "learning_material",
                             "description": "A learning material outlining the requirements for the final personal transformation plan.",
                             "details": {
@@ -1626,7 +1626,7 @@
                             }
                         },
                         {
-                            "task_name": "Project Submission",
+                            "name": "Project Submission",
                             "type": "quiz",
                             "description": "The submission and evaluation of the personal transformation plan.",
                             "details": {
