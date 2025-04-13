@@ -47,6 +47,8 @@ from api.models import (
     UserCohort,
     StoreMessageRequest,
     ChatMessage,
+    TaskAIResponseType,
+    QuestionType,
 )
 from api.utils import (
     get_date_from_str,
@@ -690,13 +692,19 @@ async def remove_tags_from_task(task_id: int, tag_ids_to_remove: List):
 
 
 async def create_draft_task_for_course(
-    title: str, type: str, org_id: int, course_id: int, milestone_id: int
-):
+    title: str,
+    type: str,
+    org_id: int,
+    course_id: int,
+    milestone_id: int,
+) -> int:
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
+        query = f"INSERT INTO {tasks_table_name} (org_id, type, title, status) VALUES (?, ?, ?, ?)"
+
         await cursor.execute(
-            f"INSERT INTO {tasks_table_name} (org_id, type, title, status) VALUES (?, ?, ?, ?)",
+            query,
             (org_id, type, title, "draft"),
         )
 
@@ -1042,7 +1050,11 @@ def prepare_blocks_for_publish(blocks: List[Dict]) -> List[Dict]:
 
 
 async def publish_learning_material_task(
-    task_id: int, title: str, blocks: List[Dict], scheduled_publish_at: datetime
+    task_id: int,
+    title: str,
+    blocks: List[Dict],
+    scheduled_publish_at: datetime,
+    status: TaskStatus = TaskStatus.PUBLISHED,
 ) -> LearningMaterialTask:
     if not await does_task_exist(task_id):
         return False
@@ -1055,7 +1067,7 @@ async def publish_learning_material_task(
             f"UPDATE {tasks_table_name} SET blocks = ?, status = ?, title = ?, scheduled_publish_at = ? WHERE id = ?",
             (
                 json.dumps(prepare_blocks_for_publish(blocks)),
-                str(TaskStatus.PUBLISHED),
+                str(status),
                 title,
                 scheduled_publish_at,
                 task_id,
@@ -1068,7 +1080,11 @@ async def publish_learning_material_task(
 
 
 async def publish_quiz(
-    task_id: int, title: str, questions: List[Dict], scheduled_publish_at: datetime
+    task_id: int,
+    title: str,
+    questions: List[Dict],
+    scheduled_publish_at: datetime,
+    status: TaskStatus = TaskStatus.PUBLISHED,
 ):
     if not await does_task_exist(task_id):
         return False
@@ -1087,7 +1103,8 @@ async def publish_quiz(
         cursor = await conn.cursor()
 
         for index, question in enumerate(questions):
-            question = question.model_dump()
+            if not isinstance(question, dict):
+                question = question.model_dump()
 
             await cursor.execute(
                 f"""
@@ -1147,7 +1164,7 @@ async def publish_quiz(
         # Update task status to published
         await cursor.execute(
             f"UPDATE {tasks_table_name} SET status = ?, title = ?, scheduled_publish_at = ? WHERE id = ?",
-            (str(TaskStatus.PUBLISHED), title, scheduled_publish_at, task_id),
+            (str(status), title, scheduled_publish_at, task_id),
         )
 
         await conn.commit()
@@ -4161,7 +4178,7 @@ async def publish_scheduled_tasks():
         UPDATE {tasks_table_name}
         SET scheduled_publish_at = NULL
         WHERE status = '{TaskStatus.PUBLISHED}'
-        AND scheduled_publish_at IS NOT NULL
+        AND scheduled_publish_at IS NOT NULL AND deleted_at IS NULL
         AND scheduled_publish_at <= ?
         RETURNING id
         """,
@@ -4184,3 +4201,128 @@ async def migrate_tasks_table():
         await execute_db_operation(
             f"ALTER TABLE {tasks_table_name} ADD COLUMN scheduled_publish_at DATETIME"
         )
+
+
+async def add_generated_course_modules(
+    course_id: int, org_id: int, modules: List[Dict]
+):
+    import random
+
+    module_ids = []
+    for module in modules:
+        color = random.choice(
+            [
+                "#2d3748",  # Slate blue
+                "#433c4c",  # Deep purple
+                "#4a5568",  # Cool gray
+                "#312e51",  # Indigo
+                "#364135",  # Forest green
+                "#4c393a",  # Burgundy
+                "#334155",  # Navy blue
+                "#553c2d",  # Rust brown
+                "#37303f",  # Plum
+                "#3c4b64",  # Steel blue
+                "#463c46",  # Mauve
+                "#3c322d",  # Coffee
+            ]
+        )
+        module_id = await add_milestone_to_course(
+            course_id, module["module_name"], color, org_id
+        )
+        module_ids.append(module_id)
+
+    return module_ids
+
+
+def convert_content_to_blocks(content: str) -> List[Dict]:
+    lines = content.split("\n")
+    blocks = []
+    for line in lines:
+        blocks.append(
+            {
+                "type": "paragraph",
+                "props": {
+                    "textColor": "default",
+                    "backgroundColor": "default",
+                    "textAlignment": "left",
+                },
+                "content": [{"type": "text", "text": line, "styles": {}}],
+                "children": [],
+            }
+        )
+
+    return blocks
+
+
+async def add_generated_learning_material(task_id: int, task_details: Dict):
+    await publish_learning_material_task(
+        task_id,
+        task_details["task_name"],
+        convert_content_to_blocks(task_details["details"]["content"]),
+        None,
+        TaskStatus.DRAFT,
+    )
+
+
+async def add_generated_quiz(task_id: int, task_details: Dict):
+    current_scorecard_index = 0
+
+    for question in task_details["details"]["questions"]:
+        question["type"] = question.pop("question_type")
+
+        question["blocks"] = convert_content_to_blocks(question["content"])
+        question["answer"] = (
+            convert_content_to_blocks(question["correct_answer"])
+            if question["correct_answer"]
+            else None
+        )
+        question["input_type"] = (
+            question.pop("answer_type") if question["answer_type"] else "text"
+        )
+        question["response_type"] = (
+            TaskAIResponseType.CHAT
+            if question["type"] != QuestionType.OPEN_ENDED
+            else TaskAIResponseType.REPORT
+        )
+        question["generation_model"] = None
+        question["context"] = None
+        question["max_attempts"] = 1 if task_details["type"] == TaskType.EXAM else None
+        question["is_feedback_shown"] = (
+            True if task_details["type"] == TaskType.QUIZ else False
+        )
+        if question.get("scorecard"):
+            question["scorecard"]["id"] = current_scorecard_index
+            current_scorecard_index += 1
+        question["scorecard_id"] = None
+
+    await publish_quiz(
+        task_id,
+        task_details["task_name"],
+        task_details["details"]["questions"],
+        None,
+        TaskStatus.DRAFT,
+    )
+
+
+async def add_generated_course(course_id: int, org_id: int, course_details: Dict):
+    await update_course_name(course_id, course_details["course_name"])
+
+    module_ids = await add_generated_course_modules(
+        course_id, org_id, course_details["modules"]
+    )
+
+    for index, module in enumerate(course_details["modules"]):
+        for concept in module["concepts"]:
+            for task in concept["tasks"]:
+                task_id = await create_draft_task_for_course(
+                    task["task_name"],
+                    task["type"],
+                    org_id,
+                    course_id,
+                    module_ids[index],
+                )
+
+                if task["type"] == TaskType.LEARNING_MATERIAL:
+                    await add_generated_learning_material(task_id, task)
+                else:
+                    await add_generated_quiz(task_id, task)
