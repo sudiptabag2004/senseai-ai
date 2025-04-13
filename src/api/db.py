@@ -1114,7 +1114,11 @@ async def publish_quiz(
                     task_id,
                     str(question["type"]),
                     json.dumps(prepare_blocks_for_publish(question["blocks"])),
-                    json.dumps(question["answer"]) if question["answer"] else None,
+                    (
+                        json.dumps(prepare_blocks_for_publish(question["answer"]))
+                        if question["answer"]
+                        else None
+                    ),
                     str(question["input_type"]),
                     str(question["response_type"]),
                     (
@@ -1190,7 +1194,11 @@ async def update_quiz(
                 """,
                 (
                     json.dumps(prepare_blocks_for_publish(question["blocks"])),
-                    json.dumps(question["answer"]) if question["answer"] else None,
+                    (
+                        json.dumps(prepare_blocks_for_publish(question["answer"]))
+                        if question["answer"]
+                        else None
+                    ),
                     str(question["input_type"]),
                     (
                         json.dumps(question["coding_languages"])
