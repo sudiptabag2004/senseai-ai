@@ -8,17 +8,16 @@ async def async_batch_gather(
     batch_size: int = 10,
     description: str = "Processing batch",
 ):
-    """Coroutines must return a tuple of (index, output) where index is the index of the coroutine in the list of coroutines. Wrap your original coroutine with the async_index_wrapper function before passing it here."""
     total_num = len(coroutines)
     # outputs = [None] * total_num
     results = []
 
     # Process in batches to limit memory usage
-    for i in range(0, len(coroutines), batch_size):
+    for i in range(0, total_num, batch_size):
         batch = coroutines[i : i + batch_size]
         batch_results = await tqdm_asyncio.gather(
             *batch,
-            desc=f"{description} {i}-{i+len(batch)}/{len(coroutines)}",
+            desc=f"{description} {i}-{i+len(batch)}/{total_num}",
         )
         results.extend(batch_results)
 

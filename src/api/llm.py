@@ -263,21 +263,21 @@ def validate_openai_api_key(openai_api_key: str) -> bool:
         return None
 
 
-def run_llm_with_instructor(
+async def run_llm_with_instructor(
     api_key: str,
     model: str,
     messages: List,
     response_model: BaseModel,
     max_completion_tokens: int,
 ):
-    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+    client = instructor.from_openai(openai.AsyncOpenAI(api_key=api_key))
 
     model_kwargs = {}
 
     if not is_reasoning_model(model):
         model_kwargs["temperature"] = 0
 
-    return client.chat.completions.create(
+    return await client.chat.completions.create(
         model=model,
         messages=messages,
         response_model=response_model,
@@ -287,7 +287,7 @@ def run_llm_with_instructor(
     )
 
 
-def stream_llm_with_instructor(
+async def stream_llm_with_instructor(
     api_key: str,
     model: str,
     messages: List,
@@ -295,7 +295,7 @@ def stream_llm_with_instructor(
     max_completion_tokens: int,
     **kwargs,
 ):
-    client = instructor.from_openai(openai.OpenAI(api_key=api_key))
+    client = instructor.from_openai(openai.AsyncOpenAI(api_key=api_key))
 
     model_kwargs = {}
 

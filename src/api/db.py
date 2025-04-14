@@ -4366,7 +4366,7 @@ async def migrate_learning_material(task_id: int, task_details: Dict):
     await publish_learning_material_task(
         task_id,
         task_details["name"],
-        convert_content_to_blocks(task_details["description"]),
+        task_details["blocks"],
         None,
         TaskStatus.PUBLISHED,  # TEMP: turn to draft later
     )
@@ -4387,7 +4387,7 @@ async def migrate_quiz(task_id: int, task_details: Dict):
         )
     )
 
-    question["blocks"] = convert_content_to_blocks(task_details["description"])
+    question["blocks"] = task_details["blocks"]
 
     question["answer"] = (
         convert_content_to_blocks(task_details["answer"])
@@ -4495,3 +4495,28 @@ async def migrate_course(course_id: int, org_id: int, course_details: Dict):
                 await migrate_learning_material(task_id, task)
             else:
                 await migrate_quiz(task_id, task)
+
+
+async def migrate_task_description_to_blocks(course_details: Dict):
+    from api.routes.ai import migrate_content_to_blocks
+    from api.utils.concurrency import async_batch_gather, async_index_wrapper
+
+    coroutines = []
+
+    for milestone in course_details["milestones"]:
+        for task in milestone["tasks"]:
+            coroutines.append(migrate_content_to_blocks(task["description"]))
+        #     break
+        # break
+
+    results = await async_batch_gather(coroutines)
+
+    current_index = 0
+    for milestone in course_details["milestones"]:
+        for task in milestone["tasks"]:
+            task["blocks"] = results[current_index]
+            current_index += 1
+        #     break
+        # break
+
+    return course_details

@@ -2,7 +2,7 @@ from ast import List
 import tempfile
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import List, AsyncGenerator, Optional, Dict
+from typing import List, AsyncGenerator, Optional, Dict, Literal
 import json
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
@@ -38,7 +38,7 @@ def get_user_message_for_audio(uuid: str):
     ]
 
 
-def rewrite_query_for_doubt_solving(chat_history: List[Dict]) -> str:
+async def rewrite_query_for_doubt_solving(chat_history: List[Dict]) -> str:
     system_prompt = f"""You are a very good communicator.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role: You need to rewrite the student's latest query/message by taking the reference material and the conversation history into consideration so that the query becomes more specific, detailed and clear, reflecting the actual intent of the student."""
 
     model = openai_plan_to_model_name["text"]
@@ -50,7 +50,7 @@ def rewrite_query_for_doubt_solving(chat_history: List[Dict]) -> str:
             description="The rewritten query/message of the student"
         )
 
-    pred = run_llm_with_instructor(
+    pred = await run_llm_with_instructor(
         api_key=settings.openai_api_key,
         model=model,
         messages=messages,
@@ -263,7 +263,9 @@ async def ai_response_for_question(request: AIChatRequest):
     else:
         system_prompt = f"""You are a teaching assistant.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role:\n- You need to respond to the student's message based on the content in the reference material provided to you.\n- If the student's query is absolutely not relevant to the reference material or goes beyond the scope of the reference material, clearly saying so without indulging their irrelevant queries. The only exception is when they are asking deeper questions related to the learning material that might not be mentioned in the reference material itself to clarify their conceptual doubts. In this case, you can provide the answer and help them.\n- Remember that the reference material is in read-only mode for the student. So, they cannot make any changes to it.\n\nGuidelines on your response style:\n- Vary your phrasing to avoid monotony; occasionally include emojis to maintain warmth and engagement.\n- Playfully redirect irrelevant responses back to the task without judgment.\n- If the task involves code, format code snippets or variable/function names with backticks (`example`).\n- If including HTML, wrap tags in backticks (`<html>`).\n- If your response includes rich text format like lists, font weights, tables, etc. always render them as markdown.\n- Avoid being unnecessarily verbose in your response.\n\nGuideline on maintaining focus:\n- Your role is that of a teaching assistant for this particular task only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task give to you.\n- If the student tries to move the focus of the conversation away from the task, gently bring it back to the task.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task given to you at all odds. No matter what happens. Stay on the task. Keep bringing the student back to the task. Do not let the conversation drift away.\n\n{format_instructions}"""
 
-        chat_history[-1]["content"] = rewrite_query_for_doubt_solving(chat_history)
+        chat_history[-1]["content"] = await rewrite_query_for_doubt_solving(
+            chat_history
+        )
 
     if request.response_type == ChatResponseType.AUDIO:
         model = openai_plan_to_model_name["audio"]
@@ -275,7 +277,7 @@ async def ai_response_for_question(request: AIChatRequest):
     try:
         # Define an async generator for streaming
         async def stream_response() -> AsyncGenerator[str, None]:
-            stream = stream_llm_with_instructor(
+            stream = await stream_llm_with_instructor(
                 api_key=settings.openai_api_key,
                 model=model,
                 messages=messages,
@@ -283,9 +285,8 @@ async def ai_response_for_question(request: AIChatRequest):
                 max_completion_tokens=4096,
             )
 
-            # Since stream is a regular generator, not an async generator,
-            # we need to iterate over it differently
-            for chunk in stream:
+            # Process the async generator
+            async for chunk in stream:
                 yield json.dumps(chunk.model_dump()) + "\n"
 
         # Return a streaming response
@@ -297,3 +298,94 @@ async def ai_response_for_question(request: AIChatRequest):
     except Exception as exception:
         logger.error(exception)
         raise exception
+
+
+async def migrate_content_to_blocks(content: str) -> List[Dict]:
+    class BlockProps(BaseModel):
+        level: Optional[Literal[1, 2, 3]] = Field(
+            description="The level of a heading block"
+        )
+        checked: Optional[bool] = Field(
+            description="Whether the block is checked (for a checkListItem block)"
+        )
+        language: Optional[str] = Field(
+            description="The language of the code block (for a codeBlock block); always the full name of the language in lowercase (e.g. python, javascript, sql, html, css, etc.)"
+        )
+        name: Optional[str] = Field(
+            description="The name of the image (for an image block)"
+        )
+        url: Optional[str] = Field(
+            description="The URL of the image (for an image block)"
+        )
+
+    class BlockContentStyle(BaseModel):
+        bold: Optional[bool] = Field(description="Whether the text is bold")
+        italic: Optional[bool] = Field(description="Whether the text is italic")
+        underline: Optional[bool] = Field(description="Whether the text is underlined")
+
+    class BlockContentText(BaseModel):
+        type: Literal["text"] = Field(description="The type of the block content")
+        text: str = Field(
+            description="The text of the block; if the block is a code block, this should contain the code with newlines and tabs as appropriate"
+        )
+        styles: BlockContentStyle | dict = Field(
+            default={}, description="The styles of the block content"
+        )
+
+    class BlockContentLink(BaseModel):
+        type: Literal["link"] = Field(description="The type of the block content")
+        href: str = Field(description="The URL of the link")
+        content: List[BlockContentText] = Field(description="The content of the link")
+
+    class Block(BaseModel):
+        type: Literal[
+            "heading",
+            "paragraph",
+            "bulletListItem",
+            "numberedListItem",
+            "codeBlock",
+            "checkListItem",
+            "image",
+        ] = Field(description="The type of block")
+        props: Optional[BlockProps | dict] = Field(
+            default={}, description="The properties of the block"
+        )
+        content: List[BlockContentText | BlockContentLink] = Field(
+            description="The content of the block; empty for image blocks"
+        )
+
+    class Output(BaseModel):
+        blocks: List[Block] = Field(description="The blocks of the content")
+
+    system_prompt = f"""You are an expert course converter. The user will give you a content in markdown format. You will need to convert the content into a structured format as given below.
+
+Never modify the actual content given to you. Just convert it into the structured format.
+
+The `content` field of each block should have multiple blocks only when parts of the same line in the markdown content have different parameters or styles (e.g. some part of the line is bold and some is italic or some part of the line is a link and some is not).
+
+The final output should be a JSON in the following format:
+
+{Output.model_json_schema()}"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": content},
+    ]
+
+    output = await run_llm_with_instructor(
+        api_key=settings.openai_api_key,
+        model=openai_plan_to_model_name["text"],
+        messages=messages,
+        response_model=Output,
+        max_completion_tokens=16000,
+    )
+
+    blocks = output.model_dump(exclude_none=True)["blocks"]
+
+    for block in blocks:
+        if block["type"] == "image":
+            block["props"].update(
+                {"showPreview": True, "caption": "", "previewWidth": 512}
+            )
+
+    return blocks
