@@ -4520,3 +4520,10 @@ async def migrate_task_description_to_blocks(course_details: Dict):
         # break
 
     return course_details
+
+
+async def transfer_course_to_org(course_id: int, org_id: int):
+    await execute_db_operation(
+        f"UPDATE {courses_table_name} SET org_id = ? WHERE id = ?",
+        (org_id, course_id),
+    )
