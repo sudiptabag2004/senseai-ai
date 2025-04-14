@@ -4262,11 +4262,21 @@ def convert_content_to_blocks(content: str) -> List[Dict]:
     return blocks
 
 
+def convert_blocks_to_right_format(blocks: List[Dict]) -> List[Dict]:
+    for block in blocks:
+        for content in block["content"]:
+            content["type"] = "text"
+            if "styles" not in content:
+                content["styles"] = {}
+
+    return blocks
+
+
 async def add_generated_learning_material(task_id: int, task_details: Dict):
     await publish_learning_material_task(
         task_id,
         task_details["name"],
-        convert_content_to_blocks(task_details["details"]["content"]),
+        convert_blocks_to_right_format(task_details["details"]["blocks"]),
         None,
         TaskStatus.PUBLISHED,  # TEMP: turn to draft later
     )
@@ -4278,14 +4288,15 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
     for question in task_details["details"]["questions"]:
         question["type"] = question.pop("question_type")
 
-        question["blocks"] = convert_content_to_blocks(question["content"])
+        question["blocks"] = convert_blocks_to_right_format(question["blocks"])
+
         question["answer"] = (
-            convert_content_to_blocks(question["correct_answer"])
-            if question["correct_answer"]
+            convert_blocks_to_right_format(question["correct_answer"])
+            if question.get("correct_answer")
             else None
         )
         question["input_type"] = (
-            question.pop("answer_type") if question["answer_type"] else "text"
+            question.pop("answer_type") if question.get("answer_type") else "text"
         )
         question["response_type"] = (
             TaskAIResponseType.CHAT
@@ -4296,11 +4307,11 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
         question["context"] = (
             {
                 "blocks": prepare_blocks_for_publish(
-                    convert_content_to_blocks(question["context"])
+                    convert_blocks_to_right_format(question["context"])
                 ),
                 "linkedMaterialIds": None,
             }
-            if question["context"]
+            if question.get("context")
             else None
         )
         question["max_attempts"] = 1 if task_details["type"] == TaskType.EXAM else None
@@ -4310,7 +4321,10 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
         if question.get("scorecard"):
             question["scorecard"]["id"] = current_scorecard_index
             current_scorecard_index += 1
+        else:
+            question["scorecard"] = None
         question["scorecard_id"] = None
+        question["coding_languages"] = question.get("coding_languages", None)
 
     await publish_quiz(
         task_id,
@@ -4331,6 +4345,9 @@ async def add_generated_course(course_id: int, org_id: int, course_details: Dict
     for index, module in enumerate(course_details["modules"]):
         for concept in module["concepts"]:
             for task in concept["tasks"]:
+                if "details" not in task:
+                    continue
+
                 task_id = await create_draft_task_for_course(
                     task["name"],
                     task["type"],
@@ -4343,3 +4360,138 @@ async def add_generated_course(course_id: int, org_id: int, course_details: Dict
                     await add_generated_learning_material(task_id, task)
                 else:
                     await add_generated_quiz(task_id, task)
+
+
+async def migrate_learning_material(task_id: int, task_details: Dict):
+    await publish_learning_material_task(
+        task_id,
+        task_details["name"],
+        convert_content_to_blocks(task_details["description"]),
+        None,
+        TaskStatus.PUBLISHED,  # TEMP: turn to draft later
+    )
+
+
+async def migrate_quiz(task_id: int, task_details: Dict):
+    scorecards = []
+
+    question = {}
+
+    question["type"] = (
+        QuestionType.OPEN_ENDED
+        if task_details["response_type"] == "report"
+        else (
+            QuestionType.CODING
+            if task_details["input_type"] == "coding"
+            else QuestionType.OBJECTIVE
+        )
+    )
+
+    question["blocks"] = convert_content_to_blocks(task_details["description"])
+
+    question["answer"] = (
+        convert_content_to_blocks(task_details["answer"])
+        if task_details.get("answer")
+        else None
+    )
+    question["input_type"] = (
+        "audio" if task_details["input_type"] == "audio" else "text"
+    )
+    question["response_type"] = (
+        TaskAIResponseType.CHAT
+        if question["type"] != QuestionType.OPEN_ENDED
+        else TaskAIResponseType.REPORT
+    )
+    question["coding_languages"] = task_details.get("coding_language", None)
+    question["generation_model"] = None
+    question["context"] = (
+        {
+            "blocks": prepare_blocks_for_publish(
+                convert_content_to_blocks(task_details["context"])
+            ),
+            "linkedMaterialIds": None,
+        }
+        if task_details.get("context")
+        else None
+    )
+    question["max_attempts"] = (
+        1 if task_details["response_type"] == TaskType.EXAM else None
+    )
+    question["is_feedback_shown"] = (
+        False if task_details["response_type"] == TaskType.EXAM else True
+    )
+
+    if task_details["response_type"] == "report":
+        scoring_criteria = task_details["scoring_criteria"]
+
+        scorecard_criteria = []
+
+        for criterion in scoring_criteria:
+            scorecard_criteria.append(
+                {
+                    "name": criterion["category"],
+                    "description": criterion["description"],
+                    "min_score": criterion["range"][0],
+                    "max_score": criterion["range"][1],
+                }
+            )
+
+        is_new_scorecard = True
+        scorecard_id = None
+        for index, existing_scorecard in enumerate(scorecards):
+            if existing_scorecard == scorecard_criteria:
+                is_new_scorecard = False
+                scorecard_id = index
+                break
+
+        question["scorecard"] = {
+            "id": len(scorecards) if is_new_scorecard else scorecard_id,
+            "title": "Scorecard",
+            "criteria": scorecard_criteria,
+        }
+
+        if is_new_scorecard:
+            scorecards.append(scorecard_criteria)
+    else:
+        question["scorecard"] = None
+
+    question["scorecard_id"] = None
+
+    await publish_quiz(
+        task_id,
+        task_details["name"],
+        [question],
+        None,
+        TaskStatus.PUBLISHED,  # TEMP: turn to draft later
+    )
+
+
+async def migrate_course(course_id: int, org_id: int, course_details: Dict):
+    await update_course_name(course_id, course_details["name"])
+
+    module_ids = await add_generated_course_modules(
+        course_id, org_id, course_details["milestones"]
+    )
+
+    for index, milestone in enumerate(course_details["milestones"]):
+        for task in milestone["tasks"]:
+            if task["type"] == "reading_material":
+                task["type"] = str(TaskType.LEARNING_MATERIAL)
+            else:
+                if task["response_type"] == "exam":
+                    task["type"] = str(TaskType.EXAM)
+                else:
+                    task["type"] = str(TaskType.QUIZ)
+
+            task_id = await create_draft_task_for_course(
+                task["name"],
+                task["type"],
+                org_id,
+                course_id,
+                module_ids[index],
+            )
+
+            if task["type"] == TaskType.LEARNING_MATERIAL:
+                await migrate_learning_material(task_id, task)
+            else:
+                await migrate_quiz(task_id, task)

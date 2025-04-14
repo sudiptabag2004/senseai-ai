@@ -193,12 +193,11 @@ class Block(BaseModel):
     id: Optional[str] = None
     type: str
     props: Optional[Dict] = {}
-    content: Optional[List] = None
+    content: Optional[List] = []
     children: Optional[List] = []
     position: Optional[int] = (
         None  # not present when sent from frontend at the time of publishing
     )
-    styles: Optional[Dict] = None
 
 
 class LearningMaterialTask(Task):
