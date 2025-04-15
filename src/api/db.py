@@ -1898,7 +1898,7 @@ async def get_user_streak(user_id: int, cohort_id: int):
         f"""
     SELECT MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
     FROM {chat_history_table_name}
-    WHERE user_id = ? AND question_id IN (SELECT question_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?))
+    WHERE user_id = ? AND question_id IN (SELECT id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
     GROUP BY DATE(datetime(created_at, '+5 hours', '+30 minutes'))
     
     UNION
@@ -1947,7 +1947,7 @@ async def get_cohort_streaks(
         -- Chat history interactions
         SELECT user_id, MAX(datetime(created_at, '+5 hours', '+30 minutes')) as created_at
         FROM {chat_history_table_name}
-        WHERE 1=1 {date_filter} AND question_id IN (SELECT question_id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
+        WHERE 1=1 {date_filter} AND question_id IN (SELECT id FROM {questions_table_name} WHERE task_id IN (SELECT task_id FROM {course_tasks_table_name} WHERE course_id IN (SELECT course_id FROM {course_cohorts_table_name} WHERE cohort_id = ?)))
         GROUP BY user_id, DATE(datetime(created_at, '+5 hours', '+30 minutes'))
         
         UNION
@@ -1973,6 +1973,8 @@ async def get_cohort_streaks(
         (cohort_id, cohort_id, cohort_id),
         fetch_all=True,
     )
+
+    print(usage_per_user)
 
     streaks = []
 
