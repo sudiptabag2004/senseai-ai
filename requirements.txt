@@ -5,7 +5,7 @@ langchain-community==0.3.18
 openai==1.74.0
 # streamlit==1.41.1
 email_validator==2.2.0
-python-dotenv==1.0.21
+python-dotenv==1.0.1
 pydantic==2.8.2
 pydantic_core==2.20.1
 backoff==2.2.1
