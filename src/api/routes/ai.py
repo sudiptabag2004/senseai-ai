@@ -41,7 +41,7 @@ def get_user_message_for_audio(uuid: str):
 async def rewrite_query_for_doubt_solving(chat_history: List[Dict]) -> str:
     system_prompt = f"""You are a very good communicator.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role: You need to rewrite the student's latest query/message by taking the reference material and the conversation history into consideration so that the query becomes more specific, detailed and clear, reflecting the actual intent of the student."""
 
-    model = openai_plan_to_model_name["text"]
+    model = openai_plan_to_model_name["text-mini"]
 
     messages = [{"role": "system", "content": system_prompt}] + chat_history
 
@@ -270,7 +270,7 @@ async def ai_response_for_question(request: AIChatRequest):
     if request.response_type == ChatResponseType.AUDIO:
         model = openai_plan_to_model_name["audio"]
     else:
-        model = openai_plan_to_model_name["reasoning"]
+        model = openai_plan_to_model_name["text"]
 
     messages = [{"role": "system", "content": system_prompt}] + chat_history
 
@@ -374,7 +374,7 @@ The final output should be a JSON in the following format:
 
     output = await run_llm_with_instructor(
         api_key=settings.openai_api_key,
-        model=openai_plan_to_model_name["text"],
+        model=openai_plan_to_model_name["text-mini"],
         messages=messages,
         response_model=Output,
         max_completion_tokens=16000,
