@@ -366,6 +366,11 @@ class ChatMessage(BaseModel):
     response_type: Optional[ChatResponseType] | None
 
 
+class PublicAPIChatMessage(ChatMessage):
+    task_id: int
+    user_email: str
+
+
 class Tag(BaseModel):
     id: int
     name: str

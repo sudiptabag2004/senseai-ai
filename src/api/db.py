@@ -1359,12 +1359,13 @@ async def store_messages(
 async def get_all_chat_history(org_id: int):
     chat_history = await execute_db_operation(
         f"""
-        SELECT message.id, message.timestamp, user.id AS user_id, user.email AS user_email, message.task_id, task.name AS task_name, message.role, message.content, message.is_solved, message.response_type
+        SELECT message.id, message.created_at, user.id AS user_id, user.email AS user_email, message.question_id, task.id AS task_id, message.role, message.content, message.response_type
         FROM {chat_history_table_name} message
-        INNER JOIN {tasks_table_name} task ON message.task_id = task.id
+        INNER JOIN {questions_table_name} question ON message.question_id = question.id
+        INNER JOIN {tasks_table_name} task ON question.task_id = task.id
         INNER JOIN {users_table_name} user ON message.user_id = user.id 
         WHERE task.deleted_at IS NULL AND task.org_id = ?
-        ORDER BY message.timestamp ASC
+        ORDER BY message.created_at ASC
         """,
         (org_id,),
         fetch_all=True,
@@ -1373,15 +1374,14 @@ async def get_all_chat_history(org_id: int):
     return [
         {
             "id": row[0],
-            "timestamp": row[1],
+            "created_at": row[1],
             "user_id": row[2],
             "user_email": row[3],
-            "task_id": row[4],
-            "task_name": row[5],
+            "question_id": row[4],
+            "task_id": row[5],
             "role": row[6],
             "content": row[7],
-            "is_solved": bool(row[8]),
-            "response_type": row[9],
+            "response_type": row[8],
         }
         for row in chat_history
     ]
