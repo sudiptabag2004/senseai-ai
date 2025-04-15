@@ -1974,8 +1974,6 @@ async def get_cohort_streaks(
         fetch_all=True,
     )
 
-    print(usage_per_user)
-
     streaks = []
 
     for (
