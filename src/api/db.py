@@ -691,13 +691,27 @@ async def remove_tags_from_task(task_id: int, tag_ids_to_remove: List):
     )
 
 
+async def get_org_id_for_course(course_id: int):
+    course = await execute_db_operation(
+        f"SELECT org_id FROM {courses_table_name} WHERE id = ?",
+        (course_id,),
+        fetch_one=True,
+    )
+
+    if not course:
+        raise ValueError("Course not found")
+
+    return course[0]
+
+
 async def create_draft_task_for_course(
     title: str,
     type: str,
-    org_id: int,
     course_id: int,
     milestone_id: int,
 ) -> int:
+    org_id = await get_org_id_for_course(course_id)
+
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
@@ -3594,8 +3608,10 @@ async def update_task_orders(task_orders: List[Tuple[int, int]]):
 
 
 async def add_milestone_to_course(
-    course_id: int, milestone_name: str, milestone_color: str, org_id: int
+    course_id: int, milestone_name: str, milestone_color: str
 ):
+    org_id = await get_org_id_for_course(course_id)
+
     # Wrap the entire operation in a transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
@@ -4211,9 +4227,7 @@ async def migrate_tasks_table():
         )
 
 
-async def add_generated_course_modules(
-    course_id: int, org_id: int, modules: List[Dict]
-):
+async def add_generated_course_modules(course_id: int, modules: List[Dict]):
     import random
 
     module_ids = []
@@ -4234,9 +4248,7 @@ async def add_generated_course_modules(
                 "#3c322d",  # Coffee
             ]
         )
-        module_id = await add_milestone_to_course(
-            course_id, module["name"], color, org_id
-        )
+        module_id = await add_milestone_to_course(course_id, module["name"], color)
         module_ids.append(module_id)
 
     return module_ids
@@ -4335,11 +4347,11 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
     )
 
 
-async def add_generated_course(course_id: int, org_id: int, course_details: Dict):
+async def add_generated_course(course_id: int, course_details: Dict):
     await update_course_name(course_id, course_details["name"])
 
     module_ids = await add_generated_course_modules(
-        course_id, org_id, course_details["modules"]
+        course_id, course_details["modules"]
     )
 
     for index, module in enumerate(course_details["modules"]):
@@ -4351,7 +4363,6 @@ async def add_generated_course(course_id: int, org_id: int, course_details: Dict
                 task_id = await create_draft_task_for_course(
                     task["name"],
                     task["type"],
-                    org_id,
                     course_id,
                     module_ids[index],
                 )
@@ -4466,11 +4477,11 @@ async def migrate_quiz(task_id: int, task_details: Dict):
     )
 
 
-async def migrate_course(course_id: int, org_id: int, course_details: Dict):
+async def migrate_course(course_id: int, course_details: Dict):
     await update_course_name(course_id, course_details["name"])
 
     module_ids = await add_generated_course_modules(
-        course_id, org_id, course_details["milestones"]
+        course_id, course_details["milestones"]
     )
 
     for index, milestone in enumerate(course_details["milestones"]):
@@ -4486,7 +4497,6 @@ async def migrate_course(course_id: int, org_id: int, course_details: Dict):
             task_id = await create_draft_task_for_course(
                 task["name"],
                 task["type"],
-                org_id,
                 course_id,
                 module_ids[index],
             )

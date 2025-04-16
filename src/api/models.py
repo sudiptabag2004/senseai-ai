@@ -1,4 +1,5 @@
 from enum import Enum
+from fastapi import File
 from pydantic import BaseModel
 from typing import List, Tuple, Optional, Dict, Literal
 from datetime import datetime
@@ -410,7 +411,6 @@ class LeaderboardViewType(Enum):
 
 
 class CreateDraftTaskRequest(BaseModel):
-    org_id: int
     course_id: int
     milestone_id: int
     type: TaskType
@@ -499,7 +499,6 @@ class UpdateTaskOrdersRequest(BaseModel):
 class AddMilestoneToCourseRequest(BaseModel):
     name: str
     color: str
-    org_id: int
 
 
 class AddMilestoneToCourseResponse(BaseModel):

@@ -55,7 +55,6 @@ async def create_draft_task_for_course(
     id = await create_draft_task_for_course_in_db(
         request.title,
         str(request.type),
-        request.org_id,
         request.course_id,
         request.milestone_id,
     )

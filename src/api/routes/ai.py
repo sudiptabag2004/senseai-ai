@@ -1,13 +1,21 @@
 from ast import List
 import tempfile
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi.params import Form
 from fastapi.responses import StreamingResponse
 from typing import List, AsyncGenerator, Optional, Dict, Literal
 import json
+import instructor
+import openai
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 from api.config import openai_plan_to_model_name
-from api.models import TaskAIResponseType, AIChatRequest, ChatResponseType, TaskType
+from api.models import (
+    TaskAIResponseType,
+    AIChatRequest,
+    ChatResponseType,
+    TaskType,
+)
 from api.llm import run_llm_with_instructor, stream_llm_with_instructor
 from api.settings import settings
 from api.utils.logging import logger
@@ -17,6 +25,9 @@ from api.db import (
     construct_description_from_blocks,
     fetch_blocks,
     get_task,
+    add_generated_course_modules,
+    update_course_name,
+    create_draft_task_for_course,
 )
 from api.utils.s3 import download_file_from_s3_as_bytes, get_media_upload_s3_key
 from api.utils.audio import prepare_audio_input_for_ai
@@ -389,3 +400,122 @@ The final output should be a JSON in the following format:
             )
 
     return blocks
+
+
+@router.post("/generate/course/{course_id}/structure")
+async def generate_course_structure(
+    course_id: int,
+    course_description: str = Form(...),
+    intended_audience: str = Form(...),
+    instructions: Optional[str] = Form(None),
+    reference_material: UploadFile = File(...),
+):
+    openai_client = openai.OpenAI(
+        api_key=settings.openai_api_key,
+    )
+
+    file = openai_client.files.create(
+        file=reference_material.file,
+        purpose="user_data",
+    )
+
+    class Task(BaseModel):
+        name: str = Field(description="The name of the task")
+        description: str = Field(
+            description="a detailed description of what should the content of that task be"
+        )
+        type: Literal[TaskType.LEARNING_MATERIAL, TaskType.QUIZ] = Field(
+            description="The type of task"
+        )
+
+    class Concept(BaseModel):
+        name: str = Field(description="The name of the concept")
+        description: str = Field(
+            description="The description for what the concept is about"
+        )
+        tasks: List[Task] = Field(description="A list of tasks for the concept")
+
+    class Module(BaseModel):
+        name: str = Field(description="The name of the module")
+        concepts: List[Concept] = Field(description="A list of concepts for the module")
+
+    class Output(BaseModel):
+        name: str = Field(description="The name of the course")
+        modules: List[Module] = Field(description="A list of modules for the course")
+
+    system_prompt = f"""You are an expert course creator. The user will give you some instructions for creating a course along with the reference material to be used as the source for the course content.
+
+You need to thoroughly analyse the reference material given to you and come up with a structure for the course. Each course should be structured into modules where each modules represents a full topic.
+
+With each modules, there must be a mix of learning materials and quizzes. A learning material is used for learning about a specific concept in the topic. Keep separate learning materials for different concepts in the same topic/module. For each concept, the learning material for that concept should be followed by one or more quizzes. Each quiz contains multiple questions for testing the understanding of the learner on the actual concept.
+
+Quizzes are where learners can practice a concept. While testing theoretical understanding is important, quizzes should go beyond that and produce practical challenges for the students to apply what they have learnt. If the reference material already has examples/sample problems, include them in the quizzes for the students to practice. If no examples are present in the reference material, generate a few relevant problem statements to test the real-world understanding of each concept for the students.
+
+All explanations should be present in the learning materials and all practice should be done in quizzes. Maintain this separation of purpose for each task type.
+
+No need to come up with the questions inside the quizzes for now. Just focus on producing the right structure.
+Don't keep any concept too big. Break a topic down into multiple smaller, ideally independent, concepts. For each concept, follow the sequence of learning material -> quiz before moving to the next concept in that topic.
+End the course with a conclusion module (with the appropriate name for the module suited to the course) which ties everything taught in the course together and ideally ends with a capstone project where the learner has to apply everything they have learnt in the course.
+
+Make sure to never skip a single concept from the reference material provided.
+
+The final output should be a JSON in the following format:
+
+{Output.model_json_schema()}
+
+Keep the sequences of modules, concepts, and tasks in mind.
+
+Do not include the type of task in the name of the task."""
+
+    client = instructor.from_openai(openai_client)
+
+    course_structure_generation_prompt = f"""About the course: {course_description}\n\nIntended audience: {intended_audience}"""
+
+    if instructions:
+        course_structure_generation_prompt += f"\n\nInstructions: {instructions}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "file",
+                    "file": {
+                        "file_id": file.id,
+                    },
+                },
+            ],
+        },
+        # separate into 2 user messages for prompt caching to work
+        {"role": "user", "content": course_structure_generation_prompt},
+    ]
+
+    # TODO: Store file in DB/S3?
+    # TODO: store course generation request in DB
+
+    response = client.chat.completions.create(
+        model=openai_plan_to_model_name["text"],
+        messages=messages,
+        response_model=Output,
+        max_completion_tokens=16000,
+        store=True,
+    )
+
+    output = response.model_dump()
+
+    await update_course_name(course_id, output["name"])
+
+    module_ids = await add_generated_course_modules(course_id, output["modules"])
+
+    for index, module in enumerate(output["modules"]):
+        for concept in module["concepts"]:
+            for task in concept["tasks"]:
+                await create_draft_task_for_course(
+                    task["name"],
+                    task["type"],
+                    course_id,
+                    module_ids[index],
+                )
+
+    return {"success": True}

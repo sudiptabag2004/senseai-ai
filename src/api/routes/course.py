@@ -83,7 +83,6 @@ async def add_milestone_to_course(
         course_id,
         request.name,
         request.color,
-        request.org_id,
     )
     return {"id": milestone_id}
 
