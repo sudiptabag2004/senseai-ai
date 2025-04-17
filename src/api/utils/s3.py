@@ -76,5 +76,5 @@ def get_media_upload_s3_dir():
     return join(settings.s3_folder_name, "media")
 
 
-def get_media_upload_s3_key(uuid: str, extension: str):
+def get_media_upload_s3_key_from_uuid(uuid: str, extension: str):
     return join(get_media_upload_s3_dir(), f"{uuid}.{extension}")

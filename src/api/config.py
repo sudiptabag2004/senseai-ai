@@ -47,6 +47,8 @@ scorecards_table_name = "scorecards"
 question_scorecards_table_name = "question_scorecards"
 group_role_learner = "learner"
 group_role_mentor = "mentor"
+course_generation_jobs_table_name = "course_generation_jobs"
+task_generation_jobs_table_name = "task_generation_jobs"
 
 uncategorized_milestone_name = "[UNASSIGNED]"
 uncategorized_milestone_color = "#808080"

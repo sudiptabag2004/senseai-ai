@@ -1,5 +1,4 @@
 from enum import Enum
-from fastapi import File
 from pydantic import BaseModel
 from typing import List, Tuple, Optional, Dict, Literal
 from datetime import datetime
@@ -576,3 +575,43 @@ class SwapMilestoneOrderingRequest(BaseModel):
 class SwapTaskOrderingRequest(BaseModel):
     task_1_id: int
     task_2_id: int
+
+
+class GenerateCourseStructureRequest(BaseModel):
+    course_description: str
+    intended_audience: str
+    instructions: Optional[str] = None
+    reference_material_s3_key: str
+
+
+class GenerateCourseJobStatus(str, Enum):
+    STARTED = "started"
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, GenerateCourseJobStatus):
+            return self.value == other.value
+
+
+class GenerateTaskJobStatus(str, Enum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, GenerateTaskJobStatus):
+            return self.value == other.value
+
+        raise NotImplementedError()

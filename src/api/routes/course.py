@@ -79,7 +79,7 @@ async def update_task_orders(request: UpdateTaskOrdersRequest):
 async def add_milestone_to_course(
     course_id: int, request: AddMilestoneToCourseRequest
 ) -> AddMilestoneToCourseResponse:
-    milestone_id = await add_milestone_to_course_in_db(
+    milestone_id, _ = await add_milestone_to_course_in_db(
         course_id,
         request.name,
         request.color,

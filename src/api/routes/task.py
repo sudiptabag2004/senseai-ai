@@ -52,7 +52,7 @@ async def get_learning_material_tasks_for_course(
 async def create_draft_task_for_course(
     request: CreateDraftTaskRequest,
 ) -> CreateDraftTaskResponse:
-    id = await create_draft_task_for_course_in_db(
+    id, _ = await create_draft_task_for_course_in_db(
         request.title,
         str(request.type),
         request.course_id,

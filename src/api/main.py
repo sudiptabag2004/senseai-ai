@@ -18,6 +18,7 @@ from api.routes import (
     ai,
     scorecard,
 )
+from api.websockets import router as websocket_router
 from api.scheduler import scheduler
 
 
@@ -55,6 +56,7 @@ app.include_router(tag.router, prefix="/tags", tags=["tags"])
 app.include_router(milestone.router, prefix="/milestones", tags=["milestones"])
 app.include_router(scorecard.router, prefix="/scorecards", tags=["scorecards"])
 app.include_router(hva.router, prefix="/hva", tags=["hva"])
+app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
 
 
 @app.get("/health")

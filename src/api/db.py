@@ -2,7 +2,7 @@ import os
 from os.path import exists
 import json
 from collections import defaultdict
-import traceback
+from enum import Enum
 import itertools
 import uuid
 from typing import List, Any, Tuple, Dict, Literal
@@ -39,6 +39,8 @@ from api.config import (
     task_completions_table_name,
     scorecards_table_name,
     question_scorecards_table_name,
+    course_generation_jobs_table_name,
+    task_generation_jobs_table_name,
 )
 from api.models import (
     LeaderboardViewType,
@@ -66,7 +68,7 @@ from api.utils.db import (
     execute_many_db_operation,
     set_db_defaults,
 )
-from api.models import TaskType
+from api.models import TaskType, GenerateCourseJobStatus, GenerateTaskJobStatus
 
 
 async def create_tests_table(cursor):
@@ -545,6 +547,48 @@ async def create_cv_review_usage_table(cursor):
     )
 
 
+async def create_course_generation_jobs_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {course_generation_jobs_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                course_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                job_details TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_course_generation_job_course_id ON {course_generation_jobs_table_name} (course_id)"""
+    )
+
+
+async def create_task_generation_jobs_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {task_generation_jobs_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
+                course_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                job_details TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_task_generation_job_task_id ON {task_generation_jobs_table_name} (task_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_task_generation_job_course_id ON {task_generation_jobs_table_name} (course_id)"""
+    )
+
+
 async def init_db():
     # Ensure the database folder exists
     db_folder = os.path.dirname(sqlite_db_path)
@@ -619,6 +663,12 @@ async def init_db():
             if not await check_table_exists(cv_review_usage_table_name, cursor):
                 await create_cv_review_usage_table(cursor)
 
+            if not await check_table_exists(course_generation_jobs_table_name, cursor):
+                await create_course_generation_jobs_table(cursor)
+
+            if not await check_table_exists(task_generation_jobs_table_name, cursor):
+                await create_task_generation_jobs_table(cursor)
+
             await conn.commit()
             return
 
@@ -662,6 +712,10 @@ async def init_db():
             await create_course_milestones_table(cursor)
 
             await create_cv_review_usage_table(cursor)
+
+            await create_course_generation_jobs_table(cursor)
+
+            await create_task_generation_jobs_table(cursor)
 
             await conn.commit()
 
@@ -709,7 +763,7 @@ async def create_draft_task_for_course(
     type: str,
     course_id: int,
     milestone_id: int,
-) -> int:
+) -> Tuple[int, int]:
     org_id = await get_org_id_for_course(course_id)
 
     async with get_new_db_connection() as conn:
@@ -719,7 +773,7 @@ async def create_draft_task_for_course(
 
         await cursor.execute(
             query,
-            (org_id, type, title, "draft"),
+            (org_id, str(type), title, "draft"),
         )
 
         task_id = cursor.lastrowid
@@ -741,7 +795,7 @@ async def create_draft_task_for_course(
 
         await conn.commit()
 
-        return task_id
+        return task_id, next_ordering
 
 
 def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict]:
@@ -3609,7 +3663,7 @@ async def update_task_orders(task_orders: List[Tuple[int, int]]):
 
 async def add_milestone_to_course(
     course_id: int, milestone_name: str, milestone_color: str
-):
+) -> Tuple[int, int]:
     org_id = await get_org_id_for_course(course_id)
 
     # Wrap the entire operation in a transaction
@@ -3640,7 +3694,7 @@ async def add_milestone_to_course(
 
         await conn.commit()
 
-        return milestone_id
+        return milestone_id, next_order
 
 
 async def update_milestone_orders(milestone_orders: List[Tuple[int, int]]):
@@ -4227,63 +4281,6 @@ async def migrate_tasks_table():
         )
 
 
-async def add_generated_course_modules(course_id: int, modules: List[Dict]):
-    import random
-
-    module_ids = []
-    for module in modules:
-        color = random.choice(
-            [
-                "#2d3748",  # Slate blue
-                "#433c4c",  # Deep purple
-                "#4a5568",  # Cool gray
-                "#312e51",  # Indigo
-                "#364135",  # Forest green
-                "#4c393a",  # Burgundy
-                "#334155",  # Navy blue
-                "#553c2d",  # Rust brown
-                "#37303f",  # Plum
-                "#3c4b64",  # Steel blue
-                "#463c46",  # Mauve
-                "#3c322d",  # Coffee
-            ]
-        )
-        module_id = await add_milestone_to_course(course_id, module["name"], color)
-        module_ids.append(module_id)
-
-    return module_ids
-
-
-def convert_content_to_blocks(content: str) -> List[Dict]:
-    lines = content.split("\n")
-    blocks = []
-    for line in lines:
-        blocks.append(
-            {
-                "type": "paragraph",
-                "props": {
-                    "textColor": "default",
-                    "backgroundColor": "default",
-                    "textAlignment": "left",
-                },
-                "content": [{"type": "text", "text": line, "styles": {}}],
-                "children": [],
-            }
-        )
-
-    return blocks
-
-
-def convert_blocks_to_right_format(blocks: List[Dict]) -> List[Dict]:
-    for block in blocks:
-        for content in block["content"]:
-            content["type"] = "text"
-            if "styles" not in content:
-                content["styles"] = {}
-
-    return blocks
-
-
 async def add_generated_learning_material(task_id: int, task_details: Dict):
     await publish_learning_material_task(
         task_id,
@@ -4347,30 +4344,60 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
     )
 
 
-async def add_generated_course(course_id: int, course_details: Dict):
-    await update_course_name(course_id, course_details["name"])
+def convert_content_to_blocks(content: str) -> List[Dict]:
+    lines = content.split("\n")
+    blocks = []
+    for line in lines:
+        blocks.append(
+            {
+                "type": "paragraph",
+                "props": {
+                    "textColor": "default",
+                    "backgroundColor": "default",
+                    "textAlignment": "left",
+                },
+                "content": [{"type": "text", "text": line, "styles": {}}],
+                "children": [],
+            }
+        )
 
-    module_ids = await add_generated_course_modules(
-        course_id, course_details["modules"]
-    )
+    return blocks
 
-    for index, module in enumerate(course_details["modules"]):
-        for concept in module["concepts"]:
-            for task in concept["tasks"]:
-                if "details" not in task:
-                    continue
 
-                task_id = await create_draft_task_for_course(
-                    task["name"],
-                    task["type"],
-                    course_id,
-                    module_ids[index],
-                )
+def convert_blocks_to_right_format(blocks: List[Dict]) -> List[Dict]:
+    for block in blocks:
+        for content in block["content"]:
+            content["type"] = "text"
+            if "styles" not in content:
+                content["styles"] = {}
 
-                if task["type"] == TaskType.LEARNING_MATERIAL:
-                    await add_generated_learning_material(task_id, task)
-                else:
-                    await add_generated_quiz(task_id, task)
+    return blocks
+
+
+# async def add_generated_course(course_id: int, course_details: Dict):
+#     await update_course_name(course_id, course_details["name"])
+
+#     module_ids = await add_generated_course_modules(
+#         course_id, course_details["modules"]
+#     )
+
+#     for index, module in enumerate(course_details["modules"]):
+#         for concept in module["concepts"]:
+#             for task in concept["tasks"]:
+#                 if "details" not in task:
+#                     continue
+
+#                 task_id = await create_draft_task_for_course(
+#                     task["name"],
+#                     task["type"],
+#                     course_id,
+#                     module_ids[index],
+#                 )
+
+#                 if task["type"] == TaskType.LEARNING_MATERIAL:
+#                     await add_generated_learning_material(task_id, task)
+#                 else:
+#                     await add_generated_quiz(task_id, task)
 
 
 async def migrate_learning_material(task_id: int, task_details: Dict):
@@ -4477,12 +4504,37 @@ async def migrate_quiz(task_id: int, task_details: Dict):
     )
 
 
+async def add_course_modules(course_id: int, modules: List[Dict]):
+    import random
+
+    module_ids = []
+    for module in modules:
+        color = random.choice(
+            [
+                "#2d3748",  # Slate blue
+                "#433c4c",  # Deep purple
+                "#4a5568",  # Cool gray
+                "#312e51",  # Indigo
+                "#364135",  # Forest green
+                "#4c393a",  # Burgundy
+                "#334155",  # Navy blue
+                "#553c2d",  # Rust brown
+                "#37303f",  # Plum
+                "#3c4b64",  # Steel blue
+                "#463c46",  # Mauve
+                "#3c322d",  # Coffee
+            ]
+        )
+        module_id = await add_milestone_to_course(course_id, module["name"], color)
+        module_ids.append(module_id)
+
+    return module_ids
+
+
 async def migrate_course(course_id: int, course_details: Dict):
     await update_course_name(course_id, course_details["name"])
 
-    module_ids = await add_generated_course_modules(
-        course_id, course_details["milestones"]
-    )
+    module_ids = await add_course_modules(course_id, course_details["milestones"])
 
     for index, milestone in enumerate(course_details["milestones"]):
         for task in milestone["tasks"]:
@@ -4494,7 +4546,7 @@ async def migrate_course(course_id: int, course_details: Dict):
                 else:
                     task["type"] = str(TaskType.QUIZ)
 
-            task_id = await create_draft_task_for_course(
+            task_id, _ = await create_draft_task_for_course(
                 task["name"],
                 task["type"],
                 course_id,
@@ -4537,3 +4589,133 @@ async def transfer_course_to_org(course_id: int, org_id: int):
         f"UPDATE {courses_table_name} SET org_id = ? WHERE id = ?",
         (org_id, course_id),
     )
+
+
+async def store_course_generation_request(course_id: int, job_details: Dict) -> str:
+    job_uuid = str(uuid.uuid4())
+
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"INSERT INTO {course_generation_jobs_table_name} (uuid, course_id, status, job_details) VALUES (?, ?, ?, ?)",
+            (
+                job_uuid,
+                course_id,
+                str(GenerateCourseJobStatus.STARTED),
+                json.dumps(job_details),
+            ),
+        )
+
+        await conn.commit()
+
+    return job_uuid
+
+
+async def get_course_generation_job_details(job_uuid: str) -> Dict:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT job_details FROM {course_generation_jobs_table_name} WHERE uuid = ?",
+            (job_uuid,),
+        )
+
+        job = await cursor.fetchone()
+
+        if job is None:
+            raise ValueError("Job not found")
+
+        return json.loads(job[0])
+
+
+class EnumEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
+
+
+async def update_course_generation_job_status_and_details(
+    job_uuid: str, status: GenerateCourseJobStatus, details: Dict
+):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"UPDATE {course_generation_jobs_table_name} SET status = ?, job_details = ? WHERE uuid = ?",
+            (str(status), json.dumps(details, cls=EnumEncoder), job_uuid),
+        )
+
+        await conn.commit()
+
+
+async def update_course_generation_job_status(
+    job_uuid: str, status: GenerateCourseJobStatus
+):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"UPDATE {course_generation_jobs_table_name} SET status = ? WHERE uuid = ?",
+            (str(status), job_uuid),
+        )
+
+        await conn.commit()
+
+
+async def store_task_generation_request(
+    task_id: int, course_id: int, job_details: Dict
+) -> str:
+    job_uuid = str(uuid.uuid4())
+
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"INSERT INTO {task_generation_jobs_table_name} (uuid, task_id, course_id, status, job_details) VALUES (?, ?, ?, ?, ?)",
+            (
+                job_uuid,
+                task_id,
+                course_id,
+                str(GenerateTaskJobStatus.STARTED),
+                json.dumps(job_details),
+            ),
+        )
+
+        await conn.commit()
+
+    return job_uuid
+
+
+async def update_task_generation_job_status(
+    job_uuid: str, status: GenerateTaskJobStatus
+):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"UPDATE {task_generation_jobs_table_name} SET status = ? WHERE uuid = ?",
+            (str(status), job_uuid),
+        )
+
+        await conn.commit()
+
+
+async def get_pending_task_generation_jobs_for_course(course_id: int) -> List[Dict]:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT uuid FROM {task_generation_jobs_table_name} WHERE course_id = ? AND status = ?",
+            (course_id, str(GenerateTaskJobStatus.STARTED)),
+        )
+
+        return [row[0] for row in await cursor.fetchall()]
+
+
+async def drop_task_generation_jobs_table():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(f"DROP TABLE IF EXISTS {task_generation_jobs_table_name}")

@@ -1,9 +1,11 @@
 from ast import List
 import tempfile
-from fastapi import APIRouter, HTTPException, File, UploadFile
-from fastapi.params import Form
+import random
+from collections import defaultdict
+import asyncio
+from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import StreamingResponse
-from typing import List, AsyncGenerator, Optional, Dict, Literal
+from typing import List, Optional, Dict, Literal, AsyncGenerator
 import json
 import instructor
 import openai
@@ -15,28 +17,46 @@ from api.models import (
     AIChatRequest,
     ChatResponseType,
     TaskType,
+    GenerateCourseStructureRequest,
+    GenerateCourseJobStatus,
+    GenerateTaskJobStatus,
 )
 from api.llm import run_llm_with_instructor, stream_llm_with_instructor
 from api.settings import settings
 from api.utils.logging import logger
+from api.websockets import get_manager
 from api.db import (
     get_question_chat_history_for_user,
     get_question,
     construct_description_from_blocks,
     fetch_blocks,
     get_task,
-    add_generated_course_modules,
     update_course_name,
     create_draft_task_for_course,
+    store_course_generation_request,
+    get_course_generation_job_details,
+    update_course_generation_job_status_and_details,
+    store_task_generation_request,
+    update_task_generation_job_status,
+    update_course_generation_job_status,
+    get_pending_task_generation_jobs_for_course,
+    add_generated_learning_material,
+    add_generated_quiz,
+    add_milestone_to_course,
 )
-from api.utils.s3 import download_file_from_s3_as_bytes, get_media_upload_s3_key
+from api.utils.s3 import (
+    download_file_from_s3_as_bytes,
+    get_media_upload_s3_key_from_uuid,
+)
 from api.utils.audio import prepare_audio_input_for_ai
 
 router = APIRouter()
 
 
 def get_user_message_for_audio(uuid: str):
-    audio_data = download_file_from_s3_as_bytes(get_media_upload_s3_key(uuid, "wav"))
+    audio_data = download_file_from_s3_as_bytes(
+        get_media_upload_s3_key_from_uuid(uuid, "wav")
+    )
 
     return [
         {
@@ -402,29 +422,99 @@ The final output should be a JSON in the following format:
     return blocks
 
 
+async def add_generated_module(course_id: int, module: BaseModel):
+    websocket_manager = get_manager()
+    color = random.choice(
+        [
+            "#2d3748",  # Slate blue
+            "#433c4c",  # Deep purple
+            "#4a5568",  # Cool gray
+            "#312e51",  # Indigo
+            "#364135",  # Forest green
+            "#4c393a",  # Burgundy
+            "#334155",  # Navy blue
+            "#553c2d",  # Rust brown
+            "#37303f",  # Plum
+            "#3c4b64",  # Steel blue
+            "#463c46",  # Mauve
+            "#3c322d",  # Coffee
+        ]
+    )
+    module_id, ordering = await add_milestone_to_course(course_id, module.name, color)
+
+    # Send WebSocket update after each module is created
+    await websocket_manager.send_item_update(
+        course_id,
+        {
+            "event": "module_created",
+            "module": {
+                "id": module_id,
+                "name": module.name,
+                "color": color,
+                "ordering": ordering,
+            },
+        },
+    )
+
+    return module_id
+
+
+async def add_generated_draft_task(course_id: int, module_id: int, task: BaseModel):
+    task_id, task_ordering = await create_draft_task_for_course(
+        task.name,
+        task.type,
+        course_id,
+        module_id,
+    )
+
+    websocket_manager = get_manager()
+
+    await websocket_manager.send_item_update(
+        course_id,
+        {
+            "event": "task_created",
+            "task": {
+                "id": task_id,
+                "module_id": module_id,
+                "ordering": task_ordering,
+                "type": str(task.type),
+                "name": task.name,
+            },
+        },
+    )
+    return task_id
+
+
 @router.post("/generate/course/{course_id}/structure")
 async def generate_course_structure(
     course_id: int,
-    course_description: str = Form(...),
-    intended_audience: str = Form(...),
-    instructions: Optional[str] = Form(None),
-    reference_material: UploadFile = File(...),
+    request: GenerateCourseStructureRequest,
 ):
-    openai_client = openai.OpenAI(
+    openai_client = openai.AsyncOpenAI(
         api_key=settings.openai_api_key,
     )
 
-    file = openai_client.files.create(
-        file=reference_material.file,
-        purpose="user_data",
+    reference_material = download_file_from_s3_as_bytes(
+        request.reference_material_s3_key
     )
+
+    print("Uploading reference material to OpenAI")
+    # Create a temporary file to pass to OpenAI
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
+        temp_file.write(reference_material)
+        temp_file.flush()
+
+        file = await openai_client.files.create(
+            file=open(temp_file.name, "rb"),
+            purpose="user_data",
+        )
 
     class Task(BaseModel):
         name: str = Field(description="The name of the task")
         description: str = Field(
             description="a detailed description of what should the content of that task be"
         )
-        type: Literal[TaskType.LEARNING_MATERIAL, TaskType.QUIZ] = Field(
+        type: Literal[TaskType.LEARNING_MATERIAL, TaskType.QUIZ] | str = Field(
             description="The type of task"
         )
 
@@ -440,7 +530,7 @@ async def generate_course_structure(
         concepts: List[Concept] = Field(description="A list of concepts for the module")
 
     class Output(BaseModel):
-        name: str = Field(description="The name of the course")
+        # name: str = Field(description="The name of the course")
         modules: List[Module] = Field(description="A list of modules for the course")
 
     system_prompt = f"""You are an expert course creator. The user will give you some instructions for creating a course along with the reference material to be used as the source for the course content.
@@ -467,12 +557,12 @@ Keep the sequences of modules, concepts, and tasks in mind.
 
 Do not include the type of task in the name of the task."""
 
-    client = instructor.from_openai(openai_client)
+    course_structure_generation_prompt = f"""About the course: {request.course_description}\n\nIntended audience: {request.intended_audience}"""
 
-    course_structure_generation_prompt = f"""About the course: {course_description}\n\nIntended audience: {intended_audience}"""
-
-    if instructions:
-        course_structure_generation_prompt += f"\n\nInstructions: {instructions}"
+    if request.instructions:
+        course_structure_generation_prompt += (
+            f"\n\nInstructions: {request.instructions}"
+        )
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -491,31 +581,379 @@ Do not include the type of task in the name of the task."""
         {"role": "user", "content": course_structure_generation_prompt},
     ]
 
-    # TODO: Store file in DB/S3?
-    # TODO: store course generation request in DB
+    job_details = {**request.model_dump(), "openai_file_id": file.id}
+    job_uuid = await store_course_generation_request(
+        course_id,
+        job_details,
+    )
 
-    response = client.chat.completions.create(
+    print("Generating course structure")
+    stream = await stream_llm_with_instructor(
+        api_key=settings.openai_api_key,
         model=openai_plan_to_model_name["text"],
         messages=messages,
         response_model=Output,
         max_completion_tokens=16000,
+    )
+
+    module_ids = []
+
+    module_concepts = defaultdict(lambda: defaultdict(list))
+
+    output = None
+
+    async for chunk in stream:
+        if not chunk or not chunk.modules:
+            continue
+
+        for index, module in enumerate(chunk.modules):
+            if not module or not module.name or not module.concepts:
+                continue
+
+            if index >= len(module_ids):
+                module_id = await add_generated_module(course_id, module)
+                module_ids.append(module_id)
+            else:
+                module_id = module_ids[index]
+
+            task_index = 0
+
+            for concept_index, concept in enumerate(module.concepts):
+                if (
+                    not concept
+                    or not concept.tasks
+                    or concept_index < len(module_concepts[module_id]) - 1
+                ):
+                    continue
+
+                for task_index, task in enumerate(concept.tasks):
+                    if (
+                        not task
+                        or not task.name
+                        or not task.type
+                        or task.type not in [TaskType.LEARNING_MATERIAL, TaskType.QUIZ]
+                        or task_index < len(module_concepts[module_id][concept_index])
+                    ):
+                        continue
+
+                    task_id = await add_generated_draft_task(course_id, module_id, task)
+                    module_concepts[module_id][concept_index].append(task_id)
+
+        # output = chunk
+
+    output = chunk.model_dump()
+
+    for index, module in enumerate(output["modules"]):
+        module["id"] = module_ids[index]
+
+        for concept_index, concept in enumerate(module["concepts"]):
+            for task_index, task in enumerate(concept["tasks"]):
+                task["id"] = module_concepts[module["id"]][concept_index][task_index]
+
+    # print("Updating course name")
+    # await update_course_name(course_id, output["name"])
+
+    # print("Adding generated course modules")
+    # module_ids = await add_generated_course_modules(course_id, output["modules"])
+
+    # print("Adding generated course tasks")
+    # for index, module in enumerate(output["modules"]):
+    #     for concept in module["concepts"]:
+    #         for task in concept["tasks"]:
+    #             task["id"] = await create_draft_task_for_course(
+    #                 task["name"],
+    #                 task["type"],
+    #                 course_id,
+    #                 module_ids[index],
+    #             )
+
+    job_details["course_structure"] = output
+    await update_course_generation_job_status_and_details(
+        job_uuid,
+        GenerateCourseJobStatus.PENDING,
+        job_details,
+    )
+
+    return {"job_uuid": job_uuid}
+
+    # TODO:
+    # Stream modules created to frontend
+    # Stream draft tasks created in each module to frontend
+    # Fetch course generation request from DB for task generation using job Id
+    # WebSocket for when each task is completed
+    # Generate tasks in parallel
+    # add jobs for each task in DB
+    # Even when reloaded, tasks in jobs in DB in running status should show spinner and disable opening
+    # show chat saying structure is generating
+    # then, tasks are being generated
+    # then, as tasks will complete generation, you will be notified and show progress bar
+    # update task as soon as completed and progress bar in chat
+    # show chat saying tasks are generated
+    # warning if user tries to leave before completion of course structure generation or reload
+
+
+def task_generation_schemas():
+
+    class BlockProps(BaseModel):
+        level: Optional[Literal[2, 3]] = Field(
+            description="The level of a heading block"
+        )
+        checked: Optional[bool] = Field(
+            description="Whether the block is checked (for a checkListItem block)"
+        )
+        language: Optional[str] = Field(
+            description="The language of the code block (for a codeBlock block); always the full name of the language in lowercase (e.g. python, javascript, sql, html, css, etc.)"
+        )
+
+    class BlockContentStyle(BaseModel):
+        bold: Optional[bool] = Field(description="Whether the text is bold")
+        italic: Optional[bool] = Field(description="Whether the text is italic")
+        underline: Optional[bool] = Field(description="Whether the text is underlined")
+
+    class BlockContent(BaseModel):
+        text: str = Field(
+            description="The text of the block; if the block is a code block, this should contain the code with newlines and tabs as appropriate"
+        )
+        styles: BlockContentStyle | dict = Field(
+            default={}, description="The styles of the block content"
+        )
+
+    class Block(BaseModel):
+        type: Literal[
+            "heading",
+            "paragraph",
+            "bulletListItem",
+            "numberedListItem",
+            "codeBlock",
+            "checkListItem",
+        ] = Field(description="The type of block")
+        props: Optional[BlockProps | dict] = Field(
+            default={}, description="The properties of the block"
+        )
+        content: Optional[List[BlockContent]] = Field(
+            description="The content of the block"
+        )
+
+    class LearningMaterial(BaseModel):
+        blocks: List[Block] = Field(
+            description="The content of the learning material as blocks"
+        )
+
+    class Criterion(BaseModel):
+        name: str = Field(
+            description="The name of the criterion (e.g. grammar, relevance, clarity, confidence, pronunciation, brevity, etc.), keep it to 1-2 words unless absolutely necessary to extend beyond that"
+        )
+        description: str = Field(
+            description="The description/rubric for how to assess this criterion - the more detailed it is, the better the evaluation will be, but avoid making it unnecessarily big - only as descriptive as it needs to be but nothing more"
+        )
+        min_score: int = Field(
+            description="The minimum score possible to achieve for this criterion (e.g. 0)"
+        )
+        max_score: int = Field(
+            description="The maximum score possible to achieve for this criterion (e.g. 5)"
+        )
+
+    class Scorecard(BaseModel):
+        title: str = Field(
+            description="what does the scorecard assess (e.g. written communication, interviewing skills, product pitch, etc.)"
+        )
+        criteria: List[Criterion] = Field(
+            description="The list of criteria for the scorecard."
+        )
+
+    class Question(BaseModel):
+        question_type: Literal["objective", "subjective", "coding"] = Field(
+            description='The type of question; "objective" means that the question has a fixed correct answer and the learner\'s response must precisely match it. "subjective" means that the question is subjective, with no fixed correct answer. "coding" - a specific type of "objective" question for programming questions that require one to write code.'
+        )
+        answer_type: Optional[Literal["text", "audio"]] = Field(
+            description='The type of answer; "text" means the student has to submit textual answer where "audio" means student has to submit audio answer. Ignore this field for questionType = "coding".',
+        )
+        coding_languages: Optional[
+            List[Literal["HTML", "CSS", "JS", "Python", "React", "Node", "SQL"]]
+        ] = Field(
+            description='The languages that a student need to submit their code in for questionType=coding. It is a list because a student might have to submit their code in multiple languages as well (e.g. HTML, CSS, JS). This should only be included for questionType = "coding".',
+        )
+        blocks: List[Block] = Field(
+            description="The actual question details as individual blocks. Every part of the question should be included here. Do not assume that there is another field to capture different parts of the question. This is the only field that should be used to capture the question details. This means that if the question is an MCQ, all the options should be included here and not in another field. Extend the same idea to other question types."
+        )
+        correct_answer: Optional[List[Block]] = Field(
+            description='The actual correct answer to compare a student\'s response with. Ignore this field for questionType = "subjective".',
+        )
+        scorecard: Optional[Scorecard] = Field(
+            description='The scorecard for subjective questions. Ignore this field for questionType = "objective" or "coding".',
+        )
+        context: List[Block] = Field(
+            description="A short text that is not the question itself. This is used to add instructions for how the student should be given feedback or the overall purpose of that question. It can also include the raw content from the reference material to be used for giving feedback to the student that may not be present in the question content (hidden from the student) but is critical for providing good feedback."
+        )
+
+    class Quiz(BaseModel):
+        questions: List[Question] = Field(
+            description="A list of questions for the quiz"
+        )
+
+    return LearningMaterial, Quiz
+
+
+def get_system_prompt_for_task_generation(task_type):
+    LearningMaterial, Quiz = task_generation_schemas()
+    schema = (
+        LearningMaterial.model_json_schema()
+        if task_type == "learning_material"
+        else Quiz.model_json_schema()
+    )
+
+    quiz_prompt = """Each quiz/exam contains multiple questions for testing the understanding of the learner on the actual concept.
+
+Important Instructions for Quiz Generation:
+- For a quiz, each question must add a strong positive value to the overall learner's understanding. Do not unnecessarily add questions simply to increase the number of questions. If a quiz merits only a single question based on the reference material provided or your asseessment of how many questions are necessary for it, keep a single question itself. Only add multiple questions when the quiz merits so. 
+- The `content` for each question is the only part of the question shown directly to the student. Add everything that the student needs to know to answer the question inside the `content` field for that question. Do not add anything there that should not be shown to the student (e.g. what is the correct answer). To add instructions for how the student should be given feedback or the overall purpose of that question or raw content from the reference material required as context to give adequate feedback, add it to the `context` field instead. 
+- While testing theoretical understanding is important, a quiz should go beyond that and produce practical challenges for the students to apply what they have learnt. If the reference material already has examples/sample problems, include them in the a quiz for the students to practice. If no examples are present in the reference material, generate a few relevant problem statements to test the real-world understanding of each concept for the students.
+- If a question references a set of options that must be shown to the student, always make sure that those options are actually present in the `content` field for that question. THIS IS SUPER IMPORTANT. As mentioned before, if the reference material does not have the options or data required for the question, generate it based on your understanding of the question and its purpose.
+- Use appropriate formatting for the `blocks` in each question. Make use of all the block types available to you to make the content of each question as engaging and readable as possible.
+- Do not use the name of the quiz as a heading to mark the start of a question in the `blocks` field for each question. The name of the quiz will already be visible to the student."""
+
+    learning_material_prompt = """A learning material is used for learning about a specific concept. 
+    
+Make the \"content\" field in learning material contain as much detail as present in the reference material relevant to it. Do not try to summarise it or skip any point.
+
+Use appropriate formatting for the `blocks` in the learning material. Make use of all the block types available to you to make the content as engaging and readable as possible.
+
+Do not use the name of the learning material as a heading to mark the start of the learning material in the `blocks`.  The name of the learning material will already be visible to the student."""
+
+    task_type_prompt = quiz_prompt if task_type == "quiz" else learning_material_prompt
+
+    system_prompt = f"""You are an expert course creator. The user will give you an outline for a concept in a course they are creating along with the reference material to be used as the source for the course content and the name of one of the tasks from the outline.
+
+You need to generate the content for the single task whose name is provided to you out of all the tasks in the outline. The outline contains the name of a concept in the course, its description and a list of tasks in that concept. Each task can be either a learning material, quiz or exam. You are given this outline so that you can clearly identify what part of the reference material should be used for generating the specific task you need to generate and for you to also understand what should not be included in your generated task. For each task, you have been given a description about what should be included in that task. 
+
+{task_type_prompt}
+
+The final output should be a JSON in the following format:
+
+{schema}"""
+
+    return system_prompt
+
+
+async def generate_course_task(
+    client,
+    task: Dict,
+    concept: Dict,
+    file_id: str,
+    job_uuid: str,
+    course_id: int,
+):
+
+    system_prompt = get_system_prompt_for_task_generation(task["type"])
+
+    model = openai_plan_to_model_name["text"]
+
+    generation_prompt = f"""Concept details:
+
+{concept}
+
+Task to generate:
+
+{task['name']}"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "file",
+                    "file": {
+                        "file_id": file_id,
+                    },
+                },
+            ],
+        },
+        # separate into 2 user messages for prompt caching to work
+        {"role": "user", "content": generation_prompt},
+    ]
+
+    LearningMaterial, Quiz = task_generation_schemas()
+    response_model = (
+        LearningMaterial if task["type"] == TaskType.LEARNING_MATERIAL else Quiz
+    )
+
+    print(f"Starting task generation job with job_uuid: {job_uuid}")
+    output = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        response_model=response_model,
+        max_completion_tokens=16000,
         store=True,
     )
 
-    output = response.model_dump()
+    task["details"] = output.model_dump(exclude_none=True)
 
-    await update_course_name(course_id, output["name"])
+    if task["type"] == TaskType.LEARNING_MATERIAL:
+        await add_generated_learning_material(task["id"], task)
+    else:
+        await add_generated_quiz(task["id"], task)
 
-    module_ids = await add_generated_course_modules(course_id, output["modules"])
+    print(f"Task generation completed for job_uuid: {job_uuid}")
+    await update_task_generation_job_status(job_uuid, GenerateTaskJobStatus.COMPLETED)
 
-    for index, module in enumerate(output["modules"]):
+    incomplete_course_jobs = await get_pending_task_generation_jobs_for_course(
+        course_id
+    )
+
+    if not incomplete_course_jobs:
+        await update_course_generation_job_status(
+            job_uuid, GenerateCourseJobStatus.COMPLETED
+        )
+
+
+@router.post("/generate/course/{course_id}/tasks")
+async def generate_course_tasks(
+    course_id: int,
+    job_uuid: str = Body(..., embed=True),
+):
+    job_details = await get_course_generation_job_details(job_uuid)
+
+    client = instructor.from_openai(
+        openai.AsyncOpenAI(
+            api_key=settings.openai_api_key,
+        )
+    )
+
+    # Create a list to hold all task coroutines
+    tasks = []
+
+    for module in job_details["course_structure"]["modules"]:
         for concept in module["concepts"]:
             for task in concept["tasks"]:
-                await create_draft_task_for_course(
-                    task["name"],
-                    task["type"],
+                task_job_uuid = await store_task_generation_request(
+                    task["id"],
                     course_id,
-                    module_ids[index],
+                    task,
+                )
+                # Add task to the list instead of adding to background_tasks
+                tasks.append(
+                    generate_course_task(
+                        client,
+                        task,
+                        concept,
+                        job_details["openai_file_id"],
+                        task_job_uuid,
+                        course_id,
+                    )
                 )
 
-    return {"success": True}
+    # Create a function to run all tasks in parallel
+    async def run_tasks_in_parallel():
+        try:
+            # Run all tasks concurrently using asyncio.gather
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            logger.error(f"Error in parallel task execution: {e}")
+
+    # Start the parallel execution in the background without awaiting it
+    asyncio.create_task(run_tasks_in_parallel())
+
+    return {
+        "success": True,
+    }
