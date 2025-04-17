@@ -19,7 +19,6 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket, course_id: int):
         if course_id in self.active_connections:
-            print(f"Disconnecting")
             self.active_connections[course_id].discard(websocket)
             if not self.active_connections[course_id]:
                 del self.active_connections[course_id]
@@ -29,10 +28,8 @@ class ConnectionManager:
             disconnected_websockets = set()
             for websocket in self.active_connections[course_id]:
                 try:
-                    print(f"Sending item update to {course_id} {item_data}")
                     await websocket.send_json(item_data)
                 except Exception as exception:
-                    print(f"Error sending item update to {course_id} {item_data}")
                     print(exception)
 
                     # Mark for removal if sending fails
