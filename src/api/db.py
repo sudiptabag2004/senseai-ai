@@ -3833,7 +3833,7 @@ def convert_course_db_to_dict(course: Tuple) -> Dict:
 
 async def get_course(course_id: int, only_published: bool = False) -> Dict:
     course = await execute_db_operation(
-        f"SELECT id, name FROM {courses_table_name} WHERE id = ?",
+        f"SELECT c.id, c.name, cgj.status as course_generation_status FROM {courses_table_name} c LEFT JOIN {course_generation_jobs_table_name} cgj ON c.id = cgj.course_id WHERE c.id = ?",
         (course_id,),
         fetch_one=True,
     )
@@ -3857,9 +3857,11 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
             (CASE WHEN t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') THEN 
                 (SELECT COUNT(*) FROM {questions_table_name} q 
                  WHERE q.task_id = t.id)
-             ELSE NULL END) as num_questions
+             ELSE NULL END) as num_questions,
+            tgj.status as task_generation_status
             FROM {course_tasks_table_name} ct
             JOIN {tasks_table_name} t ON ct.task_id = t.id
+            LEFT JOIN {task_generation_jobs_table_name} tgj ON t.id = tgj.task_id
             WHERE ct.course_id = ? AND t.deleted_at IS NULL
             {
                 f"AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL"
@@ -3885,10 +3887,16 @@ async def get_course(course_id: int, only_published: bool = False) -> Dict:
                 "scheduled_publish_at": task[4],
                 "ordering": task[6],
                 "num_questions": task[7],
+                "is_generating": task[8] is not None
+                and task[8] == GenerateTaskJobStatus.STARTED,
             }
         )
 
-    course_dict = convert_course_db_to_dict(course)
+    course_dict = {
+        "id": course[0],
+        "name": course[1],
+        "course_generation_status": course[2],
+    }
     course_dict["milestones"] = []
 
     for milestone in milestones:
@@ -3942,6 +3950,14 @@ async def delete_course(course_id: int):
             ),
             (
                 f"DELETE FROM {course_milestones_table_name} WHERE course_id = ?",
+                (course_id,),
+            ),
+            (
+                f"DELETE FROM {course_generation_jobs_table_name} WHERE course_id = ?",
+                (course_id,),
+            ),
+            (
+                f"DELETE FROM {task_generation_jobs_table_name} WHERE course_id = ?",
                 (course_id,),
             ),
             (f"DELETE FROM {courses_table_name} WHERE id = ?", (course_id,)),
@@ -4702,16 +4718,43 @@ async def update_task_generation_job_status(
         await conn.commit()
 
 
-async def get_pending_task_generation_jobs_for_course(course_id: int) -> List[Dict]:
+async def get_course_task_generation_jobs_status(course_id: int) -> List[str]:
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
         await cursor.execute(
-            f"SELECT uuid FROM {task_generation_jobs_table_name} WHERE course_id = ? AND status = ?",
-            (course_id, str(GenerateTaskJobStatus.STARTED)),
+            f"SELECT status FROM {task_generation_jobs_table_name} WHERE course_id = ?",
+            (course_id,),
         )
 
-        return [row[0] for row in await cursor.fetchall()]
+        statuses = [row[0] for row in await cursor.fetchall()]
+
+        return {
+            str(GenerateTaskJobStatus.COMPLETED): statuses.count(
+                str(GenerateTaskJobStatus.COMPLETED)
+            ),
+            str(GenerateTaskJobStatus.STARTED): statuses.count(
+                str(GenerateTaskJobStatus.STARTED)
+            ),
+        }
+
+
+async def get_all_pending_task_generation_jobs() -> List[Dict]:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT uuid, job_details FROM {task_generation_jobs_table_name} WHERE status = ?",
+            (str(GenerateTaskJobStatus.STARTED),),
+        )
+
+        return [
+            {
+                "uuid": row[0],
+                "job_details": json.loads(row[1]),
+            }
+            for row in await cursor.fetchall()
+        ]
 
 
 async def drop_task_generation_jobs_table():

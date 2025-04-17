@@ -19,13 +19,12 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket, course_id: int):
         if course_id in self.active_connections:
-            print(f"Disconnecting from {course_id}")
+            print(f"Disconnecting")
             self.active_connections[course_id].discard(websocket)
             if not self.active_connections[course_id]:
                 del self.active_connections[course_id]
 
     async def send_item_update(self, course_id: int, item_data: Dict):
-        print(self.active_connections)
         if course_id in self.active_connections:
             disconnected_websockets = set()
             for websocket in self.active_connections[course_id]:
@@ -35,9 +34,7 @@ class ConnectionManager:
                 except Exception as exception:
                     print(f"Error sending item update to {course_id} {item_data}")
                     print(exception)
-                    import ipdb
 
-                    ipdb.set_trace()
                     # Mark for removal if sending fails
                     disconnected_websockets.add(websocket)
 

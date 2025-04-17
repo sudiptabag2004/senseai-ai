@@ -293,9 +293,43 @@ class QuizTask(Task):
     questions: List[PublishedQuestion]
 
 
+class GenerateCourseJobStatus(str, Enum):
+    STARTED = "started"
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, GenerateCourseJobStatus):
+            return self.value == other.value
+
+
+class GenerateTaskJobStatus(str, Enum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, GenerateTaskJobStatus):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
+
 class MilestoneTask(Task):
     ordering: int
     num_questions: int | None
+    is_generating: bool
 
 
 class MilestoneWithTasks(Milestone):
@@ -304,6 +338,7 @@ class MilestoneWithTasks(Milestone):
 
 class CourseWithMilestonesAndTasks(Course):
     milestones: List[MilestoneWithTasks]
+    course_generation_status: GenerateCourseJobStatus | None
 
 
 class UserCourseRole(str, Enum):
@@ -582,36 +617,3 @@ class GenerateCourseStructureRequest(BaseModel):
     intended_audience: str
     instructions: Optional[str] = None
     reference_material_s3_key: str
-
-
-class GenerateCourseJobStatus(str, Enum):
-    STARTED = "started"
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-    def __str__(self):
-        return self.value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        elif isinstance(other, GenerateCourseJobStatus):
-            return self.value == other.value
-
-
-class GenerateTaskJobStatus(str, Enum):
-    STARTED = "started"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-    def __str__(self):
-        return self.value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        elif isinstance(other, GenerateTaskJobStatus):
-            return self.value == other.value
-
-        raise NotImplementedError()

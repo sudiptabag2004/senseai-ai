@@ -24,6 +24,7 @@ from api.models import (
 from api.llm import run_llm_with_instructor, stream_llm_with_instructor
 from api.settings import settings
 from api.utils.logging import logger
+from api.utils.concurrency import async_batch_gather
 from api.websockets import get_manager
 from api.db import (
     get_question_chat_history_for_user,
@@ -39,10 +40,11 @@ from api.db import (
     store_task_generation_request,
     update_task_generation_job_status,
     update_course_generation_job_status,
-    get_pending_task_generation_jobs_for_course,
+    get_course_task_generation_jobs_status,
     add_generated_learning_material,
     add_generated_quiz,
     add_milestone_to_course,
+    get_all_pending_task_generation_jobs,
 )
 from api.utils.s3 import (
     download_file_from_s3_as_bytes,
@@ -676,9 +678,6 @@ Do not include the type of task in the name of the task."""
 
     return {"job_uuid": job_uuid}
 
-    # TODO:
-    # warning if user tries to leave before completion of course structure generation or reload
-
 
 def task_generation_schemas():
 
@@ -828,7 +827,8 @@ async def generate_course_task(
     task: Dict,
     concept: Dict,
     file_id: str,
-    job_uuid: str,
+    task_job_uuid: str,
+    course_job_uuid: str,
     course_id: int,
 ):
 
@@ -866,7 +866,7 @@ Task to generate:
         LearningMaterial if task["type"] == TaskType.LEARNING_MATERIAL else Quiz
     )
 
-    print(f"Starting task generation job with job_uuid: {job_uuid}")
+    print(f"Starting task generation job with task_job_uuid: {task_job_uuid}")
     output = await client.chat.completions.create(
         model=model,
         messages=messages,
@@ -882,6 +882,13 @@ Task to generate:
     else:
         await add_generated_quiz(task["id"], task)
 
+    print(f"Task generation completed for task_job_uuid: {task_job_uuid}")
+    await update_task_generation_job_status(
+        task_job_uuid, GenerateTaskJobStatus.COMPLETED
+    )
+
+    course_jobs_status = await get_course_task_generation_jobs_status(course_id)
+
     websocket_manager = get_manager()
 
     await websocket_manager.send_item_update(
@@ -891,18 +898,13 @@ Task to generate:
             "task": {
                 "id": task["id"],
             },
+            "total_completed": course_jobs_status[str(GenerateTaskJobStatus.COMPLETED)],
         },
     )
-    print(f"Task generation completed for job_uuid: {job_uuid}")
-    await update_task_generation_job_status(job_uuid, GenerateTaskJobStatus.COMPLETED)
 
-    incomplete_course_jobs = await get_pending_task_generation_jobs_for_course(
-        course_id
-    )
-
-    if not incomplete_course_jobs:
+    if not course_jobs_status[str(GenerateTaskJobStatus.STARTED)]:
         await update_course_generation_job_status(
-            job_uuid, GenerateCourseJobStatus.COMPLETED
+            course_job_uuid, GenerateCourseJobStatus.COMPLETED
         )
 
 
@@ -928,7 +930,13 @@ async def generate_course_tasks(
                 task_job_uuid = await store_task_generation_request(
                     task["id"],
                     course_id,
-                    task,
+                    {
+                        "task": task,
+                        "concept": concept,
+                        "openai_file_id": job_details["openai_file_id"],
+                        "course_job_uuid": job_uuid,
+                        "course_id": course_id,
+                    },
                 )
                 # Add task to the list instead of adding to background_tasks
                 tasks.append(
@@ -938,6 +946,7 @@ async def generate_course_tasks(
                         concept,
                         job_details["openai_file_id"],
                         task_job_uuid,
+                        job_uuid,
                         course_id,
                     )
                 )
@@ -946,7 +955,7 @@ async def generate_course_tasks(
     async def run_tasks_in_parallel():
         try:
             # Run all tasks concurrently using asyncio.gather
-            await asyncio.gather(*tasks)
+            await async_batch_gather(tasks, description="Generating tasks")
         except Exception as e:
             logger.error(f"Error in parallel task execution: {e}")
 
@@ -956,3 +965,33 @@ async def generate_course_tasks(
     return {
         "success": True,
     }
+
+
+async def resume_pending_task_generation_jobs():
+    incomplete_course_jobs = await get_all_pending_task_generation_jobs()
+
+    if not incomplete_course_jobs:
+        return
+
+    tasks = []
+
+    client = instructor.from_openai(
+        openai.AsyncOpenAI(
+            api_key=settings.openai_api_key,
+        )
+    )
+
+    for job in incomplete_course_jobs:
+        tasks.append(
+            generate_course_task(
+                client,
+                job["job_details"]["task"],
+                job["job_details"]["concept"],
+                job["job_details"]["openai_file_id"],
+                job["uuid"],
+                job["job_details"]["course_job_uuid"],
+                job["job_details"]["course_id"],
+            )
+        )
+
+    await async_batch_gather(tasks, description="Resuming task generation jobs")

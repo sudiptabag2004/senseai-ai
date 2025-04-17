@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,7 @@ from api.routes import (
     ai,
     scorecard,
 )
+from api.routes.ai import resume_pending_task_generation_jobs
 from api.websockets import router as websocket_router
 from api.scheduler import scheduler
 
@@ -25,6 +27,10 @@ from api.scheduler import scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler.start()
+
+    # Add recovery logic for interrupted tasks
+    asyncio.create_task(resume_pending_task_generation_jobs())
+
     yield
     scheduler.shutdown()
 
