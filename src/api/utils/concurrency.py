@@ -5,7 +5,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 async def async_batch_gather(
     coroutines: List[Coroutine],
-    batch_size: int = 10,
+    batch_size: int = 25,
     description: str = "Processing batch",
 ):
     total_num = len(coroutines)
