@@ -500,7 +500,6 @@ async def generate_course_structure(
         request.reference_material_s3_key
     )
 
-    print("Uploading reference material to OpenAI")
     # Create a temporary file to pass to OpenAI
     with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
         temp_file.write(reference_material)
@@ -589,7 +588,6 @@ Do not include the type of task in the name of the task."""
         job_details,
     )
 
-    print("Generating course structure")
     stream = await stream_llm_with_instructor(
         api_key=settings.openai_api_key,
         model=openai_plan_to_model_name["text"],
@@ -651,23 +649,6 @@ Do not include the type of task in the name of the task."""
         for concept_index, concept in enumerate(module["concepts"]):
             for task_index, task in enumerate(concept["tasks"]):
                 task["id"] = module_concepts[module["id"]][concept_index][task_index]
-
-    # print("Updating course name")
-    # await update_course_name(course_id, output["name"])
-
-    # print("Adding generated course modules")
-    # module_ids = await add_generated_course_modules(course_id, output["modules"])
-
-    # print("Adding generated course tasks")
-    # for index, module in enumerate(output["modules"]):
-    #     for concept in module["concepts"]:
-    #         for task in concept["tasks"]:
-    #             task["id"] = await create_draft_task_for_course(
-    #                 task["name"],
-    #                 task["type"],
-    #                 course_id,
-    #                 module_ids[index],
-    #             )
 
     job_details["course_structure"] = output
     await update_course_generation_job_status_and_details(
@@ -866,7 +847,6 @@ Task to generate:
         LearningMaterial if task["type"] == TaskType.LEARNING_MATERIAL else Quiz
     )
 
-    print(f"Starting task generation job with task_job_uuid: {task_job_uuid}")
     output = await client.chat.completions.create(
         model=model,
         messages=messages,
@@ -882,7 +862,6 @@ Task to generate:
     else:
         await add_generated_quiz(task["id"], task)
 
-    print(f"Task generation completed for task_job_uuid: {task_job_uuid}")
     await update_task_generation_job_status(
         task_job_uuid, GenerateTaskJobStatus.COMPLETED
     )
