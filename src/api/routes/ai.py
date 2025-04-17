@@ -3,7 +3,7 @@ import tempfile
 import random
 from collections import defaultdict
 import asyncio
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from typing import List, Optional, Dict, Literal, AsyncGenerator
 import json
@@ -487,29 +487,15 @@ async def add_generated_draft_task(course_id: int, module_id: int, task: BaseMod
     return task_id
 
 
-@router.post("/generate/course/{course_id}/structure")
-async def generate_course_structure(
+async def _generate_course_structure(
+    course_description: str,
+    intended_audience: str,
+    instructions: str,
+    openai_file_id: str,
     course_id: int,
-    request: GenerateCourseStructureRequest,
+    course_job_uuid: str,
+    job_details: Dict,
 ):
-    openai_client = openai.AsyncOpenAI(
-        api_key=settings.openai_api_key,
-    )
-
-    reference_material = download_file_from_s3_as_bytes(
-        request.reference_material_s3_key
-    )
-
-    # Create a temporary file to pass to OpenAI
-    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
-        temp_file.write(reference_material)
-        temp_file.flush()
-
-        file = await openai_client.files.create(
-            file=open(temp_file.name, "rb"),
-            purpose="user_data",
-        )
-
     class Task(BaseModel):
         name: str = Field(description="The name of the task")
         description: str = Field(
@@ -558,12 +544,10 @@ Keep the sequences of modules, concepts, and tasks in mind.
 
 Do not include the type of task in the name of the task."""
 
-    course_structure_generation_prompt = f"""About the course: {request.course_description}\n\nIntended audience: {request.intended_audience}"""
+    course_structure_generation_prompt = f"""About the course: {course_description}\n\nIntended audience: {intended_audience}"""
 
-    if request.instructions:
-        course_structure_generation_prompt += (
-            f"\n\nInstructions: {request.instructions}"
-        )
+    if instructions:
+        course_structure_generation_prompt += f"\n\nInstructions: {instructions}"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -573,7 +557,7 @@ Do not include the type of task in the name of the task."""
                 {
                     "type": "file",
                     "file": {
-                        "file_id": file.id,
+                        "file_id": openai_file_id,
                     },
                 },
             ],
@@ -581,12 +565,6 @@ Do not include the type of task in the name of the task."""
         # separate into 2 user messages for prompt caching to work
         {"role": "user", "content": course_structure_generation_prompt},
     ]
-
-    job_details = {**request.model_dump(), "openai_file_id": file.id}
-    job_uuid = await store_course_generation_request(
-        course_id,
-        job_details,
-    )
 
     stream = await stream_llm_with_instructor(
         api_key=settings.openai_api_key,
@@ -652,8 +630,60 @@ Do not include the type of task in the name of the task."""
 
     job_details["course_structure"] = output
     await update_course_generation_job_status_and_details(
-        job_uuid,
+        course_job_uuid,
         GenerateCourseJobStatus.PENDING,
+        job_details,
+    )
+
+    websocket_manager = get_manager()
+
+    await websocket_manager.send_item_update(
+        course_id,
+        {
+            "event": "course_structure_completed",
+            "job_id": course_job_uuid,
+        },
+    )
+
+
+@router.post("/generate/course/{course_id}/structure")
+async def generate_course_structure(
+    course_id: int,
+    background_tasks: BackgroundTasks,
+    request: GenerateCourseStructureRequest,
+):
+    openai_client = openai.AsyncOpenAI(
+        api_key=settings.openai_api_key,
+    )
+
+    reference_material = download_file_from_s3_as_bytes(
+        request.reference_material_s3_key
+    )
+
+    # Create a temporary file to pass to OpenAI
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
+        temp_file.write(reference_material)
+        temp_file.flush()
+
+        file = await openai_client.files.create(
+            file=open(temp_file.name, "rb"),
+            purpose="user_data",
+        )
+
+    job_details = {**request.model_dump(), "openai_file_id": file.id}
+    job_uuid = await store_course_generation_request(
+        course_id,
+        job_details,
+    )
+
+    background_tasks.add_task(
+        _generate_course_structure,
+        request.course_description,
+        request.intended_audience,
+        request.instructions,
+        file.id,
+        course_id,
+        job_uuid,
         job_details,
     )
 
