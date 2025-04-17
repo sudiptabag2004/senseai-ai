@@ -677,18 +677,6 @@ Do not include the type of task in the name of the task."""
     return {"job_uuid": job_uuid}
 
     # TODO:
-    # Stream modules created to frontend
-    # Stream draft tasks created in each module to frontend
-    # Fetch course generation request from DB for task generation using job Id
-    # WebSocket for when each task is completed
-    # Generate tasks in parallel
-    # add jobs for each task in DB
-    # Even when reloaded, tasks in jobs in DB in running status should show spinner and disable opening
-    # show chat saying structure is generating
-    # then, tasks are being generated
-    # then, as tasks will complete generation, you will be notified and show progress bar
-    # update task as soon as completed and progress bar in chat
-    # show chat saying tasks are generated
     # warning if user tries to leave before completion of course structure generation or reload
 
 
@@ -894,6 +882,17 @@ Task to generate:
     else:
         await add_generated_quiz(task["id"], task)
 
+    websocket_manager = get_manager()
+
+    await websocket_manager.send_item_update(
+        course_id,
+        {
+            "event": "task_completed",
+            "task": {
+                "id": task["id"],
+            },
+        },
+    )
     print(f"Task generation completed for job_uuid: {job_uuid}")
     await update_task_generation_job_status(job_uuid, GenerateTaskJobStatus.COMPLETED)
 
