@@ -55,12 +55,16 @@ from api.utils.audio import prepare_audio_input_for_ai
 router = APIRouter()
 
 
-def get_user_message_for_audio(uuid: str):
+def get_user_audio_message_for_chat_history(uuid: str) -> List[Dict]:
     audio_data = download_file_from_s3_as_bytes(
         get_media_upload_s3_key_from_uuid(uuid, "wav")
     )
 
     return [
+        {
+            "type": "text",
+            "text": "Student's Response:",
+        },
         {
             "type": "input_audio",
             "input_audio": {
@@ -117,6 +121,10 @@ def get_ai_message_for_chat_history(ai_message: Dict) -> str:
 
     scorecard_as_prompt = "\n".join(scorecard_as_prompt)
     return f"""Feedback:\n```\n{message['feedback']}\n```\n\nScorecard:\n```\n{scorecard_as_prompt}\n```"""
+
+
+def get_user_message_for_chat_history(user_response: str) -> str:
+    return f"""Student's Response:\n```\n{user_response}\n```"""
 
 
 @router.post("/chat")
@@ -181,21 +189,23 @@ async def ai_response_for_question(request: AIChatRequest):
         question_description = construct_description_from_blocks(question["blocks"])
         question_details = f"""Task:\n```\n{question_description}\n```"""
 
-        for message in chat_history:
-            if message["role"] != "user":
-                message["content"] = get_ai_message_for_chat_history(message["content"])
-
-    if request.response_type == ChatResponseType.AUDIO:
-        for message in chat_history:
-            if message["role"] != "user":
-                continue
-
-            message["content"] = get_user_message_for_audio(message["content"])
+    for message in chat_history:
+        if message["role"] == "user":
+            if request.response_type == ChatResponseType.AUDIO:
+                message["content"] = get_user_audio_message_for_chat_history(
+                    message["content"]
+                )
+            else:
+                message["content"] = get_user_message_for_chat_history(
+                    message["content"]
+                )
+        else:
+            message["content"] = get_ai_message_for_chat_history(message["content"])
 
     user_message = (
-        get_user_message_for_audio(request.user_response)
+        get_user_audio_message_for_chat_history(request.user_response)
         if request.response_type == ChatResponseType.AUDIO
-        else request.user_response
+        else get_user_message_for_chat_history(request.user_response)
     )
 
     user_message = {"role": "user", "content": user_message}
@@ -214,44 +224,53 @@ async def ai_response_for_question(request: AIChatRequest):
             )
 
     chat_history = (
-        [
+        chat_history
+        + [user_message]
+        + [
             {
                 "role": "user",
                 "content": question_details,
             }
         ]
-        + chat_history
-        + [user_message]
     )
 
     if request.task_type in [TaskType.EXAM, TaskType.QUIZ]:
         if question["response_type"] == TaskAIResponseType.CHAT:
 
             class Output(BaseModel):
+                analysis: str = Field(
+                    description="A detailed analysis of the student's response"
+                )
                 feedback: str = Field(
                     description="Feedback on the student's response; add newline characters to the feedback to make it more readable where necessary"
                 )
                 is_correct: bool = Field(
-                    description="Whether the student's response correctly solves the task that the student is supposed to solve. For this to be true, the task needs to be completely solved and not just partially solved."
+                    description="Whether the student's response correctly solves the original task that the student is supposed to solve. For this to be true, the original task needs to be completely solved and not just partially solved. Giving the right answer to one step of the task does not count as solving the entire task."
                 )
 
         else:
 
             class Feedback(BaseModel):
-                correct: Optional[str] = Field(description="What worked well")
-                wrong: Optional[str] = Field(description="What needs improvement")
+                correct: Optional[str] = Field(
+                    description="What worked well in the student's response for this category based on the scoring criteria"
+                )
+                wrong: Optional[str] = Field(
+                    description="What needs improvement in the student's response for this category based on the scoring criteria"
+                )
 
             class Row(BaseModel):
                 category: str = Field(
                     description="Category from the scoring criteria for which the feedback is being provided"
                 )
                 feedback: Feedback = Field(
-                    description="Detailed feedback for this category"
+                    description="Detailed feedback for the student's response for this category"
                 )
                 score: int = Field(
-                    description="Score given within the min/max range for this category"
+                    description="Score given within the min/max range for this category based on the student's response - the score given should be in alignment with the feedback provided"
                 )
-                max_score: int = Field(description="Maximum score for this category")
+                max_score: int = Field(
+                    description="Maximum score possible for this category as per the scoring criteria"
+                )
 
             class Output(BaseModel):
                 feedback: str = Field(
