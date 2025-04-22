@@ -4757,6 +4757,25 @@ async def get_all_pending_task_generation_jobs() -> List[Dict]:
         ]
 
 
+async def get_all_pending_course_structure_generation_jobs() -> List[Dict]:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT uuid, course_id, job_details FROM {course_generation_jobs_table_name} WHERE status = ?",
+            (str(GenerateCourseJobStatus.STARTED),),
+        )
+
+        return [
+            {
+                "uuid": row[0],
+                "course_id": row[1],
+                "job_details": json.loads(row[2]),
+            }
+            for row in await cursor.fetchall()
+        ]
+
+
 async def drop_task_generation_jobs_table():
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()

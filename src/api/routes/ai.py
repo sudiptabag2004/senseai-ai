@@ -1,4 +1,5 @@
 from ast import List
+import os
 import tempfile
 import random
 from collections import defaultdict
@@ -45,6 +46,7 @@ from api.db import (
     add_generated_quiz,
     add_milestone_to_course,
     get_all_pending_task_generation_jobs,
+    get_all_pending_course_structure_generation_jobs,
 )
 from api.utils.s3 import (
     download_file_from_s3_as_bytes,
@@ -56,9 +58,13 @@ router = APIRouter()
 
 
 def get_user_audio_message_for_chat_history(uuid: str) -> List[Dict]:
-    audio_data = download_file_from_s3_as_bytes(
-        get_media_upload_s3_key_from_uuid(uuid, "wav")
-    )
+    if settings.s3_folder_name:
+        audio_data = download_file_from_s3_as_bytes(
+            get_media_upload_s3_key_from_uuid(uuid, "wav")
+        )
+    else:
+        with open(os.path.join(settings.local_upload_folder, f"{uuid}.wav"), "rb") as f:
+            audio_data = f.read()
 
     return [
         {
@@ -675,9 +681,18 @@ async def generate_course_structure(
         api_key=settings.openai_api_key,
     )
 
-    reference_material = download_file_from_s3_as_bytes(
-        request.reference_material_s3_key
-    )
+    if settings.s3_folder_name:
+        reference_material = download_file_from_s3_as_bytes(
+            request.reference_material_s3_key
+        )
+    else:
+        with open(
+            os.path.join(
+                settings.local_upload_folder, request.reference_material_s3_key
+            ),
+            "rb",
+        ) as f:
+            reference_material = f.read()
 
     # Create a temporary file to pass to OpenAI
     with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
@@ -993,6 +1008,34 @@ async def generate_course_tasks(
     return {
         "success": True,
     }
+
+
+async def resume_pending_course_structure_generation_jobs():
+    incomplete_course_structure_jobs = (
+        await get_all_pending_course_structure_generation_jobs()
+    )
+
+    if not incomplete_course_structure_jobs:
+        return
+
+    tasks = []
+
+    for job in incomplete_course_structure_jobs:
+        tasks.append(
+            _generate_course_structure(
+                job["job_details"]["course_description"],
+                job["job_details"]["intended_audience"],
+                job["job_details"]["instructions"],
+                job["job_details"]["openai_file_id"],
+                job["course_id"],
+                job["uuid"],
+                job["job_details"],
+            )
+        )
+
+    await async_batch_gather(
+        tasks, description="Resuming course structure generation jobs"
+    )
 
 
 async def resume_pending_task_generation_jobs():

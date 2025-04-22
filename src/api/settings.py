@@ -13,8 +13,9 @@ if os.path.exists(env_path):
 class Settings(BaseSettings):
     google_client_id: str
     openai_api_key: str
-    s3_bucket_name: str
-    s3_folder_name: str
+    s3_bucket_name: str | None = None  # only relevant when running the code remotely
+    s3_folder_name: str | None = None  # only relevant when running the code remotely
+    local_upload_folder: str = "uploads"  # hardcoded variable for local file storage
 
     model_config = SettingsConfigDict(env_file=join(root_dir, ".env"))
 

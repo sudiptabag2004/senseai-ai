@@ -1,6 +1,8 @@
+import os
 import traceback
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+import uuid
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import boto3
 from botocore.exceptions import ClientError
@@ -20,7 +22,12 @@ router = APIRouter()
 
 
 @router.put("/presigned-url/create", response_model=PresignedUrlResponse)
-async def get_presigned_url(request: PresignedUrlRequest) -> PresignedUrlResponse:
+async def get_upload_presigned_url(
+    request: PresignedUrlRequest,
+) -> PresignedUrlResponse:
+    if not settings.s3_folder_name:
+        raise HTTPException(status_code=500, detail="S3 folder name is not set")
+
     try:
         s3_client = boto3.client(
             "s3",
@@ -63,6 +70,9 @@ async def get_download_presigned_url(
     uuid: str,
     file_extension: str,
 ) -> S3FetchPresignedUrlResponse:
+    if not settings.s3_folder_name:
+        raise HTTPException(status_code=500, detail="S3 folder name is not set")
+
     try:
         s3_client = boto3.client(
             "s3",
@@ -92,3 +102,68 @@ async def get_download_presigned_url(
         logger.error(f"Unexpected error: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@router.post("/upload-local")
+async def upload_file_locally(
+    file: UploadFile = File(...), content_type: str = Form(...)
+):
+    try:
+        # Create the folder if it doesn't exist
+        os.makedirs(settings.local_upload_folder, exist_ok=True)
+
+        # Generate a unique filename
+        file_uuid = str(uuid.uuid4())
+        file_extension = content_type.split("/")[1]
+        filename = f"{file_uuid}.{file_extension}"
+        file_path = os.path.join(settings.local_upload_folder, filename)
+
+        # Save the file
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+
+        # Generate the URL to access the file statically
+        static_url = f"/uploads/{filename}"
+
+        return {
+            "file_key": filename,
+            "file_path": file_path,
+            "file_uuid": file_uuid,
+            "static_url": static_url,
+        }
+
+    except Exception as e:
+        logger.error(f"Error uploading file locally: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to upload file locally")
+
+
+@router.get("/download-local/")
+async def download_file_locally(
+    uuid: str,
+    file_extension: str,
+):
+    try:
+        file_path = os.path.join(
+            settings.local_upload_folder, f"{uuid}.{file_extension}"
+        )
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        # Return the file as a response
+        return FileResponse(
+            path=file_path,
+            filename=f"{uuid}.{file_extension}",
+            media_type="application/octet-stream",
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading file locally: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to download file locally")
