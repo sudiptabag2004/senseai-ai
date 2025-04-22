@@ -1,12 +1,14 @@
 from typing import Annotated, Dict, List, Optional, Tuple
 from fastapi import FastAPI, Body
-from api.models import PublicAPIChatMessage, CourseWithMilestonesAndTasks
+from api.models import (
+    PublicAPIChatMessage,
+    CourseWithMilestonesAndTaskDetails,
+    TaskType,
+)
 from api.db import (
     get_all_chat_history as get_all_chat_history_from_db,
     get_course as get_course_from_db,
-    get_cohort_streaks as get_cohort_streaks_from_db,
-    get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
-    add_members_to_cohort as add_members_to_cohort_in_db,
+    get_task as get_task_from_db,
 )
 
 app = FastAPI()
@@ -22,10 +24,20 @@ async def get_all_chat_history(org_id: int) -> List[PublicAPIChatMessage]:
 
 @app.get(
     "/course/{course_id}",
-    response_model=CourseWithMilestonesAndTasks,
+    response_model=CourseWithMilestonesAndTaskDetails,
 )
-async def get_tasks_for_course(course_id: int) -> CourseWithMilestonesAndTasks:
-    return await get_course_from_db(course_id=course_id, only_published=True)
+async def get_tasks_for_course(course_id: int) -> CourseWithMilestonesAndTaskDetails:
+    course = await get_course_from_db(course_id=course_id, only_published=True)
+
+    for milestone in course["milestones"]:
+        for task in milestone["tasks"]:
+            if task["type"] != TaskType.LEARNING_MATERIAL:
+                continue
+
+            task_details = await get_task_from_db(task["id"])
+            task["blocks"] = task_details["blocks"]
+
+    return course
 
 
 # @app.get(

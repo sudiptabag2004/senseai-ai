@@ -332,12 +332,25 @@ class MilestoneTask(Task):
     is_generating: bool
 
 
+class MilestoneTaskWithDetails(MilestoneTask):
+    blocks: Optional[List[Block]] = None
+
+
 class MilestoneWithTasks(Milestone):
     tasks: List[MilestoneTask]
 
 
+class MilestoneWithTaskDetails(Milestone):
+    tasks: List[MilestoneTaskWithDetails]
+
+
 class CourseWithMilestonesAndTasks(Course):
     milestones: List[MilestoneWithTasks]
+    course_generation_status: GenerateCourseJobStatus | None
+
+
+class CourseWithMilestonesAndTaskDetails(CourseWithMilestonesAndTasks):
+    milestones: List[MilestoneWithTaskDetails]
     course_generation_status: GenerateCourseJobStatus | None
 
 
