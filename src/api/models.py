@@ -334,6 +334,7 @@ class MilestoneTask(Task):
 
 class MilestoneTaskWithDetails(MilestoneTask):
     blocks: Optional[List[Block]] = None
+    questions: Optional[List[PublishedQuestion]] = None
 
 
 class MilestoneWithTasks(Milestone):

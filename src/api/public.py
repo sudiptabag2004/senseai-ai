@@ -31,11 +31,12 @@ async def get_tasks_for_course(course_id: int) -> CourseWithMilestonesAndTaskDet
 
     for milestone in course["milestones"]:
         for task in milestone["tasks"]:
-            if task["type"] != TaskType.LEARNING_MATERIAL:
-                continue
-
             task_details = await get_task_from_db(task["id"])
-            task["blocks"] = task_details["blocks"]
+
+            if task["type"] == TaskType.LEARNING_MATERIAL:
+                task["blocks"] = task_details["blocks"]
+            elif task["type"] in [TaskType.QUIZ, TaskType.EXAM]:
+                task["questions"] = task_details["questions"]
 
     return course
 
