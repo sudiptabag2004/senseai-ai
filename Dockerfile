@@ -45,11 +45,6 @@ RUN pip install -r requirements.txt
 
 COPY src /src
 
-COPY src/frontend/.streamlit/config.prod.toml /src/frontend/.streamlit/config.toml
-
-# Remove the /src/lib/.env and .env.aws file if it exists
-RUN test -f /src/frontend/lib/.env && rm -f /src/frontend/lib/.env || true
-RUN test -f /src/frontend/lib/.env.aws && rm -f /src/frontend/lib/.env.aws || true
 RUN test -f /src/api/.env && rm -f /src/api/.env || true
 RUN test -f /src/api/.env.aws && rm -f /src/api/.env.aws || true
 
@@ -74,15 +69,6 @@ ARG OPENAI_API_KEY
 ARG GOOGLE_CLIENT_ID
 
 ARG BACKEND_URL
-
-COPY src/frontend/.streamlit/secrets.${ENV}.toml /src/frontend/.streamlit/secrets.toml
-
-RUN test -f /src/frontend/.streamlit/secrets.dev.toml && rm -f /src/frontend/.streamlit/secrets.dev.toml || true
-RUN test -f /src/frontend/.streamlit/secrets.prod.toml && rm -f /src/frontend/.streamlit/secrets.prod.toml || true
-
-# Use ARG value in ENV to make it available at runtime
-RUN printf "APP_URL=$APP_URL\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME\nOPENAI_API_KEY=$OPENAI_API_KEY\nBACKEND_URL=$BACKEND_URL" >> /src/frontend/lib/.env
-
 
 RUN printf "OPENAI_API_KEY=$OPENAI_API_KEY\nGOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID\nS3_BUCKET_NAME=$S3_BUCKET_NAME\nS3_FOLDER_NAME=$S3_FOLDER_NAME" >> /src/api/.env
 

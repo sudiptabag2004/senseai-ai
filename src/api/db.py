@@ -3831,7 +3831,7 @@ def convert_course_db_to_dict(course: Tuple) -> Dict:
     return result
 
 
-async def get_course(course_id: int, only_published: bool = False) -> Dict:
+async def get_course(course_id: int, only_published: bool = True) -> Dict:
     course = await execute_db_operation(
         f"SELECT c.id, c.name, cgj.status as course_generation_status FROM {courses_table_name} c LEFT JOIN {course_generation_jobs_table_name} cgj ON c.id = cgj.course_id WHERE c.id = ?",
         (course_id,),

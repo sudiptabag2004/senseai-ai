@@ -27,7 +27,7 @@ async def get_all_chat_history(org_id: int) -> List[PublicAPIChatMessage]:
     response_model=CourseWithMilestonesAndTaskDetails,
 )
 async def get_tasks_for_course(course_id: int) -> CourseWithMilestonesAndTaskDetails:
-    course = await get_course_from_db(course_id=course_id, only_published=True)
+    course = await get_course_from_db(course_id=course_id)
 
     for milestone in course["milestones"]:
         for task in milestone["tasks"]:

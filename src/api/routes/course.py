@@ -52,9 +52,9 @@ async def get_all_courses_for_org(org_id: int) -> List[Course]:
 
 @router.get("/{course_id}", response_model=CourseWithMilestonesAndTasks)
 async def get_course(
-    course_id: int, published: bool = False
+    course_id: int, only_published: bool = True
 ) -> CourseWithMilestonesAndTasks:
-    return await get_course_from_db(course_id, published)
+    return await get_course_from_db(course_id, only_published)
 
 
 @router.post("/tasks")
