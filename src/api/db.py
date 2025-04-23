@@ -4541,7 +4541,7 @@ async def add_course_modules(course_id: int, modules: List[Dict]):
                 "#3c322d",  # Coffee
             ]
         )
-        module_id = await add_milestone_to_course(course_id, module["name"], color)
+        module_id, _ = await add_milestone_to_course(course_id, module["name"], color)
         module_ids.append(module_id)
 
     return module_ids
@@ -4575,9 +4575,17 @@ async def migrate_course(course_id: int, course_details: Dict):
                 await migrate_quiz(task_id, task)
 
 
+def convert_task_description_to_blocks(course_details: Dict):
+    for milestone in course_details["milestones"]:
+        for task in milestone["tasks"]:
+            task["blocks"] = convert_content_to_blocks(task["description"])
+
+    return course_details
+
+
 async def migrate_task_description_to_blocks(course_details: Dict):
     from api.routes.ai import migrate_content_to_blocks
-    from api.utils.concurrency import async_batch_gather, async_index_wrapper
+    from api.utils.concurrency import async_batch_gather
 
     coroutines = []
 
