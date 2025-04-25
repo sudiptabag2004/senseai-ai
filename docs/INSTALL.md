@@ -34,7 +34,7 @@
 - Copy `src/api/.env.aws.example` to `src/api/.env.aws` and set the AWS credentials.
 - Initialize the database
   ```
-  python src/startup.py
+  cd src; python startup.py
   ```
 - Running the API locally
     ```

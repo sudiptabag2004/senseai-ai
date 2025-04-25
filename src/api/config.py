@@ -50,6 +50,8 @@ group_role_mentor = "mentor"
 course_generation_jobs_table_name = "course_generation_jobs"
 task_generation_jobs_table_name = "task_generation_jobs"
 
+UPLOAD_FOLDER_NAME = "uploads"
+
 uncategorized_milestone_name = "[UNASSIGNED]"
 uncategorized_milestone_color = "#808080"
 

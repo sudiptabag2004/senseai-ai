@@ -206,6 +206,9 @@ async def ai_response_for_question(request: AIChatRequest):
                     message["content"]
                 )
         else:
+            if request.task_type == TaskType.LEARNING_MATERIAL:
+                message["content"] = json.dumps({"feedback": message["content"]})
+
             message["content"] = get_ai_message_for_chat_history(message["content"])
 
     user_message = (
