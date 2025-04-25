@@ -807,7 +807,7 @@ def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict
 
 async def get_all_learning_material_tasks_for_course(course_id: int):
     query = f"""
-    SELECT t.id, t.title, t.type, t.status
+    SELECT t.id, t.title, t.type, t.status, t.scheduled_publish_at
     FROM {tasks_table_name} t
     INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
     WHERE ct.course_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.LEARNING_MATERIAL}' AND t.status = '{TaskStatus.PUBLISHED}'
@@ -819,7 +819,13 @@ async def get_all_learning_material_tasks_for_course(course_id: int):
     tasks = await execute_db_operation(query, query_params, fetch_all=True)
 
     return [
-        {"id": task[0], "title": task[1], "type": task[2], "status": task[3]}
+        {
+            "id": task[0],
+            "title": task[1],
+            "type": task[2],
+            "status": task[3],
+            "scheduled_publish_at": task[4],
+        }
         for task in tasks
     ]
 
