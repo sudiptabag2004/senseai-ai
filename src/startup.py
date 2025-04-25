@@ -9,6 +9,7 @@ if __name__ == "__main__":
     asyncio.run(init_db())
 
     # create uploads folder
-    upload_folder = os.path.join(root_dir, UPLOAD_FOLDER_NAME)
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder)
+    if not os.path.exists("/appdata"):
+        upload_folder = os.path.join(root_dir, UPLOAD_FOLDER_NAME)
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder)
