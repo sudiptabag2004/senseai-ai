@@ -4795,3 +4795,28 @@ async def drop_task_generation_jobs_table():
         cursor = await conn.cursor()
 
         await cursor.execute(f"DROP TABLE IF EXISTS {task_generation_jobs_table_name}")
+
+
+async def schedule_module_tasks(
+    course_id: int, module_id: int, scheduled_publish_at: datetime
+):
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT t.id FROM {tasks_table_name} t INNER JOIN {course_tasks_table_name} ct ON t.id = ct.task_id WHERE ct.course_id = ? AND ct.milestone_id = ? AND t.status = '{TaskStatus.PUBLISHED}'",
+            (course_id, module_id),
+        )
+
+        course_module_tasks = await cursor.fetchall()
+
+        if not course_module_tasks:
+            return
+
+        for task in course_module_tasks:
+            await cursor.execute(
+                f"UPDATE {tasks_table_name} SET scheduled_publish_at = ? WHERE id = ?",
+                (scheduled_publish_at, task[0]),
+            )
+
+        await conn.commit()
