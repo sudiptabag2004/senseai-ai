@@ -149,7 +149,6 @@ class Milestone(BaseModel):
 
 
 class TaskType(Enum):
-    EXAM = "exam"
     QUIZ = "quiz"
     LEARNING_MATERIAL = "learning_material"
 
@@ -205,7 +204,7 @@ class LearningMaterialTask(Task):
 
 
 class TaskInputType(Enum):
-    CODING = "coding"
+    CODE = "code"
     TEXT = "text"
     AUDIO = "audio"
 
@@ -223,7 +222,6 @@ class TaskInputType(Enum):
 
 class TaskAIResponseType(Enum):
     CHAT = "chat"
-    REPORT = "report"
     EXAM = "exam"
 
     def __str__(self):
@@ -241,7 +239,6 @@ class TaskAIResponseType(Enum):
 class QuestionType(Enum):
     OPEN_ENDED = "subjective"
     OBJECTIVE = "objective"
-    CODING = "coding"
 
     def __str__(self):
         return self.value

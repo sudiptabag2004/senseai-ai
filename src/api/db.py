@@ -51,6 +51,7 @@ from api.models import (
     ChatMessage,
     TaskAIResponseType,
     QuestionType,
+    TaskInputType,
 )
 from api.utils import (
     get_date_from_str,
@@ -1080,7 +1081,7 @@ async def get_task(task_id: int):
 
         task_data["blocks"] = json.loads(result[0]) if result[0] else []
 
-    elif task_data["type"] in [TaskType.QUIZ, TaskType.EXAM]:
+    elif task_data["type"] == TaskType.QUIZ:
         questions = await execute_db_operation(
             f"""
             SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
@@ -1506,7 +1507,7 @@ async def get_task_chat_history_for_user(
         raise ValueError("Task does not exist")
 
     if task["type"] == TaskType.LEARNING_MATERIAL:
-        raise ValueError("Task is not a quiz or exam")
+        raise ValueError("Task is not a quiz")
 
     query = f"""
         SELECT ch.id, ch.created_at, ch.user_id, ch.question_id, ch.role, ch.content, ch.response_type
@@ -1692,7 +1693,7 @@ async def get_cohort_completion(
         JOIN {course_tasks_table_name} ct ON t.id = ct.task_id
         JOIN {course_cohorts_table_name} cc ON ct.course_id = cc.course_id
         LEFT JOIN {questions_table_name} q ON t.id = q.task_id AND q.deleted_at IS NULL
-        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL{
+        WHERE cc.cohort_id = ? AND t.deleted_at IS NULL AND t.type = '{TaskType.QUIZ}' AND t.status = '{TaskStatus.PUBLISHED}' AND t.scheduled_publish_at IS NULL{
             " AND ct.course_id = ?" if course_id else ""
         } 
         ORDER BY t.id, q.position ASC
@@ -3870,7 +3871,7 @@ async def get_course(course_id: int, only_published: bool = True) -> Dict:
     # Fetch all tasks for this course
     tasks = await execute_db_operation(
         f"""SELECT t.id, t.title, t.type, t.status, t.scheduled_publish_at, ct.milestone_id, ct.ordering,
-            (CASE WHEN t.type IN ('{TaskType.QUIZ}', '{TaskType.EXAM}') THEN 
+            (CASE WHEN t.type = '{TaskType.QUIZ}' THEN 
                 (SELECT COUNT(*) FROM {questions_table_name} q 
                  WHERE q.task_id = t.id)
              ELSE NULL END) as num_questions,
@@ -4341,9 +4342,7 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
         )
         question["response_type"] = (
             TaskAIResponseType.CHAT
-            if question["type"] != QuestionType.OPEN_ENDED
-            else TaskAIResponseType.REPORT
-        )
+        )  # not getting exams to be generated in course generation
         question["generation_model"] = None
         question["context"] = (
             {
@@ -4355,9 +4354,11 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
             if question.get("context")
             else None
         )
-        question["max_attempts"] = 1 if task_details["type"] == TaskType.EXAM else None
+        question["max_attempts"] = (
+            1 if task_details["response_type"] == TaskAIResponseType.EXAM else None
+        )
         question["is_feedback_shown"] = (
-            True if task_details["type"] == TaskType.QUIZ else False
+            task_details["response_type"] != TaskAIResponseType.EXAM
         )
         if question.get("scorecard"):
             question["scorecard"]["id"] = current_scorecard_index
@@ -4406,32 +4407,6 @@ def convert_blocks_to_right_format(blocks: List[Dict]) -> List[Dict]:
     return blocks
 
 
-# async def add_generated_course(course_id: int, course_details: Dict):
-#     await update_course_name(course_id, course_details["name"])
-
-#     module_ids = await add_generated_course_modules(
-#         course_id, course_details["modules"]
-#     )
-
-#     for index, module in enumerate(course_details["modules"]):
-#         for concept in module["concepts"]:
-#             for task in concept["tasks"]:
-#                 if "details" not in task:
-#                     continue
-
-#                 task_id = await create_draft_task_for_course(
-#                     task["name"],
-#                     task["type"],
-#                     course_id,
-#                     module_ids[index],
-#                 )
-
-#                 if task["type"] == TaskType.LEARNING_MATERIAL:
-#                     await add_generated_learning_material(task_id, task)
-#                 else:
-#                     await add_generated_quiz(task_id, task)
-
-
 async def migrate_learning_material(task_id: int, task_details: Dict):
     await update_learning_material_task(
         task_id,
@@ -4450,11 +4425,7 @@ async def migrate_quiz(task_id: int, task_details: Dict):
     question["type"] = (
         QuestionType.OPEN_ENDED
         if task_details["response_type"] == "report"
-        else (
-            QuestionType.CODING
-            if task_details["input_type"] == "coding"
-            else QuestionType.OBJECTIVE
-        )
+        else QuestionType.OBJECTIVE
     )
 
     question["blocks"] = task_details["blocks"]
@@ -4467,11 +4438,7 @@ async def migrate_quiz(task_id: int, task_details: Dict):
     question["input_type"] = (
         "audio" if task_details["input_type"] == "audio" else "text"
     )
-    question["response_type"] = (
-        TaskAIResponseType.CHAT
-        if question["type"] != QuestionType.OPEN_ENDED
-        else TaskAIResponseType.REPORT
-    )
+    question["response_type"] = task_details["response_type"]
     question["coding_languages"] = task_details.get("coding_language", None)
     question["generation_model"] = None
     question["context"] = (
@@ -4485,10 +4452,10 @@ async def migrate_quiz(task_id: int, task_details: Dict):
         else None
     )
     question["max_attempts"] = (
-        1 if task_details["response_type"] == TaskType.EXAM else None
+        1 if task_details["response_type"] == TaskAIResponseType.EXAM else None
     )
     question["is_feedback_shown"] = (
-        False if task_details["response_type"] == TaskType.EXAM else True
+        False if task_details["response_type"] == TaskAIResponseType.EXAM else True
     )
 
     if task_details["response_type"] == "report":
@@ -4573,10 +4540,7 @@ async def migrate_course(course_id: int, course_details: Dict):
             if task["type"] == "reading_material":
                 task["type"] = str(TaskType.LEARNING_MATERIAL)
             else:
-                if task["response_type"] == "exam":
-                    task["type"] = str(TaskType.EXAM)
-                else:
-                    task["type"] = str(TaskType.QUIZ)
+                task["type"] = str(TaskType.QUIZ)
 
             task_id, _ = await create_draft_task_for_course(
                 task["name"],
@@ -4828,5 +4792,86 @@ async def schedule_module_tasks(
                 f"UPDATE {tasks_table_name} SET scheduled_publish_at = ? WHERE id = ?",
                 (scheduled_publish_at, task[0]),
             )
+
+        await conn.commit()
+
+
+async def migrate_coding_questions_structure():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT id FROM {questions_table_name} WHERE type = ?",
+            ("coding",),
+        )
+
+        questions = await cursor.fetchall()
+
+        for question in questions:
+            await cursor.execute(
+                f"UPDATE {questions_table_name} SET type = ?, input_type = ? WHERE id = ?",
+                (str(QuestionType.OBJECTIVE), str(TaskInputType.CODE), question[0]),
+            )
+
+        await conn.commit()
+
+
+async def migrate_exams():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"SELECT t.id, q.id FROM {tasks_table_name} t LEFT JOIN {questions_table_name} q ON q.task_id = t.id WHERE t.type = ?",
+            ("exam",),
+        )
+
+        exam_tasks = await cursor.fetchall()
+
+        task_id_to_question_id = {}
+
+        for task in exam_tasks:
+            if task[0] not in task_id_to_question_id:
+                task_id_to_question_id[task[0]] = []
+
+            if task[1] is None:
+                continue
+
+            task_id_to_question_id[task[0]].append(task[1])
+
+        for task_id, question_ids in task_id_to_question_id.items():
+            await cursor.execute(
+                f"UPDATE {tasks_table_name} SET type = ? WHERE id = ?",
+                (str(TaskType.QUIZ), task_id),
+            )
+
+            await cursor.execute(
+                f"UPDATE {questions_table_name} SET response_type = ? WHERE id IN ({', '.join(map(str, question_ids))})",
+                (str(TaskAIResponseType.EXAM),),
+            )
+
+        await conn.commit()
+
+
+async def migrate_subjective_questions_response_type():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        # running the exam migration above will already set the response_type as exam for all subjective questions
+        # overwriting the original "report" response_type
+        # the ones remaining are all practice mode questions
+        await cursor.execute(
+            f"SELECT id FROM {questions_table_name} WHERE response_type = ?",
+            ("report",),
+        )
+
+        questions = await cursor.fetchall()
+
+        question_ids = [question[0] for question in questions]
+
+        # since these are all practice mode questions, we can set the response_type to chat
+        await cursor.execute(
+            f"UPDATE {questions_table_name} SET response_type = ? WHERE id IN ({', '.join(map(str, question_ids))})",
+            (str(TaskAIResponseType.CHAT),),
+        )
 
         await conn.commit()
