@@ -1123,7 +1123,7 @@ def prepare_blocks_for_publish(blocks: List[Dict]) -> List[Dict]:
     return blocks
 
 
-async def publish_learning_material_task(
+async def update_learning_material_task(
     task_id: int,
     title: str,
     blocks: List[Dict],
@@ -1153,7 +1153,7 @@ async def publish_learning_material_task(
         return await get_task(task_id)
 
 
-async def publish_quiz(
+async def update_draft_quiz(
     task_id: int,
     title: str,
     questions: List[Dict],
@@ -1175,6 +1175,16 @@ async def publish_quiz(
     # Execute all operations in a single transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"DELETE FROM {question_scorecards_table_name} WHERE question_id IN (SELECT id FROM {questions_table_name} WHERE task_id = ?)",
+            (task_id,),
+        )
+
+        await cursor.execute(
+            f"DELETE FROM {questions_table_name} WHERE task_id = ?",
+            (task_id,),
+        )
 
         for index, question in enumerate(questions):
             if not isinstance(question, dict):
@@ -1250,7 +1260,7 @@ async def publish_quiz(
         return await get_task(task_id)
 
 
-async def update_quiz(
+async def update_published_quiz(
     task_id: int, title: str, questions: List[Dict], scheduled_publish_at: datetime
 ):
     if not await does_task_exist(task_id):
@@ -4304,7 +4314,7 @@ async def migrate_tasks_table():
 
 
 async def add_generated_learning_material(task_id: int, task_details: Dict):
-    await publish_learning_material_task(
+    await update_learning_material_task(
         task_id,
         task_details["name"],
         convert_blocks_to_right_format(task_details["details"]["blocks"]),
@@ -4357,7 +4367,7 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
         question["scorecard_id"] = None
         question["coding_languages"] = question.get("coding_languages", None)
 
-    await publish_quiz(
+    await update_draft_quiz(
         task_id,
         task_details["name"],
         task_details["details"]["questions"],
@@ -4423,7 +4433,7 @@ def convert_blocks_to_right_format(blocks: List[Dict]) -> List[Dict]:
 
 
 async def migrate_learning_material(task_id: int, task_details: Dict):
-    await publish_learning_material_task(
+    await update_learning_material_task(
         task_id,
         task_details["name"],
         task_details["blocks"],
@@ -4517,7 +4527,7 @@ async def migrate_quiz(task_id: int, task_details: Dict):
 
     question["scorecard_id"] = None
 
-    await publish_quiz(
+    await update_draft_quiz(
         task_id,
         task_details["name"],
         [question],

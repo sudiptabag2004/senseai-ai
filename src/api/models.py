@@ -475,7 +475,11 @@ class PublishLearningMaterialTaskRequest(BaseModel):
     scheduled_publish_at: datetime | None
 
 
-class PublishQuestionRequest(DraftQuestion):
+class UpdateLearningMaterialTaskRequest(PublishLearningMaterialTaskRequest):
+    status: TaskStatus
+
+
+class CreateQuestionRequest(DraftQuestion):
     generation_model: str | None
     max_attempts: int | None
     is_feedback_shown: bool | None
@@ -484,10 +488,11 @@ class PublishQuestionRequest(DraftQuestion):
     context: Dict | None
 
 
-class PublishQuizRequest(BaseModel):
+class UpdateDraftQuizRequest(BaseModel):
     title: str
-    questions: List[PublishQuestionRequest]
+    questions: List[CreateQuestionRequest]
     scheduled_publish_at: datetime | None
+    status: TaskStatus
 
 
 class UpdateQuestionRequest(BaseModel):
@@ -499,7 +504,7 @@ class UpdateQuestionRequest(BaseModel):
     context: Dict | None
 
 
-class UpdateQuizRequest(BaseModel):
+class UpdatePublishedQuizRequest(BaseModel):
     title: str
     questions: List[UpdateQuestionRequest]
     scheduled_publish_at: datetime | None
