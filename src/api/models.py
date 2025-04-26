@@ -284,6 +284,8 @@ class DraftQuestion(BaseModel):
 class PublishedQuestion(DraftQuestion):
     id: int
     scorecard_id: Optional[int] = None
+    max_attempts: Optional[int] = None
+    is_feedback_shown: Optional[bool] = None
 
 
 class QuizTask(Task):
@@ -505,6 +507,17 @@ class UpdatePublishedQuizRequest(BaseModel):
     title: str
     questions: List[UpdateQuestionRequest]
     scheduled_publish_at: datetime | None
+
+
+class DuplicateTaskRequest(BaseModel):
+    task_id: int
+    course_id: int
+    milestone_id: int
+
+
+class DuplicateTaskResponse(BaseModel):
+    task: LearningMaterialTask | QuizTask
+    ordering: int
 
 
 class StoreMessageRequest(BaseModel):

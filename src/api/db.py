@@ -764,6 +764,7 @@ async def create_draft_task_for_course(
     type: str,
     course_id: int,
     milestone_id: int,
+    ordering: int = None,
 ) -> Tuple[int, int]:
     org_id = await get_org_id_for_course(course_id)
 
@@ -779,24 +780,49 @@ async def create_draft_task_for_course(
 
         task_id = cursor.lastrowid
 
-        # Get the maximum ordering value for this milestone
-        await cursor.execute(
-            f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ? AND milestone_id = ?",
-            (course_id, milestone_id),
-        )
-        max_ordering = await cursor.fetchone()
-
-        # Set the new milestone's order to be the next value
-        next_ordering = max_ordering[0] + 1 if max_ordering else 0
+        if ordering is not None:
+            # Shift all tasks at or after the given ordering down by 1
+            await cursor.execute(
+                f"""
+                UPDATE {course_tasks_table_name}
+                SET ordering = ordering + 1
+                WHERE course_id = ? AND milestone_id = ? AND ordering >= ?
+                """,
+                (course_id, milestone_id, ordering),
+            )
+            insert_ordering = ordering
+        else:
+            # Get the maximum ordering value for this milestone
+            await cursor.execute(
+                f"SELECT COALESCE(MAX(ordering), -1) FROM {course_tasks_table_name} WHERE course_id = ? AND milestone_id = ?",
+                (course_id, milestone_id),
+            )
+            max_ordering = await cursor.fetchone()
+            insert_ordering = max_ordering[0] + 1 if max_ordering else 0
 
         await cursor.execute(
             f"INSERT INTO {course_tasks_table_name} (course_id, task_id, milestone_id, ordering) VALUES (?, ?, ?, ?)",
-            (course_id, task_id, milestone_id, next_ordering),
+            (course_id, task_id, milestone_id, insert_ordering),
         )
 
         await conn.commit()
 
-        return task_id, next_ordering
+        # Compute the "visible" ordering (i.e., the index among non-deleted tasks)
+        visible_ordering_row = await execute_db_operation(
+            f"""
+            SELECT COUNT(*) FROM {course_tasks_table_name} ct
+            INNER JOIN {tasks_table_name} t ON ct.task_id = t.id
+            WHERE ct.course_id = ? AND ct.milestone_id = ? AND ct.ordering < ? AND t.deleted_at IS NULL
+            """,
+            (course_id, milestone_id, insert_ordering),
+            fetch_one=True,
+        )
+
+        visible_ordering = (
+            visible_ordering_row[0] if visible_ordering_row else insert_ordering
+        )
+
+        return task_id, visible_ordering
 
 
 def return_test_rows_as_dict(test_rows: List[Tuple[str, str, str]]) -> List[Dict]:
@@ -915,6 +941,8 @@ def convert_question_db_to_dict(question) -> Dict:
         "scorecard_id": question[6],
         "context": json.loads(question[7]) if question[7] else None,
         "coding_languages": json.loads(question[8]) if question[8] else None,
+        "max_attempts": question[9],
+        "is_feedback_shown": question[10],
     }
 
 
@@ -938,7 +966,7 @@ async def get_scorecard(scorecard_id: int) -> Dict:
 async def get_question(question_id: int) -> Dict:
     question = await execute_db_operation(
         f"""
-        SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
+        SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language, q.max_attempts, q.is_feedback_shown
         FROM {questions_table_name} q
         LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
         WHERE q.id = ?
@@ -1084,7 +1112,7 @@ async def get_task(task_id: int):
     elif task_data["type"] == TaskType.QUIZ:
         questions = await execute_db_operation(
             f"""
-            SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language
+            SELECT q.id, q.type, q.blocks, q.answer, q.input_type, q.response_type, qs.scorecard_id, q.context, q.coding_language, q.max_attempts, q.is_feedback_shown
             FROM {questions_table_name} q
             LEFT JOIN {question_scorecards_table_name} qs ON q.id = qs.question_id
             WHERE task_id = ? ORDER BY position ASC
@@ -1211,7 +1239,7 @@ async def update_draft_quiz(
                         if question["coding_languages"]
                         else None
                     ),
-                    str(question["generation_model"]),
+                    None,
                     json.dumps(question["context"]) if question["context"] else None,
                     index,
                     question["max_attempts"],
@@ -1224,7 +1252,7 @@ async def update_draft_quiz(
             scorecard_id = None
             if question["scorecard_id"] is not None:
                 scorecard_id = question["scorecard_id"]
-            elif question["scorecard"]:
+            elif question.get("scorecard"):
                 if question["scorecard"]["id"] not in scorecard_uuid_to_id:
                     await cursor.execute(
                         f"""
@@ -1304,6 +1332,66 @@ async def update_published_quiz(
         await conn.commit()
 
         return await get_task(task_id)
+
+
+async def duplicate_task(task_id: int, course_id: int, milestone_id: int) -> int:
+    task = await get_basic_task_details(task_id)
+
+    if not task:
+        raise ValueError("Task does not exist")
+
+    task_ordering_in_module = await execute_db_operation(
+        f"SELECT ordering FROM {course_tasks_table_name} WHERE course_id = ? AND milestone_id = ? AND task_id = ?",
+        (course_id, milestone_id, task_id),
+        fetch_one=True,
+    )
+
+    if task_ordering_in_module is None:
+        raise ValueError("Task is not in this module")
+
+    new_task_ordering = task_ordering_in_module[0] + 1
+
+    new_task_id, visible_ordering = await create_draft_task_for_course(
+        task["title"],
+        str(task["type"]),
+        course_id,
+        milestone_id,
+        new_task_ordering,
+    )
+
+    task = await get_task(task["id"])
+
+    if task["type"] == TaskType.LEARNING_MATERIAL:
+        await update_learning_material_task(
+            new_task_id,
+            task["title"],
+            task["blocks"],
+            None,
+            TaskStatus.DRAFT,
+        )
+    elif task["type"] == TaskType.QUIZ:
+        for question in task["questions"]:
+            if question["scorecard_id"] is not None:
+                question["scorecard"] = await get_scorecard(
+                    question.pop("scorecard_id")
+                )
+
+        await update_draft_quiz(
+            new_task_id,
+            task["title"],
+            task["questions"],
+            None,
+            TaskStatus.DRAFT,
+        )
+    else:
+        raise ValueError("Task type not supported")
+
+    task = await get_task(new_task_id)
+
+    return {
+        "task": task,
+        "ordering": visible_ordering,
+    }
 
 
 async def get_scoring_criteria_for_task(task_id: int):
