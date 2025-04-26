@@ -35,7 +35,7 @@ async def get_tasks_for_course(course_id: int) -> CourseWithMilestonesAndTaskDet
 
             if task["type"] == TaskType.LEARNING_MATERIAL:
                 task["blocks"] = task_details["blocks"]
-            elif task["type"] in [TaskType.QUIZ, TaskType.EXAM]:
+            else:
                 task["questions"] = task_details["questions"]
 
     return course
