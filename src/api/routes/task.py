@@ -14,9 +14,9 @@ from api.db import (
     get_courses_for_tasks as get_courses_for_tasks_from_db,
     update_tests_for_task as update_tests_for_task_in_db,
     create_draft_task_for_course as create_draft_task_for_course_in_db,
-    publish_learning_material_task as publish_learning_material_task_in_db,
-    publish_quiz as publish_quiz_in_db,
-    update_quiz as update_quiz_in_db,
+    update_learning_material_task as update_learning_material_task_in_db,
+    update_draft_quiz as update_draft_quiz_in_db,
+    update_published_quiz as update_published_quiz_in_db,
     mark_task_completed as mark_task_completed_in_db,
     get_all_learning_material_tasks_for_course as get_all_learning_material_tasks_for_course_from_db,
 )
@@ -25,7 +25,7 @@ from api.models import (
     LearningMaterialTask,
     QuizTask,
     LeaderboardViewType,
-    PublishQuizRequest,
+    UpdateDraftQuizRequest,
     TaskTagsRequest,
     AddScoringCriteriaToTasksRequest,
     UpdateTaskTestsRequest,
@@ -33,8 +33,8 @@ from api.models import (
     TaskCourseResponse,
     CreateDraftTaskResponse,
     PublishLearningMaterialTaskRequest,
-    UpdateQuestionRequest,
-    UpdateQuizRequest,
+    UpdateLearningMaterialTaskRequest,
+    UpdatePublishedQuizRequest,
     MarkTaskCompletedRequest,
 )
 
@@ -65,8 +65,27 @@ async def create_draft_task_for_course(
 async def publish_learning_material_task(
     task_id: int, request: PublishLearningMaterialTaskRequest
 ) -> LearningMaterialTask:
-    result = await publish_learning_material_task_in_db(
-        task_id, request.title, request.blocks, request.scheduled_publish_at
+    result = await update_learning_material_task_in_db(
+        task_id,
+        request.title,
+        request.blocks,
+        request.scheduled_publish_at,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return result
+
+
+@router.put("/{task_id}/learning_material", response_model=LearningMaterialTask)
+async def update_learning_material_task(
+    task_id: int, request: UpdateLearningMaterialTaskRequest
+) -> LearningMaterialTask:
+    result = await update_learning_material_task_in_db(
+        task_id,
+        request.title,
+        request.blocks,
+        request.scheduled_publish_at,
+        request.status,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -74,12 +93,13 @@ async def publish_learning_material_task(
 
 
 @router.post("/{task_id}/quiz", response_model=QuizTask)
-async def publish_quiz(task_id: int, request: PublishQuizRequest) -> QuizTask:
-    result = await publish_quiz_in_db(
+async def update_draft_quiz(task_id: int, request: UpdateDraftQuizRequest) -> QuizTask:
+    result = await update_draft_quiz_in_db(
         task_id=task_id,
         title=request.title,
         questions=request.questions,
         scheduled_publish_at=request.scheduled_publish_at,
+        status=request.status,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -87,8 +107,10 @@ async def publish_quiz(task_id: int, request: PublishQuizRequest) -> QuizTask:
 
 
 @router.put("/{task_id}/quiz", response_model=QuizTask)
-async def update_quiz(task_id: int, request: UpdateQuizRequest) -> QuizTask:
-    result = await update_quiz_in_db(
+async def update_published_quiz(
+    task_id: int, request: UpdatePublishedQuizRequest
+) -> QuizTask:
+    result = await update_published_quiz_in_db(
         task_id=task_id,
         title=request.title,
         questions=request.questions,
