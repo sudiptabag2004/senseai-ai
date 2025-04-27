@@ -4484,10 +4484,10 @@ async def add_generated_quiz(task_id: int, task_details: Dict):
             else None
         )
         question["max_attempts"] = (
-            1 if task_details["response_type"] == TaskAIResponseType.EXAM else None
+            1 if question["response_type"] == TaskAIResponseType.EXAM else None
         )
         question["is_feedback_shown"] = (
-            task_details["response_type"] != TaskAIResponseType.EXAM
+            question["response_type"] != TaskAIResponseType.EXAM
         )
         if question.get("scorecard"):
             question["scorecard"]["id"] = current_scorecard_index

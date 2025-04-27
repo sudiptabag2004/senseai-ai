@@ -103,4 +103,4 @@ async def health_check():
 
 @app.get("/sentry-debug")
 async def trigger_error():
-    division_by_zero = 1 / 0
+    raise ValueError("This is a test error")
