@@ -18,6 +18,7 @@ from api.db import (
     update_draft_quiz as update_draft_quiz_in_db,
     update_published_quiz as update_published_quiz_in_db,
     mark_task_completed as mark_task_completed_in_db,
+    duplicate_task as duplicate_task_in_db,
     get_all_learning_material_tasks_for_course as get_all_learning_material_tasks_for_course_from_db,
 )
 from api.models import (
@@ -35,6 +36,8 @@ from api.models import (
     PublishLearningMaterialTaskRequest,
     UpdateLearningMaterialTaskRequest,
     UpdatePublishedQuizRequest,
+    DuplicateTaskRequest,
+    DuplicateTaskResponse,
     MarkTaskCompletedRequest,
 )
 
@@ -119,6 +122,15 @@ async def update_published_quiz(
     if not result:
         raise HTTPException(status_code=404, detail="Task not found")
     return result
+
+
+@router.post("/duplicate", response_model=DuplicateTaskResponse)
+async def duplicate_task(
+    request: DuplicateTaskRequest,
+) -> DuplicateTaskResponse:
+    return await duplicate_task_in_db(
+        request.task_id, request.course_id, request.milestone_id
+    )
 
 
 @router.get("/courses")
