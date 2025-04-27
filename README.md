@@ -30,24 +30,14 @@ pip install -r requirements-dev.txt
 ### Running Tests
 To run all tests and generate a coverage report:
 ```bash
-./scripts/run_tests.sh
-```
-
-To run only unit tests:
-```bash
-./scripts/run_unit_tests.sh
-```
-
-To run only integration tests:
-```bash
-./scripts/run_integration_tests.sh
+./run_tests.sh
 ```
 
 ### Coverage Reports
 After running the full test suite with `run_tests.sh`, a HTML coverage report will be generated in the `coverage_html` directory. Open `coverage_html/index.html` in your browser to view the report.
 
-### CodeCov Integration
-This project is integrated with [CodeCov](https://codecov.io) for continuous monitoring of code coverage. Coverage reports are automatically generated and uploaded to CodeCov when tests are run in the GitLab CI pipeline. The CodeCov badge at the top of this README shows the current coverage status.
+### Codecov Integration
+This project is integrated with [Codecov](https://codecov.io) for continuous monitoring of code coverage. Coverage reports are automatically generated and uploaded to Codecov when tests are run in the GitLab CI pipeline. The Codecov badge at the top of this README shows the current coverage status.
 
 <!-- ## Deployment
 Use the `Dockerfile` provided to build a docker image and deploy the image to whatever infra makes sense for you. We use an EC2 instance and you can refer to the `.gitlab-ci.yml` and `docker-compose.ai.demo.yml` files to understand how we do Continuous Deployment (CD). -->

@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     local_upload_folder: str = (
         UPLOAD_FOLDER_NAME  # hardcoded variable for local file storage
     )
-
+    sentry_dsn: str | None = None
+    env: str | None = None
     model_config = SettingsConfigDict(env_file=join(root_dir, ".env"))
 
 

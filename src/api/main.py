@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from os.path import exists
+from api.config import UPLOAD_FOLDER_NAME
 from api.routes import (
     auth,
     badge,
@@ -28,6 +30,7 @@ from api.routes.ai import (
 from api.websockets import router as websocket_router
 from api.scheduler import scheduler
 from api.settings import settings
+import sentry_sdk
 
 
 @asynccontextmanager
@@ -45,6 +48,16 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+        environment=settings.env,
+    )
+
+
 app = FastAPI(lifespan=lifespan)
 
 
@@ -58,9 +71,12 @@ app.add_middleware(
 )
 
 # Mount the uploads folder as a static directory
-app.mount(
-    "/uploads", StaticFiles(directory=settings.local_upload_folder), name="uploads"
-)
+if exists(settings.local_upload_folder):
+    app.mount(
+        f"/{UPLOAD_FOLDER_NAME}",
+        StaticFiles(directory=settings.local_upload_folder),
+        name="uploads",
+    )
 
 app.include_router(file.router, prefix="/file", tags=["file"])
 app.include_router(ai.router, prefix="/ai", tags=["ai"])
@@ -83,3 +99,8 @@ app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
