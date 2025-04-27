@@ -1,9 +1,11 @@
+import hashlib
 import os
 from os.path import exists
 import json
 from collections import defaultdict
 from enum import Enum
 import itertools
+import secrets
 import uuid
 from typing import List, Any, Tuple, Dict, Literal
 from datetime import datetime, timezone, timedelta
@@ -41,6 +43,7 @@ from api.config import (
     question_scorecards_table_name,
     course_generation_jobs_table_name,
     task_generation_jobs_table_name,
+    org_api_keys_table_name,
 )
 from api.models import (
     LeaderboardViewType,
@@ -106,6 +109,26 @@ async def create_organizations_table(cursor):
 
     await cursor.execute(
         f"""CREATE INDEX idx_org_slug ON {organizations_table_name} (slug)"""
+    )
+
+
+async def create_org_api_keys_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {org_api_keys_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER NOT NULL,
+                hashed_key TEXT NOT NULL UNIQUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
+            )"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_org_api_key_org_id ON {org_api_keys_table_name} (org_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX idx_org_api_key_hashed_key ON {org_api_keys_table_name} (hashed_key)"""
     )
 
 
@@ -607,6 +630,9 @@ async def init_db():
             if not await check_table_exists(organizations_table_name, cursor):
                 await create_organizations_table(cursor)
 
+            if not await check_table_exists(org_api_keys_table_name, cursor):
+                await create_org_api_keys_table(cursor)
+
             if not await check_table_exists(users_table_name, cursor):
                 await create_users_table(cursor)
 
@@ -675,6 +701,8 @@ async def init_db():
 
         try:
             await create_organizations_table(cursor)
+
+            await create_org_api_keys_table(cursor)
 
             await create_users_table(cursor)
 
@@ -3936,6 +3964,19 @@ def convert_course_db_to_dict(course: Tuple) -> Dict:
     return result
 
 
+async def get_course_org_id(course_id: int) -> int:
+    course = await execute_db_operation(
+        f"SELECT org_id FROM {courses_table_name} WHERE id = ?",
+        (course_id,),
+        fetch_one=True,
+    )
+
+    if not course:
+        raise ValueError("Course not found")
+
+    return course[0]
+
+
 async def get_course(course_id: int, only_published: bool = True) -> Dict:
     course = await execute_db_operation(
         f"SELECT c.id, c.name, cgj.status as course_generation_status FROM {courses_table_name} c LEFT JOIN {course_generation_jobs_table_name} cgj ON c.id = cgj.course_id WHERE c.id = ?",
@@ -4963,3 +5004,60 @@ async def migrate_subjective_questions_response_type():
         )
 
         await conn.commit()
+
+
+def generate_api_key(org_id: int):
+    """Generate a new API key"""
+    # Create a random API key
+    identifier = secrets.token_urlsafe(32)
+
+    api_key = f"org__{org_id}__{identifier}"
+
+    # Hash it for storage
+    hashed_key = hashlib.sha256(api_key.encode()).hexdigest()
+    return api_key, hashed_key  # Return both - give api_key to user, store hashed_key
+
+
+async def create_org_api_key(org_id: int) -> str:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        api_key, hashed_key = generate_api_key(org_id)
+
+        await cursor.execute(
+            f"INSERT INTO {org_api_keys_table_name} (org_id, hashed_key) VALUES (?, ?)",
+            (org_id, hashed_key),
+        )
+
+        await conn.commit()
+
+        return api_key
+
+
+async def get_org_id_from_api_key(api_key: str) -> int:
+    api_key_parts = api_key.split("__")
+
+    if len(api_key_parts) != 3:
+        raise ValueError("Invalid API key")
+
+    try:
+        org_id = int(api_key_parts[1])
+    except ValueError:
+        raise ValueError("Invalid API key")
+
+    rows = await execute_db_operation(
+        f"SELECT hashed_key FROM {org_api_keys_table_name} WHERE org_id = ?",
+        (org_id,),
+        fetch_all=True,
+    )
+
+    if not rows:
+        raise ValueError("Invalid API key")
+
+    hashed_key = hashlib.sha256(api_key.encode()).hexdigest()
+
+    for row in rows:
+        if hashed_key == row[0]:
+            return org_id
+
+    raise ValueError("Invalid API key")

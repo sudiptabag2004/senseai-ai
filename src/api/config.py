@@ -49,6 +49,7 @@ group_role_learner = "learner"
 group_role_mentor = "mentor"
 course_generation_jobs_table_name = "course_generation_jobs"
 task_generation_jobs_table_name = "task_generation_jobs"
+org_api_keys_table_name = "org_api_keys"
 
 UPLOAD_FOLDER_NAME = "uploads"
 
