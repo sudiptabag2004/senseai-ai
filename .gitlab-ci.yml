@@ -12,7 +12,7 @@ test:
     - cp src/api/.env.example src/api/.env
   script:
     - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml 
-    - codecovcli upload-process -C "$(git rev-parse HEAD)"
+    - codecovcli upload-process
   artifacts:
     paths:
       - coverage.xml
