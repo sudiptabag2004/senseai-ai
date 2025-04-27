@@ -99,8 +99,3 @@ app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-@app.get("/sentry-debug")
-async def trigger_error():
-    raise ValueError("This is a test error")
