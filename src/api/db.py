@@ -15,7 +15,6 @@ from api.config import (
     chat_history_table_name,
     tasks_table_name,
     questions_table_name,
-    blocks_table_name,
     tests_table_name,
     cohorts_table_name,
     groups_table_name,
@@ -883,79 +882,6 @@ async def get_all_learning_material_tasks_for_course(course_id: int):
         }
         for task in tasks
     ]
-
-
-async def fetch_blocks(owner_id: int, owner_type: Literal["task", "question"]):
-    owner_id_param = "task_id" if owner_type == "task" else "question_id"
-
-    # Fetch blocks for this task
-    blocks_data = await execute_db_operation(
-        f"""
-        SELECT id, parent_id, type, properties, content, position
-        FROM {blocks_table_name}
-        WHERE {owner_id_param} = ?
-        ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, parent_id, position
-        """,
-        (owner_id,),
-        fetch_all=True,
-    )
-
-    # Convert blocks to a tree structure
-    block_tree = []
-    block_dict = {}
-
-    if not blocks_data:
-        return []
-
-    # Create a dictionary of all blocks
-    for block_row in blocks_data:
-        block_id, parent_id, block_type, properties_json, content, position = block_row
-
-        # Parse properties from JSON
-        try:
-            properties = json.loads(properties_json)
-            if not properties:
-                properties = {}
-        except:
-            properties = {}
-
-        # Extract client ID if it exists
-        client_id = properties.pop("client_id", None)
-
-        # Parse content based on block type
-        block_content = content
-        if content:
-            try:
-                # Try to parse as JSON first
-                parsed_content = json.loads(content)
-                block_content = parsed_content
-            except (json.JSONDecodeError, TypeError):
-                # If not valid JSON, keep as is
-                pass
-
-        block = {
-            "id": client_id
-            or str(block_id),  # Use client ID if available, otherwise use DB ID
-            "type": block_type,
-            "props": properties,
-            "content": block_content,
-            "position": position,
-            "children": [],
-        }
-
-        block_dict[block_id] = block
-
-        # Add to tree if it's a root block
-        if parent_id is None:
-            block_tree.append(block)
-
-    # Link children to parents
-    for block_row in blocks_data:
-        block_id, parent_id, _, _, _, _ = block_row
-        if parent_id is not None and parent_id in block_dict:
-            block_dict[parent_id]["children"].append(block_dict[block_id])
-
-    return block_tree
 
 
 def convert_question_db_to_dict(question) -> Dict:

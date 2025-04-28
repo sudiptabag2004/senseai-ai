@@ -32,7 +32,6 @@ from api.db import (
     get_question_chat_history_for_user,
     get_question,
     construct_description_from_blocks,
-    fetch_blocks,
     get_task,
     update_course_name,
     create_draft_task_for_course,
@@ -309,8 +308,9 @@ async def ai_response_for_question(request: AIChatRequest):
 
             if linked_learning_material_ids:
                 for id in linked_learning_material_ids:
-                    blocks = await fetch_blocks(int(id), "task")
-                    knowledge_blocks += blocks
+                    task = await get_task(int(id))
+                    if task:
+                        knowledge_blocks += task["blocks"]
 
             knowledge_base = construct_description_from_blocks(knowledge_blocks)
 
