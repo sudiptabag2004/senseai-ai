@@ -1204,7 +1204,7 @@ async def update_draft_quiz(
             question_id = cursor.lastrowid
 
             scorecard_id = None
-            if question["scorecard_id"] is not None:
+            if question.get("scorecard_id") is not None:
                 scorecard_id = question["scorecard_id"]
             elif question.get("scorecard"):
                 if question["scorecard"]["id"] not in scorecard_uuid_to_id:
