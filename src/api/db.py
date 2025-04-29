@@ -55,6 +55,13 @@ from api.models import (
     QuestionType,
     TaskInputType,
 )
+from api.slack import (
+    send_slack_notification_for_learner_added_to_cohort,
+    send_slack_notification_for_member_added_to_org,
+    send_slack_notification_for_new_user,
+    send_slack_notification_for_new_org,
+    send_slack_notification_for_new_course,
+)
 from api.utils import (
     get_date_from_str,
     generate_random_color,
@@ -2312,6 +2319,9 @@ async def insert_or_return_user(
 
     user = convert_user_db_to_dict(await cursor.fetchone())
 
+    # Send Slack notification for new user
+    await send_slack_notification_for_new_user(user)
+
     return user
 
 
@@ -2334,7 +2344,7 @@ async def add_members_to_cohort(
         org_id = org_id[0]
     else:
         org = await execute_db_operation(
-            f"SELECT id FROM {organizations_table_name} WHERE id = ?",
+            f"SELECT slug FROM {organizations_table_name} WHERE id = ?",
             (org_id,),
             fetch_one=True,
         )
@@ -2342,16 +2352,18 @@ async def add_members_to_cohort(
         if org is None:
             raise Exception("Organization not found")
 
+        org_slug = org[0]
+
     # Check if cohort belongs to the organization
-    cohort_exists = await execute_db_operation(
+    cohort = await execute_db_operation(
         f"""
-        SELECT 1 FROM {cohorts_table_name} WHERE id = ? AND org_id = ?
+        SELECT name FROM {cohorts_table_name} WHERE id = ? AND org_id = ?
         """,
         (cohort_id, org_id),
         fetch_one=True,
     )
 
-    if not cohort_exists:
+    if not cohort:
         raise Exception("Cohort does not belong to this organization")
 
     # Check if any of the emails is an admin for the org
@@ -2380,6 +2392,9 @@ async def add_members_to_cohort(
                 cursor,
                 email,
             )
+            await send_slack_notification_for_learner_added_to_cohort(
+                user, org_slug, org_id, cohort[0], cohort_id
+            )
             users_to_add.append(user["id"])
 
         await cursor.execute(
@@ -2402,6 +2417,7 @@ async def add_members_to_cohort(
             """,
             [(user_id, cohort_id, role) for user_id, role in zip(users_to_add, roles)],
         )
+
         await conn.commit()
 
 
@@ -3278,6 +3294,11 @@ async def create_organization_with_user(org_name: str, slug: str, user_id: int):
     if existing_org:
         raise Exception(f"Organization with slug '{slug}' already exists")
 
+    user = await get_user_by_id(user_id)
+
+    if not user:
+        raise Exception(f"User with id '{user_id}' not found")
+
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
@@ -3293,6 +3314,8 @@ async def create_organization_with_user(org_name: str, slug: str, user_id: int):
         await add_user_to_org_by_user_id(cursor, user_id, org_id, "owner")
 
         await conn.commit()
+
+    await send_slack_notification_for_new_org(org_name, org_id, user)
 
     return org_id
 
@@ -3384,6 +3407,11 @@ async def add_users_to_org_by_email(
     org_id: int,
     emails: List[str],
 ):
+    org = await get_org_by_id(org_id)
+
+    if not org:
+        raise Exception("Organization not found")
+
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
 
@@ -3391,6 +3419,10 @@ async def add_users_to_org_by_email(
         for email in emails:
             user = await insert_or_return_user(cursor, email)
             user_ids.append(user["id"])
+
+            await send_slack_notification_for_member_added_to_org(
+                user, org["slug"], org_id
+            )
 
         # Check if any of the users are already in the organization
         placeholders = ", ".join(["?" for _ in user_ids])
@@ -3863,6 +3895,11 @@ async def add_scoring_criteria_to_tasks(
 
 
 async def create_course(name: str, org_id: int) -> int:
+    org = await get_org_by_id(org_id)
+
+    if not org:
+        raise Exception(f"Organization with id '{org_id}' not found")
+
     course_id = await execute_db_operation(
         f"""
         INSERT INTO {courses_table_name} (name, org_id)
@@ -3871,6 +3908,9 @@ async def create_course(name: str, org_id: int) -> int:
         (name, org_id),
         get_last_row_id=True,
     )
+
+    await send_slack_notification_for_new_course(name, course_id, org["slug"], org_id)
+
     return course_id
 
 

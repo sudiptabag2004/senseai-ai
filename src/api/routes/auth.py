@@ -44,7 +44,10 @@ async def login_or_signup_user(user_data: UserLoginData) -> Dict:
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
         user = await insert_or_return_user(
-            cursor, user_data.email, user_data.given_name, user_data.family_name
+            cursor,
+            user_data.email,
+            user_data.given_name,
+            user_data.family_name,
         )
         await conn.commit()
 
