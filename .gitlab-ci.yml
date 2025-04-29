@@ -12,7 +12,11 @@ test:
     - cp src/api/.env.example src/api/.env
   script:
     - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml 
-    - codecovcli upload-process
+    - |
+      # Pick the right variable for every pipeline type
+      BRANCH_NAME="${CI_COMMIT_REF_NAME:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"
+      
+      codecovcli upload-process -B $BRANCH_NAME -C $CI_COMMIT_SHA
   artifacts:
     paths:
       - coverage.xml

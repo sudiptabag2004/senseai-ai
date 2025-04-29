@@ -4355,20 +4355,6 @@ async def publish_scheduled_tasks():
     return [task[0] for task in tasks] if tasks else []
 
 
-async def migrate_tasks_table():
-    """Add scheduled_publish_at column if it doesn't exist"""
-    columns = await execute_db_operation(
-        f"PRAGMA table_info({tasks_table_name})",
-        fetch_all=True,
-    )
-
-    columns_names = [column[1] for column in columns]
-    if "scheduled_publish_at" not in columns_names:
-        await execute_db_operation(
-            f"ALTER TABLE {tasks_table_name} ADD COLUMN scheduled_publish_at DATETIME"
-        )
-
-
 async def add_generated_learning_material(task_id: int, task_details: Dict):
     await update_learning_material_task(
         task_id,
@@ -4649,6 +4635,50 @@ async def transfer_course_to_org(course_id: int, org_id: int):
         (org_id, course_id),
     )
 
+    milestones = await execute_db_operation(
+        f"SELECT cm.milestone_id FROM {course_milestones_table_name} cm INNER JOIN {courses_table_name} c ON cm.course_id = c.id WHERE c.id = ?",
+        (course_id,),
+        fetch_all=True,
+    )
+
+    for milestone in milestones:
+        await execute_db_operation(
+            f"UPDATE {milestones_table_name} SET org_id = ? WHERE id = ?",
+            (org_id, milestone[0]),
+        )
+
+    tasks = await execute_db_operation(
+        f"SELECT ct.task_id FROM {course_tasks_table_name} ct INNER JOIN {courses_table_name} c ON ct.course_id = c.id WHERE c.id = ?",
+        (course_id,),
+        fetch_all=True,
+    )
+
+    task_ids = [task[0] for task in tasks]
+
+    questions = await execute_db_operation(
+        f"SELECT q.id FROM {questions_table_name} q INNER JOIN {tasks_table_name} t ON q.task_id = t.id WHERE t.id IN ({', '.join(map(str, task_ids))})",
+        fetch_all=True,
+    )
+
+    question_ids = [question[0] for question in questions]
+
+    scorecards = await execute_db_operation(
+        f"SELECT qs.scorecard_id FROM {question_scorecards_table_name} qs INNER JOIN {questions_table_name} q ON qs.question_id = q.id WHERE q.id IN ({', '.join(map(str, question_ids))})",
+        fetch_all=True,
+    )
+
+    scorecard_ids = [scorecard[0] for scorecard in scorecards]
+
+    await execute_db_operation(
+        f"UPDATE {scorecards_table_name} SET org_id = ? WHERE id IN ({', '.join(map(str, scorecard_ids))})",
+        (org_id,),
+    )
+
+    await execute_db_operation(
+        f"UPDATE {tasks_table_name} SET org_id = ? WHERE id IN ({', '.join(map(str, task_ids))})",
+        (org_id,),
+    )
+
 
 async def store_course_generation_request(course_id: int, job_details: Dict) -> str:
     job_uuid = str(uuid.uuid4())
@@ -4847,87 +4877,6 @@ async def schedule_module_tasks(
                 f"UPDATE {tasks_table_name} SET scheduled_publish_at = ? WHERE id = ?",
                 (scheduled_publish_at, task[0]),
             )
-
-        await conn.commit()
-
-
-async def migrate_coding_questions_structure():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        await cursor.execute(
-            f"SELECT id FROM {questions_table_name} WHERE type = ?",
-            ("coding",),
-        )
-
-        questions = await cursor.fetchall()
-
-        for question in questions:
-            await cursor.execute(
-                f"UPDATE {questions_table_name} SET type = ?, input_type = ? WHERE id = ?",
-                (str(QuestionType.OBJECTIVE), str(TaskInputType.CODE), question[0]),
-            )
-
-        await conn.commit()
-
-
-async def migrate_exams():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        await cursor.execute(
-            f"SELECT t.id, q.id FROM {tasks_table_name} t LEFT JOIN {questions_table_name} q ON q.task_id = t.id WHERE t.type = ?",
-            ("exam",),
-        )
-
-        exam_tasks = await cursor.fetchall()
-
-        task_id_to_question_id = {}
-
-        for task in exam_tasks:
-            if task[0] not in task_id_to_question_id:
-                task_id_to_question_id[task[0]] = []
-
-            if task[1] is None:
-                continue
-
-            task_id_to_question_id[task[0]].append(task[1])
-
-        for task_id, question_ids in task_id_to_question_id.items():
-            await cursor.execute(
-                f"UPDATE {tasks_table_name} SET type = ? WHERE id = ?",
-                (str(TaskType.QUIZ), task_id),
-            )
-
-            await cursor.execute(
-                f"UPDATE {questions_table_name} SET response_type = ? WHERE id IN ({', '.join(map(str, question_ids))})",
-                (str(TaskAIResponseType.EXAM),),
-            )
-
-        await conn.commit()
-
-
-async def migrate_subjective_questions_response_type():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # running the exam migration above will already set the response_type as exam for all subjective questions
-        # overwriting the original "report" response_type
-        # the ones remaining are all practice mode questions
-        await cursor.execute(
-            f"SELECT id FROM {questions_table_name} WHERE response_type = ?",
-            ("report",),
-        )
-
-        questions = await cursor.fetchall()
-
-        question_ids = [question[0] for question in questions]
-
-        # since these are all practice mode questions, we can set the response_type to chat
-        await cursor.execute(
-            f"UPDATE {questions_table_name} SET response_type = ? WHERE id IN ({', '.join(map(str, question_ids))})",
-            (str(TaskAIResponseType.CHAT),),
-        )
 
         await conn.commit()
 
