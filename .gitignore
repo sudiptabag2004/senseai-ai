@@ -24,3 +24,4 @@ coverage_html
 coverage.xml
 .coverage
 uploads
+db.sqlite
