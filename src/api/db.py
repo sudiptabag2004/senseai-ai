@@ -4976,3 +4976,10 @@ async def get_org_id_from_api_key(api_key: str) -> int:
             return org_id
 
     raise ValueError("Invalid API key")
+
+
+async def update_user_email(email_1: str, email_2: str) -> None:
+    await execute_db_operation(
+        f"UPDATE {users_table_name} SET email = ? WHERE email = ?",
+        (email_2, email_1),
+    )

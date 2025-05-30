@@ -450,13 +450,24 @@ class TestCourseOperations:
 
     @patch("src.api.db.get_new_db_connection")
     @patch("src.api.db.execute_db_operation")
-    async def test_create_course(self, mock_execute, mock_get_connection):
+    @patch("src.api.db.get_org_by_id")
+    async def test_create_course(self, mock_get_org, mock_execute, mock_get_connection):
         """Test creating a course."""
         # Setup mock
         mock_conn = AsyncMock()
         mock_cursor = AsyncMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_execute.return_value = 456  # Mock course_id
+
+        # Mock the org returned by get_org_by_id
+        mock_get_org.return_value = {
+            "id": 42,
+            "slug": "test-org",
+            "name": "Test Org",
+            "logo_color": "blue",
+            "openai_api_key": "test-key",
+            "openai_free_trial": False,
+        }
 
         mock_get_connection.return_value.__aenter__.return_value = mock_conn
 
@@ -628,3 +639,46 @@ class TestMiscOperations:
         finally:
             # Restore original hashlib function
             hashlib.sha256 = original_sha256
+
+
+@pytest.mark.asyncio
+class TestApiKeyOperations:
+    """Test API key-related database operations."""
+
+    @patch("src.api.db.execute_db_operation")
+    async def test_get_org_id_from_api_key_validation(self, mock_execute):
+        """Test validation of API keys and extraction of org_id."""
+        # Mock the database response for a valid key
+        mock_execute.return_value = [("hashed_valid_key",)]
+
+        # Test with correctly formatted key - should succeed
+        valid_key = "org__42__validkeypart123"
+
+        # Mock the hashlib.sha256 function to return predictable hash
+        with patch("hashlib.sha256") as mock_hash:
+            # Create a mock hash object that returns our test hash
+            mock_digest = MagicMock()
+            mock_digest.hexdigest.return_value = "hashed_valid_key"
+            mock_hash.return_value = mock_digest
+
+            # Test valid key
+            result = await db.get_org_id_from_api_key(valid_key)
+            assert result == 42
+
+            # Test invalid format key (missing parts)
+            with pytest.raises(ValueError, match="Invalid API key"):
+                await db.get_org_id_from_api_key("not_valid_format")
+
+            # Test invalid format key (non-numeric org_id)
+            with pytest.raises(ValueError, match="Invalid API key"):
+                await db.get_org_id_from_api_key("org__notanumber__somekey")
+
+            # Test key with valid format but no matching hash in DB
+            mock_digest.hexdigest.return_value = "different_hash"
+            with pytest.raises(ValueError, match="Invalid API key"):
+                await db.get_org_id_from_api_key(valid_key)
+
+            # Test key with valid format but no keys in database
+            mock_execute.return_value = []
+            with pytest.raises(ValueError, match="Invalid API key"):
+                await db.get_org_id_from_api_key(valid_key)
