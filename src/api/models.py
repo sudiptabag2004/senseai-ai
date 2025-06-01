@@ -257,6 +257,11 @@ class ScorecardCriterion(BaseModel):
     max_score: float
 
 
+class ScorecardStatus(Enum):
+    PUBLISHED = "published"
+    DRAFT = "draft"
+
+
 class BaseScorecard(BaseModel):
     title: str
     criteria: List[ScorecardCriterion]
@@ -268,6 +273,7 @@ class NewScorecard(BaseScorecard):
 
 class Scorecard(BaseScorecard):
     id: int
+    status: ScorecardStatus
 
 
 class DraftQuestion(BaseModel):

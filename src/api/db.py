@@ -78,7 +78,12 @@ from api.utils.db import (
     execute_many_db_operation,
     set_db_defaults,
 )
-from api.models import TaskType, GenerateCourseJobStatus, GenerateTaskJobStatus
+from api.models import (
+    TaskType,
+    GenerateCourseJobStatus,
+    GenerateTaskJobStatus,
+    BaseScorecard,
+)
 
 
 async def create_tests_table(cursor):
@@ -460,6 +465,7 @@ async def create_scorecards_table(cursor):
                 title TEXT NOT NULL,
                 criteria TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT,
                 FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
             )"""
     )
@@ -909,7 +915,7 @@ def convert_question_db_to_dict(question) -> Dict:
 
 async def get_scorecard(scorecard_id: int) -> Dict:
     scorecard = await execute_db_operation(
-        f"SELECT id, title, criteria FROM {scorecards_table_name} WHERE id = ?",
+        f"SELECT id, title, criteria, status FROM {scorecards_table_name} WHERE id = ?",
         (scorecard_id,),
         fetch_one=True,
     )
@@ -921,6 +927,7 @@ async def get_scorecard(scorecard_id: int) -> Dict:
         "id": scorecard[0],
         "title": scorecard[1],
         "criteria": json.loads(scorecard[2]),
+        "status": scorecard[3],
     }
 
 
@@ -1214,22 +1221,40 @@ async def update_draft_quiz(
             if question.get("scorecard_id") is not None:
                 scorecard_id = question["scorecard_id"]
             elif question.get("scorecard"):
-                if question["scorecard"]["id"] not in scorecard_uuid_to_id:
-                    await cursor.execute(
-                        f"""
-                        INSERT INTO {scorecards_table_name} (org_id, title, criteria) VALUES (?, ?, ?)
-                        """,
-                        (
-                            org_id,
-                            question["scorecard"]["title"],
-                            json.dumps(question["scorecard"]["criteria"]),
-                        ),
-                    )
-
-                    scorecard_id = cursor.lastrowid
-                    scorecard_uuid_to_id[question["scorecard"]["id"]] = scorecard_id
-                else:
+                if question["scorecard"]["id"] in scorecard_uuid_to_id:
                     scorecard_id = scorecard_uuid_to_id[question["scorecard"]["id"]]
+                else:
+                    if isinstance(question["scorecard"]["id"], int):
+                        # update scorecard
+                        await cursor.execute(
+                            f"""
+                            UPDATE {scorecards_table_name} SET title = ?, criteria = ?, status = ? WHERE id = ?
+                            """,
+                            (
+                                question["scorecard"]["title"],
+                                json.dumps(question["scorecard"]["criteria"]),
+                                str(status),
+                                question["scorecard"]["id"],
+                            ),
+                        )
+                        scorecard_id = question["scorecard"]["id"]
+                    else:
+                        # add new scorecard
+                        await cursor.execute(
+                            f"""
+                            INSERT INTO {scorecards_table_name} (org_id, title, criteria, status) VALUES (?, ?, ?, ?)
+                            """,
+                            (
+                                org_id,
+                                question["scorecard"]["title"],
+                                json.dumps(question["scorecard"]["criteria"]),
+                                str(status),
+                            ),
+                        )
+
+                        scorecard_id = cursor.lastrowid
+
+                    scorecard_uuid_to_id[question["scorecard"]["id"]] = scorecard_id
 
             if scorecard_id is not None:
                 await cursor.execute(
@@ -4345,7 +4370,7 @@ async def drop_task_completions_table():
 
 async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
     scorecards = await execute_db_operation(
-        f"SELECT id, title, criteria FROM {scorecards_table_name} WHERE org_id = ?",
+        f"SELECT id, title, criteria, status FROM {scorecards_table_name} WHERE org_id = ?",
         (org_id,),
         fetch_all=True,
     )
@@ -4355,9 +4380,21 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
             "id": scorecard[0],
             "title": scorecard[1],
             "criteria": json.loads(scorecard[2]),
+            "status": scorecard[3],
         }
         for scorecard in scorecards
     ]
+
+
+async def update_scorecard(scorecard_id: int, scorecard: BaseScorecard):
+    scorecard = scorecard.model_dump()
+
+    await execute_db_operation(
+        f"UPDATE {scorecards_table_name} SET title = ?, criteria = ? WHERE id = ?",
+        (scorecard["title"], json.dumps(scorecard["criteria"]), scorecard_id),
+    )
+
+    return await get_scorecard(scorecard_id)
 
 
 async def undo_task_delete(task_id: int):
@@ -4983,3 +5020,19 @@ async def update_user_email(email_1: str, email_2: str) -> None:
         f"UPDATE {users_table_name} SET email = ? WHERE email = ?",
         (email_2, email_1),
     )
+
+
+async def migrate_scorecard_table():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(
+            f"ALTER TABLE {scorecards_table_name} ADD COLUMN status TEXT"
+        )
+
+        # Update all existing scorecards to have status 'published'
+        await cursor.execute(
+            f"UPDATE {scorecards_table_name} SET status = 'published' WHERE status IS NULL"
+        )
+
+        await conn.commit()
