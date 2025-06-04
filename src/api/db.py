@@ -2439,15 +2439,15 @@ async def update_cohort_group_name(group_id: int, new_name: str):
 
 
 async def add_members_to_cohort_group(cursor, group_id: int, member_ids: List[int]):
-    # Check if any members already exist in the group
-    member_exists = await execute_db_operation(
+    # Check if any members already exist in the group using the same connection
+    await cursor.execute(
         f"""
         SELECT 1 FROM {user_groups_table_name} 
         WHERE group_id = ? AND user_id IN ({','.join(['?' for _ in member_ids])})
         """,
         (group_id, *member_ids),
-        fetch_one=True,
     )
+    member_exists = await cursor.fetchone()
 
     if member_exists:
         raise Exception("Member already exists in group")
@@ -3294,16 +3294,6 @@ async def add_user_to_org_by_user_id(
 
 
 async def create_organization_with_user(org_name: str, slug: str, user_id: int):
-    # Check if organization with the given slug already exists
-    existing_org = await execute_db_operation(
-        f"SELECT id FROM {organizations_table_name} WHERE slug = ?",
-        (slug,),
-        fetch_one=True,
-    )
-
-    if existing_org:
-        raise Exception(f"Organization with slug '{slug}' already exists")
-
     user = await get_user_by_id(user_id)
 
     if not user:
@@ -3313,6 +3303,15 @@ async def create_organization_with_user(org_name: str, slug: str, user_id: int):
         cursor = await conn.cursor()
 
         await cursor.execute(
+            f"SELECT id FROM {organizations_table_name} WHERE slug = ?",
+            (slug,),
+        )
+        existing_org = await cursor.fetchone()
+
+        if existing_org:
+            raise Exception(f"Organization with slug '{slug}' already exists")
+
+        await cursor.execute(
             f"""INSERT INTO {organizations_table_name} 
                 (slug, name)
                 VALUES (?, ?)""",
@@ -3320,9 +3319,7 @@ async def create_organization_with_user(org_name: str, slug: str, user_id: int):
         )
 
         org_id = cursor.lastrowid
-
         await add_user_to_org_by_user_id(cursor, user_id, org_id, "owner")
-
         await conn.commit()
 
     await send_slack_notification_for_new_org(org_name, org_id, user)
