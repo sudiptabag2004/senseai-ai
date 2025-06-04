@@ -2411,22 +2411,20 @@ async def add_members_to_cohort(
         cursor = await conn.cursor()
 
         users_to_add = []
+
         for email in emails:
             # Get or create user
             user = await insert_or_return_user(
                 cursor,
                 email,
             )
-            await send_slack_notification_for_learner_added_to_cohort(
-                user, org_slug, org_id, cohort[0], cohort_id
-            )
-            users_to_add.append(user["id"])
+            users_to_add.append(user)
 
         await cursor.execute(
             f"""
-            SELECT 1 FROM {user_cohorts_table_name} WHERE user_id IN ({','.join(['?' for _ in users_to_add])}) AND cohort_id = ?
+            SELECT 1 FROM {user_cohorts_table_name} WHERE user_id IN ({','.join(['?' for _ in [user["id"] for user in users_to_add]])}) AND cohort_id = ?
             """,
-            (*users_to_add, cohort_id),
+            (*[user["id"] for user in users_to_add], cohort_id),
         )
 
         user_exists = await cursor.fetchone()
@@ -2434,13 +2432,18 @@ async def add_members_to_cohort(
         if user_exists:
             raise Exception("User already exists in cohort")
 
+        for user in users_to_add:
+            await send_slack_notification_for_learner_added_to_cohort(
+                user, org_slug, org_id, cohort[0], cohort_id
+            )
+
         # Add users to cohort
         await cursor.executemany(
             f"""
             INSERT INTO {user_cohorts_table_name} (user_id, cohort_id, role)
             VALUES (?, ?, ?)
             """,
-            [(user_id, cohort_id, role) for user_id, role in zip(users_to_add, roles)],
+            [(user["id"], cohort_id, role) for user, role in zip(users_to_add, roles)],
         )
 
         await conn.commit()
