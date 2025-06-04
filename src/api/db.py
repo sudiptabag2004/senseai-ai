@@ -1651,32 +1651,14 @@ async def get_solved_tasks_for_user(
 
 
 async def mark_task_completed(task_id: int, user_id: int):
-    # Update task completion table
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Check if the task is already marked as completed
-        existing_completion = await execute_db_operation(
-            f"""
-            SELECT id FROM {task_completions_table_name}
-            WHERE user_id = ? AND task_id = ?
-            """,
-            (user_id, task_id),
-            fetch_one=True,
-        )
-        if existing_completion:
-            return
-
-        # If not already completed, insert a new record
-        await cursor.execute(
-            f"""
-            INSERT INTO {task_completions_table_name} (user_id, task_id)
-            VALUES (?, ?)
-            """,
-            (user_id, task_id),
-        )
-
-        await conn.commit()
+    # Update task completion table using INSERT OR IGNORE to handle duplicates gracefully
+    await execute_db_operation(
+        f"""
+        INSERT OR IGNORE INTO {task_completions_table_name} (user_id, task_id)
+        VALUES (?, ?)
+        """,
+        (user_id, task_id),
+    )
 
 
 async def get_cohort_completion(
