@@ -229,7 +229,7 @@ async def ai_response_for_question(request: AIChatRequest):
             scoring_criteria_as_prompt = ""
 
             for criterion in question["scorecard"]["criteria"]:
-                scoring_criteria_as_prompt += f"""- **{criterion['name']}** [min: {criterion['min_score']}, max: {criterion['max_score']}, pass: {criterion['pass_score']}]: {criterion['description']}\n"""
+                scoring_criteria_as_prompt += f"""- **{criterion['name']}** [min: {criterion['min_score']}, max: {criterion['max_score']}, pass: {criterion.get('pass_score', criterion['max_score'])}]: {criterion['description']}\n"""
 
             question_details += (
                 f"""\n\nScoring Criteria:\n```\n{scoring_criteria_as_prompt}\n```"""
