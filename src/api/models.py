@@ -255,6 +255,7 @@ class ScorecardCriterion(BaseModel):
     description: str
     min_score: float
     max_score: float
+    pass_score: float
 
 
 class ScorecardStatus(Enum):
