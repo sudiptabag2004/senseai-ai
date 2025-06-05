@@ -9,3 +9,4 @@ api/.env
 **/.env
 **/.env.aws
 api/.env.aws
+src/db/
