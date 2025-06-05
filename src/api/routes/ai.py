@@ -229,7 +229,7 @@ async def ai_response_for_question(request: AIChatRequest):
             scoring_criteria_as_prompt = ""
 
             for criterion in question["scorecard"]["criteria"]:
-                scoring_criteria_as_prompt += f"""- **{criterion['name']}** [min: {criterion['min_score']}, max: {criterion['max_score']}]: {criterion['description']}\n"""
+                scoring_criteria_as_prompt += f"""- **{criterion['name']}** [min: {criterion['min_score']}, max: {criterion['max_score']}, pass: {criterion['pass_score']}]: {criterion['description']}\n"""
 
             question_details += (
                 f"""\n\nScoring Criteria:\n```\n{scoring_criteria_as_prompt}\n```"""
@@ -282,6 +282,9 @@ async def ai_response_for_question(request: AIChatRequest):
                 )
                 max_score: int = Field(
                     description="Maximum score possible for this category as per the scoring criteria"
+                )
+                pass_score: int = Field(
+                    description="Pass score possible for this category as per the scoring criteria"
                 )
 
             class Output(BaseModel):

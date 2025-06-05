@@ -4369,7 +4369,13 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
         {
             "id": scorecard[0],
             "title": scorecard[1],
-            "criteria": json.loads(scorecard[2]),
+            "criteria": [
+                {
+                    **criterion,
+                    "pass_score": criterion.get("pass_score", criterion["max_score"]),
+                }
+                for criterion in json.loads(scorecard[2])
+            ],
             "status": scorecard[3],
         }
         for scorecard in scorecards
