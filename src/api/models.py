@@ -299,6 +299,7 @@ class DraftQuestion(BaseModel):
     response_type: TaskAIResponseType
     context: Dict | None
     coding_languages: List[str] | None
+    scorecard_id: Optional[int] = None
 
 
 class PublishedQuestion(DraftQuestion):
@@ -502,7 +503,6 @@ class CreateQuestionRequest(DraftQuestion):
     generation_model: str | None
     max_attempts: int | None
     is_feedback_shown: bool | None
-    scorecard_id: Optional[int] = None
     context: Dict | None
 
 

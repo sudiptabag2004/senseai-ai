@@ -33,7 +33,7 @@ from api.db import (
     get_question,
     construct_description_from_blocks,
     get_task,
-    update_course_name,
+    get_scorecard,
     create_draft_task_for_course,
     store_course_generation_request,
     get_course_generation_job_details,
@@ -192,6 +192,8 @@ async def ai_response_for_question(request: AIChatRequest):
             question = request.question.model_dump()
             chat_history = request.chat_history
 
+            question["scorecard"] = await get_scorecard(question["scorecard_id"])
+
         question_description = construct_description_from_blocks(question["blocks"])
         question_details = f"""Task:\n```\n{question_description}\n```"""
 
@@ -225,6 +227,7 @@ async def ai_response_for_question(request: AIChatRequest):
             question_details += f"""\n\nReference Solution (never to be shared with the learner):\n```\n{answer_as_prompt}\n```"""
         else:
             scoring_criteria_as_prompt = ""
+
             for criterion in question["scorecard"]["criteria"]:
                 scoring_criteria_as_prompt += f"""- **{criterion['name']}** [min: {criterion['min_score']}, max: {criterion['max_score']}]: {criterion['description']}\n"""
 
