@@ -83,6 +83,7 @@ from api.models import (
     GenerateCourseJobStatus,
     GenerateTaskJobStatus,
     BaseScorecard,
+    ScorecardStatus,
 )
 
 
@@ -1183,6 +1184,8 @@ async def update_draft_quiz(
             (task_id,),
         )
 
+        scorecards_to_publish = []
+
         for index, question in enumerate(questions):
             if not isinstance(question, dict):
                 question = question.model_dump()
@@ -1220,49 +1223,29 @@ async def update_draft_quiz(
             scorecard_id = None
             if question.get("scorecard_id") is not None:
                 scorecard_id = question["scorecard_id"]
-            elif question.get("scorecard"):
-                if question["scorecard"]["id"] in scorecard_uuid_to_id:
-                    scorecard_id = scorecard_uuid_to_id[question["scorecard"]["id"]]
-                else:
-                    if isinstance(question["scorecard"]["id"], int):
-                        # update scorecard
-                        await cursor.execute(
-                            f"""
-                            UPDATE {scorecards_table_name} SET title = ?, criteria = ?, status = ? WHERE id = ?
-                            """,
-                            (
-                                question["scorecard"]["title"],
-                                json.dumps(question["scorecard"]["criteria"]),
-                                str(status),
-                                question["scorecard"]["id"],
-                            ),
-                        )
-                        scorecard_id = question["scorecard"]["id"]
-                    else:
-                        # add new scorecard
-                        await cursor.execute(
-                            f"""
-                            INSERT INTO {scorecards_table_name} (org_id, title, criteria, status) VALUES (?, ?, ?, ?)
-                            """,
-                            (
-                                org_id,
-                                question["scorecard"]["title"],
-                                json.dumps(question["scorecard"]["criteria"]),
-                                str(status),
-                            ),
-                        )
 
-                        scorecard_id = cursor.lastrowid
-
-                    scorecard_uuid_to_id[question["scorecard"]["id"]] = scorecard_id
-
-            if scorecard_id is not None:
                 await cursor.execute(
                     f"""
                     INSERT INTO {question_scorecards_table_name} (question_id, scorecard_id) VALUES (?, ?)
                     """,
                     (question_id, scorecard_id),
                 )
+
+                await cursor.execute(
+                    f"SELECT id FROM {scorecards_table_name} WHERE id = ? AND status = ?",
+                    (question["scorecard_id"], str(ScorecardStatus.DRAFT)),
+                )
+
+                result = await cursor.fetchone()
+
+                if result:
+                    scorecards_to_publish.append(question["scorecard_id"])
+
+        if scorecards_to_publish:
+            await cursor.execute(
+                f"UPDATE {scorecards_table_name} SET status = ? WHERE id IN ({','.join(map(str, scorecards_to_publish))})",
+                (str(ScorecardStatus.PUBLISHED),),
+            )
 
         # Update task status to published
         await cursor.execute(
@@ -1284,6 +1267,9 @@ async def update_published_quiz(
     # Execute all operations in a single transaction
     async with get_new_db_connection() as conn:
         cursor = await conn.cursor()
+
+        scorecards_to_publish = []
+
         for question in questions:
             question = question.model_dump()
 
@@ -1307,6 +1293,28 @@ async def update_published_quiz(
                     json.dumps(question["context"]) if question["context"] else None,
                     question["id"],
                 ),
+            )
+
+            if question.get("scorecard_id") is not None:
+                await cursor.execute(
+                    f"UPDATE {question_scorecards_table_name} SET scorecard_id = ? WHERE question_id = ?",
+                    (question["scorecard_id"], question["id"]),
+                )
+
+                await cursor.execute(
+                    f"SELECT id FROM {scorecards_table_name} WHERE id = ? AND status = ?",
+                    (question["scorecard_id"], str(ScorecardStatus.DRAFT)),
+                )
+
+                result = await cursor.fetchone()
+
+                if result:
+                    scorecards_to_publish.append(question["scorecard_id"])
+
+        if scorecards_to_publish:
+            await cursor.execute(
+                f"UPDATE {scorecards_table_name} SET status = ? WHERE id IN ({','.join(map(str, scorecards_to_publish))})",
+                (str(ScorecardStatus.PUBLISHED),),
             )
 
         # Update task status to published
@@ -4366,6 +4374,23 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
         }
         for scorecard in scorecards
     ]
+
+
+async def create_scorecard(scorecard):
+    scorecard = scorecard.model_dump()
+
+    scorecard_id = await execute_db_operation(
+        f"INSERT INTO {scorecards_table_name} (org_id, title, criteria, status) VALUES (?, ?, ?, ?)",
+        (
+            scorecard["org_id"],
+            scorecard["title"],
+            json.dumps(scorecard["criteria"]),
+            str(ScorecardStatus.DRAFT),
+        ),
+        get_last_row_id=True,
+    )
+
+    return await get_scorecard(scorecard_id)
 
 
 async def update_scorecard(scorecard_id: int, scorecard: BaseScorecard):

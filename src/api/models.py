@@ -261,10 +261,25 @@ class ScorecardStatus(Enum):
     PUBLISHED = "published"
     DRAFT = "draft"
 
+    def __str__(self):
+        return self.value
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.value == other
+        elif isinstance(other, ScorecardStatus):
+            return self.value == other.value
+
+        raise NotImplementedError()
+
 
 class BaseScorecard(BaseModel):
     title: str
     criteria: List[ScorecardCriterion]
+
+
+class CreateScorecardRequest(BaseScorecard):
+    org_id: int
 
 
 class NewScorecard(BaseScorecard):
@@ -282,7 +297,6 @@ class DraftQuestion(BaseModel):
     type: QuestionType
     input_type: TaskInputType
     response_type: TaskAIResponseType
-    scorecard: Optional[NewScorecard] = None
     context: Dict | None
     coding_languages: List[str] | None
 
@@ -489,7 +503,6 @@ class CreateQuestionRequest(DraftQuestion):
     max_attempts: int | None
     is_feedback_shown: bool | None
     scorecard_id: Optional[int] = None
-    scorecard: Optional[NewScorecard] = None
     context: Dict | None
 
 
@@ -505,6 +518,7 @@ class UpdateQuestionRequest(BaseModel):
     blocks: List[dict]
     coding_languages: List[str] | None
     answer: List[Block] | None
+    scorecard_id: Optional[int] = None
     input_type: TaskInputType | None
     context: Dict | None
 
