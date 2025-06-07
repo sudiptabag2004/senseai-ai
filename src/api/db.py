@@ -1275,7 +1275,7 @@ async def update_published_quiz(
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET blocks = ?, answer = ?, input_type = ?, coding_language = ?, context = ? WHERE id = ?
+                UPDATE {questions_table_name} SET blocks = ?, answer = ?, input_type = ?, coding_language = ?, context = ?, response_type = ? WHERE id = ?
                 """,
                 (
                     json.dumps(prepare_blocks_for_publish(question["blocks"])),
@@ -1291,6 +1291,7 @@ async def update_published_quiz(
                         else None
                     ),
                     json.dumps(question["context"]) if question["context"] else None,
+                    str(question["response_type"]),
                     question["id"],
                 ),
             )
