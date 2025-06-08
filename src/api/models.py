@@ -523,6 +523,7 @@ class UpdateQuestionRequest(BaseModel):
     input_type: TaskInputType | None
     context: Dict | None
     response_type: TaskAIResponseType | None
+    type: QuestionType | None
 
 
 class UpdatePublishedQuizRequest(BaseModel):
