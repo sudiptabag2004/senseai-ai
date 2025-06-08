@@ -4382,16 +4382,16 @@ async def get_all_scorecards_for_org(org_id: int) -> List[Dict]:
     ]
 
 
-async def create_scorecard(scorecard):
-    scorecard = scorecard.model_dump()
-
+async def create_scorecard(
+    scorecard: Dict, status: ScorecardStatus = ScorecardStatus.DRAFT
+):
     scorecard_id = await execute_db_operation(
         f"INSERT INTO {scorecards_table_name} (org_id, title, criteria, status) VALUES (?, ?, ?, ?)",
         (
             scorecard["org_id"],
             scorecard["title"],
             json.dumps(scorecard["criteria"]),
-            str(ScorecardStatus.DRAFT),
+            str(status),
         ),
         get_last_row_id=True,
     )
@@ -5049,3 +5049,74 @@ async def migrate_scorecard_table():
         )
 
         await conn.commit()
+
+
+async def duplicate_course_to_org(course_id: int, org_id: int):
+    course = await get_course(course_id)
+
+    new_course_id = await create_course(course["name"], org_id)
+
+    for milestone in course["milestones"]:
+        new_milestone_id, _ = await add_milestone_to_course(
+            new_course_id, milestone["name"], milestone["color"]
+        )
+
+        for task in milestone["tasks"]:
+            task_details = await get_task(task["id"])
+
+            new_task_id, _ = await create_draft_task_for_course(
+                task_details["title"],
+                task_details["type"],
+                new_course_id,
+                new_milestone_id,
+            )
+
+            if task_details["type"] == TaskType.LEARNING_MATERIAL:
+                await update_learning_material_task(
+                    new_task_id,
+                    task_details["title"],
+                    task_details["blocks"],
+                    None,
+                    TaskStatus.PUBLISHED,
+                )
+            else:
+                # Handle quiz tasks with scorecard duplication
+                scorecard_mapping = {}  # Map original scorecard_id to new scorecard_id
+
+                for question in task_details["questions"]:
+                    if question.get("scorecard_id") is not None:
+                        original_scorecard_id = question["scorecard_id"]
+
+                        # Check if we've already duplicated this scorecard
+                        if original_scorecard_id not in scorecard_mapping:
+                            # Get the original scorecard
+                            original_scorecard = await get_scorecard(
+                                original_scorecard_id
+                            )
+
+                            # Create new scorecard for the new org
+                            new_scorecard = await create_scorecard(
+                                {
+                                    "title": original_scorecard["title"],
+                                    "criteria": original_scorecard["criteria"],
+                                    "org_id": org_id,
+                                },
+                                ScorecardStatus.PUBLISHED,
+                            )
+
+                            scorecard_mapping[original_scorecard_id] = new_scorecard[
+                                "id"
+                            ]
+
+                        # Update question to use the new scorecard
+                        question["scorecard_id"] = scorecard_mapping[
+                            original_scorecard_id
+                        ]
+
+                await update_draft_quiz(
+                    new_task_id,
+                    task_details["title"],
+                    task_details["questions"],
+                    None,
+                    TaskStatus.PUBLISHED,
+                )

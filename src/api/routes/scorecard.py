@@ -22,4 +22,4 @@ async def update_scorecard(scorecard_id: int, scorecard: BaseScorecard) -> Score
 
 @router.post("/", response_model=Scorecard)
 async def create_scorecard(scorecard: CreateScorecardRequest) -> Scorecard:
-    return await create_scorecard_from_db(scorecard)
+    return await create_scorecard_from_db(scorecard.model_dump())
