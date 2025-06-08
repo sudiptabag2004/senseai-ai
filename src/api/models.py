@@ -522,6 +522,7 @@ class UpdateQuestionRequest(BaseModel):
     scorecard_id: Optional[int] = None
     input_type: TaskInputType | None
     context: Dict | None
+    response_type: TaskAIResponseType | None
 
 
 class UpdatePublishedQuizRequest(BaseModel):
