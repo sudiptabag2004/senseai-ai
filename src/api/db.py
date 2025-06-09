@@ -1275,7 +1275,7 @@ async def update_published_quiz(
 
             await cursor.execute(
                 f"""
-                UPDATE {questions_table_name} SET blocks = ?, answer = ?, input_type = ?, coding_language = ?, context = ?, response_type = ? WHERE id = ?
+                UPDATE {questions_table_name} SET blocks = ?, answer = ?, input_type = ?, coding_language = ?, context = ?, response_type = ?, type = ? WHERE id = ?
                 """,
                 (
                     json.dumps(prepare_blocks_for_publish(question["blocks"])),
@@ -1292,15 +1292,31 @@ async def update_published_quiz(
                     ),
                     json.dumps(question["context"]) if question["context"] else None,
                     str(question["response_type"]),
+                    str(question["type"]),
                     question["id"],
                 ),
             )
 
             if question.get("scorecard_id") is not None:
+                # First check if there's an existing scorecard mapping
                 await cursor.execute(
-                    f"UPDATE {question_scorecards_table_name} SET scorecard_id = ? WHERE question_id = ?",
-                    (question["scorecard_id"], question["id"]),
+                    f"SELECT scorecard_id FROM {question_scorecards_table_name} WHERE question_id = ?",
+                    (question["id"],),
                 )
+                existing_mapping = await cursor.fetchone()
+
+                if existing_mapping:
+                    # Update existing mapping
+                    await cursor.execute(
+                        f"UPDATE {question_scorecards_table_name} SET scorecard_id = ? WHERE question_id = ?",
+                        (question["scorecard_id"], question["id"]),
+                    )
+                else:
+                    # Insert new mapping
+                    await cursor.execute(
+                        f"INSERT INTO {question_scorecards_table_name} (question_id, scorecard_id) VALUES (?, ?)",
+                        (question["id"], question["scorecard_id"]),
+                    )
 
                 await cursor.execute(
                     f"SELECT id FROM {scorecards_table_name} WHERE id = ? AND status = ?",
