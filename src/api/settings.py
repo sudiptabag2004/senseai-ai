@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from functools import lru_cache
 from api.config import UPLOAD_FOLDER_NAME
+from phoenix.otel import register
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = join(root_dir, ".env.aws")
@@ -34,3 +35,12 @@ def get_settings():
 
 
 settings = get_settings()
+
+
+if settings.phoenix_endpoint:
+    tracer_provider = register(
+        project_name=f"sensai-{settings.env}",
+        auto_instrument=True,
+        endpoint=settings.phoenix_endpoint,
+    )
+    tracer = tracer_provider.get_tracer(__name__)

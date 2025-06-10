@@ -1,8 +1,6 @@
 import os
 from os.path import exists
 from api.models import LeaderboardViewType, TaskInputType, TaskAIResponseType, TaskType
-from phoenix.otel import register
-from api.settings import settings
 
 if exists("/appdata"):
     data_root_dir = "/appdata"
@@ -21,14 +19,6 @@ if not exists(data_root_dir):
 if not exists(log_dir):
     os.makedirs(log_dir)
 
-
-if settings.phoenix_endpoint:
-    tracer_provider = register(
-        project_name=f"sensai-{settings.env}",
-        auto_instrument=True,
-        endpoint=settings.phoenix_endpoint,
-    )
-    tracer = tracer_provider.get_tracer(__name__)
 
 sqlite_db_path = f"{data_root_dir}/db.sqlite.prod"
 log_file_path = f"{log_dir}/backend.log"
