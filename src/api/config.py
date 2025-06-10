@@ -20,7 +20,7 @@ if not exists(log_dir):
     os.makedirs(log_dir)
 
 
-sqlite_db_path = f"{data_root_dir}/db.sqlite.prod"
+sqlite_db_path = f"{data_root_dir}/db.sqlite"
 log_file_path = f"{log_dir}/backend.log"
 
 chat_history_table_name = "chat_history"
