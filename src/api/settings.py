@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     slack_user_signup_webhook_url: str | None = None
     slack_course_created_webhook_url: str | None = None
     phoenix_endpoint: str | None = None
+    phoenix_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=join(root_dir, ".env"))
 
@@ -38,9 +39,11 @@ settings = get_settings()
 
 
 if settings.phoenix_endpoint:
+    os.environ["PHOENIX_API_KEY"] = settings.phoenix_api_key
     tracer_provider = register(
         project_name=f"sensai-{settings.env}",
         auto_instrument=True,
+        batch=True,
         endpoint=settings.phoenix_endpoint,
     )
     tracer = tracer_provider.get_tracer(__name__)
