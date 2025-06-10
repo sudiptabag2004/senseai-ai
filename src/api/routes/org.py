@@ -12,6 +12,7 @@ from api.db import (
     remove_members_from_org as remove_members_from_org_from_db,
     get_org_members as get_org_members_from_db,
     get_org_by_slug as get_org_by_slug_from_db,
+    get_all_orgs as get_all_orgs_from_db,
 )
 from api.utils.db import get_new_db_connection
 from api.models import (
@@ -95,3 +96,8 @@ async def remove_members_from_org(org_id: int, request: RemoveMembersFromOrgRequ
 @router.get("/{org_id}/members")
 async def get_org_members(org_id: int) -> List[Dict]:
     return await get_org_members_from_db(org_id)
+
+
+@router.get("/")
+async def get_all_orgs() -> List[Dict]:
+    return await get_all_orgs_from_db()

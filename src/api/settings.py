@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     env: str | None = None
     slack_user_signup_webhook_url: str | None = None
     slack_course_created_webhook_url: str | None = None
+    phoenix_endpoint: str | None = None
 
     model_config = SettingsConfigDict(env_file=join(root_dir, ".env"))
 

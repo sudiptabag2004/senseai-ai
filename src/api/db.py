@@ -5137,3 +5137,19 @@ async def duplicate_course_to_org(course_id: int, org_id: int):
                     None,
                     TaskStatus.PUBLISHED,
                 )
+
+
+async def get_all_orgs() -> List[Dict]:
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(f"SELECT id, name, slug FROM {organizations_table_name}")
+
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "slug": row[2],
+            }
+            for row in await cursor.fetchall()
+        ]

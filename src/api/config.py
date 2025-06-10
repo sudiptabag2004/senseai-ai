@@ -1,15 +1,19 @@
 import os
 from os.path import exists
 from api.models import LeaderboardViewType, TaskInputType, TaskAIResponseType, TaskType
+from phoenix.otel import register
+from api.settings import settings
 
 if exists("/appdata"):
     data_root_dir = "/appdata"
     root_dir = "/demo"
     log_dir = "/appdata/logs"
 else:
-    data_root_dir = "./db"
     root_dir = os.path.dirname(os.path.abspath(__file__))
-    log_dir = "./logs"
+    parent_dir = os.path.dirname(root_dir)
+
+    data_root_dir = f"{parent_dir}/db"
+    log_dir = f"{parent_dir}/logs"
 
 if not exists(data_root_dir):
     os.makedirs(data_root_dir)
@@ -17,7 +21,16 @@ if not exists(data_root_dir):
 if not exists(log_dir):
     os.makedirs(log_dir)
 
-sqlite_db_path = f"{data_root_dir}/db.sqlite"
+
+if settings.phoenix_endpoint:
+    tracer_provider = register(
+        project_name=f"sensai-{settings.env}",
+        auto_instrument=True,
+        endpoint=settings.phoenix_endpoint,
+    )
+    tracer = tracer_provider.get_tracer(__name__)
+
+sqlite_db_path = f"{data_root_dir}/db.sqlite.prod"
 log_file_path = f"{log_dir}/backend.log"
 
 chat_history_table_name = "chat_history"

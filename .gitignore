@@ -25,3 +25,4 @@ coverage.xml
 .coverage
 uploads
 db.sqlite
+evals
