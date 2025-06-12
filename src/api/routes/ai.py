@@ -225,7 +225,8 @@ async def ai_response_for_question(request: AIChatRequest):
         question_details = f"""Task:\n```\n{question_description}\n```"""
 
     task_metadata = await get_task_metadata(request.task_id)
-    metadata.update(task_metadata)
+    if task_metadata:
+        metadata.update(task_metadata)
 
     for message in chat_history:
         if message["role"] == "user":
