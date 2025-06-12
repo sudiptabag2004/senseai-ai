@@ -53,6 +53,9 @@ from api.utils.s3 import (
     get_media_upload_s3_key_from_uuid,
 )
 from api.utils.audio import prepare_audio_input_for_ai
+from api.settings import tracer
+from opentelemetry.trace import StatusCode, Status
+from openinference.instrumentation import using_attributes
 
 router = APIRouter()
 
@@ -153,6 +156,12 @@ async def ai_response_for_question(request: AIChatRequest):
                 status_code=400,
                 detail="Chat history is required when question is provided",
             )
+        if request.question_id is None:
+            session_id = f"quiz_{request.task_id}_preview_{request.user_id}"
+        else:
+            session_id = (
+                f"quiz_{request.task_id}_{request.question_id}_{request.user_id}"
+            )
     else:
         if request.task_id is None:
             raise HTTPException(
@@ -165,6 +174,7 @@ async def ai_response_for_question(request: AIChatRequest):
                 status_code=400,
                 detail="Chat history is required for learning material tasks",
             )
+        session_id = f"lm_{request.task_id}_{request.user_id}"
 
     if request.task_type == TaskType.LEARNING_MATERIAL:
         task = await get_task(request.task_id)
@@ -335,37 +345,86 @@ async def ai_response_for_question(request: AIChatRequest):
             chat_history
         )
 
-    if request.response_type == ChatResponseType.AUDIO:
-        model = openai_plan_to_model_name["audio"]
-    else:
-        model = openai_plan_to_model_name["text"]
-
     messages = [{"role": "system", "content": system_prompt}] + chat_history
 
-    try:
-        # Define an async generator for streaming
-        async def stream_response() -> AsyncGenerator[str, None]:
-            stream = await stream_llm_with_instructor(
-                api_key=settings.openai_api_key,
-                model=model,
-                messages=messages,
-                response_model=Output,
-                max_completion_tokens=4096,
-            )
-
-            # Process the async generator
-            async for chunk in stream:
-                yield json.dumps(chunk.model_dump()) + "\n"
-
-        # Return a streaming response
-        return StreamingResponse(
-            stream_response(),
-            media_type="application/x-ndjson",
+    class RouterOutput(BaseModel):
+        use_reasoning_model: bool = Field(
+            description="Whether to use a reasoning model to evaluate the student's response"
         )
 
-    except Exception as exception:
-        logger.error(exception)
-        raise exception
+    router_format_instructions = PydanticOutputParser(
+        pydantic_object=RouterOutput
+    ).get_format_instructions()
+
+    router_messages = [
+        {
+            "role": "system",
+            "content": f"You are an intelligent routing agent that decides which type of language model should be used to evaluate a student's response to a given task. You will receive the details of a task, the conversation history with the student and the student's latest query/message.\n\nYou have two options:\n- Reasoning Model (e.g. o3): Best for complex tasks involving logical deduction, problem-solving, code generation, mathematics, research reasoning, multi-step analysis, or edge-case handling.\n- General-Purpose Model (e.g. gpt-4o): Best for everyday conversation, writing help, summaries, rephrasing, explanations, casual queries, grammar correction, and general knowledge Q&A.\n\nYour job is to classify which of the two options is best suited to evaluate the student's response for the given task. If a task can be solved by a general purpose model, avoid using a reasoning model as it takes longer and costs more. At the same time, accuracy cannot be compromised.\n\n{router_format_instructions}",
+        }
+    ] + chat_history
+
+    # Define an async generator for streaming
+    async def stream_response() -> AsyncGenerator[str, None]:
+        with tracer.start_as_current_span(
+            "ai_chat", openinference_span_kind="llm"
+        ) as span:
+            span.set_input(chat_history)
+            output_buffer = []
+
+            try:
+                if request.response_type == ChatResponseType.AUDIO:
+                    model = openai_plan_to_model_name["audio"]
+                else:
+                    with using_attributes(
+                        session_id=session_id,
+                        user_id=str(request.user_id),
+                        metadata={"stage": "router"},
+                    ):
+                        router_output = await run_llm_with_instructor(
+                            api_key=settings.openai_api_key,
+                            model=openai_plan_to_model_name["router"],
+                            messages=router_messages,
+                            response_model=RouterOutput,
+                            max_completion_tokens=4096,
+                        )
+
+                    if router_output.use_reasoning_model:
+                        model = openai_plan_to_model_name["reasoning"]
+                    else:
+                        model = openai_plan_to_model_name["text"]
+
+                # print(f"Using model: {model}")
+
+                with using_attributes(
+                    session_id=f"{session_id}",
+                    user_id=str(request.user_id),
+                    metadata={"stage": "feedback"},
+                ):
+                    stream = await stream_llm_with_instructor(
+                        api_key=settings.openai_api_key,
+                        model=model,
+                        messages=messages,
+                        response_model=Output,
+                        max_completion_tokens=4096,
+                    )
+                    # Process the async generator
+                    async for chunk in stream:
+                        content = json.dumps(chunk.model_dump()) + "\n"
+                        output_buffer = content
+                        yield content
+            except Exception as error:
+                span.record_exception(error)
+                span.set_status(Status(StatusCode.ERROR))
+                raise error
+            else:
+                span.set_output("".join(output_buffer))
+                span.set_status(Status(StatusCode.OK))
+
+    # Return a streaming response
+    return StreamingResponse(
+        stream_response(),
+        media_type="application/x-ndjson",
+    )
 
 
 async def migrate_content_to_blocks(content: str) -> List[Dict]:

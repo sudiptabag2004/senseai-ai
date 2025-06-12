@@ -627,7 +627,8 @@ class AIChatRequest(BaseModel):
     question: Optional[DraftQuestion] = None
     chat_history: Optional[List[Dict]] = None
     question_id: Optional[int] = None
-    user_id: Optional[int] = None
+    user_id: int
+    task_id: int
     response_type: Optional[ChatResponseType] = None
 
 

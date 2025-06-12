@@ -64,4 +64,5 @@ openai_plan_to_model_name = {
     "text": "gpt-4.1-2025-04-14",
     "text-mini": "gpt-4.1-mini-2025-04-14",
     "audio": "gpt-4o-audio-preview-2024-12-17",
+    "router": "gpt-4.1-mini-2025-04-14",
 }
