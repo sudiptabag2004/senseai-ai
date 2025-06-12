@@ -277,6 +277,9 @@ async def get_cohort_metrics_for_course(cohort_id: int, course_id: int):
 
         for task_id, task_completion_data in task_completions[learner_id].items():
             if task_completion_data["is_complete"]:
+                if task_id not in task_id_to_metadata:
+                    continue
+
                 num_tasks_completed += 1
                 task_type_completions[task_id_to_metadata[task_id]["type"]][
                     learner_id
