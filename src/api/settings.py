@@ -37,13 +37,12 @@ def get_settings():
 
 settings = get_settings()
 
-
-if settings.phoenix_endpoint:
-    os.environ["PHOENIX_API_KEY"] = settings.phoenix_api_key
-    tracer_provider = register(
-        project_name=f"sensai-{settings.env}",
-        auto_instrument=True,
-        batch=True,
-        endpoint=settings.phoenix_endpoint,
-    )
-    tracer = tracer_provider.get_tracer(__name__)
+os.environ["PHOENIX_API_KEY"] = settings.phoenix_api_key
+tracer_provider = register(
+    protocol="http/protobuf",
+    project_name=f"sensai-{settings.env}",
+    auto_instrument=True,
+    batch=True,
+    endpoint=settings.phoenix_endpoint,
+)
+tracer = tracer_provider.get_tracer(__name__)
