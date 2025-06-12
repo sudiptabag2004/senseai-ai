@@ -915,6 +915,9 @@ def convert_question_db_to_dict(question) -> Dict:
 
 
 async def get_scorecard(scorecard_id: int) -> Dict:
+    if scorecard_id is None:
+        return
+
     scorecard = await execute_db_operation(
         f"SELECT id, title, criteria, status FROM {scorecards_table_name} WHERE id = ?",
         (scorecard_id,),
