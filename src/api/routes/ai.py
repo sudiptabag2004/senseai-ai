@@ -29,6 +29,7 @@ from api.utils.logging import logger
 from api.utils.concurrency import async_batch_gather
 from api.websockets import get_manager
 from api.db import (
+    get_task_metadata,
     get_question_chat_history_for_user,
     get_question,
     construct_description_from_blocks,
@@ -138,6 +139,8 @@ def get_user_message_for_chat_history(user_response: str) -> str:
 
 @router.post("/chat")
 async def ai_response_for_question(request: AIChatRequest):
+    metadata = {"task_id": request.task_id}
+
     if request.task_type == TaskType.QUIZ:
         if request.question_id is None and request.question is None:
             raise HTTPException(
@@ -177,6 +180,7 @@ async def ai_response_for_question(request: AIChatRequest):
         session_id = f"lm_{request.task_id}_{request.user_id}"
 
     if request.task_type == TaskType.LEARNING_MATERIAL:
+        metadata["type"] = "learning_material"
         task = await get_task(request.task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -186,10 +190,14 @@ async def ai_response_for_question(request: AIChatRequest):
         reference_material = construct_description_from_blocks(task["blocks"])
         question_details = f"""Reference Material:\n```\n{reference_material}\n```"""
     else:
+        metadata["type"] = "quiz"
+
         if request.question_id:
             question = await get_question(request.question_id)
             if not question:
                 raise HTTPException(status_code=404, detail="Question not found")
+
+            metadata["question_id"] = request.question_id
 
             chat_history = await get_question_chat_history_for_user(
                 request.question_id, request.user_id
@@ -204,8 +212,20 @@ async def ai_response_for_question(request: AIChatRequest):
 
             question["scorecard"] = await get_scorecard(question["scorecard_id"])
 
+            metadata["question_id"] = None
+
+        metadata["question_type"] = question["type"]
+        metadata["question_purpose"] = (
+            "practice" if question["response_type"] == "chat" else "exam"
+        )
+        metadata["question_input_type"] = question["input_type"]
+        metadata["question_has_context"] = bool(question["context"])
+
         question_description = construct_description_from_blocks(question["blocks"])
         question_details = f"""Task:\n```\n{question_description}\n```"""
+
+    task_metadata = await get_task_metadata(request.task_id)
+    metadata.update(task_metadata)
 
     for message in chat_history:
         if message["role"] == "user":
@@ -378,7 +398,7 @@ async def ai_response_for_question(request: AIChatRequest):
                     with using_attributes(
                         session_id=session_id,
                         user_id=str(request.user_id),
-                        metadata={"stage": "router"},
+                        metadata={"stage": "router", **metadata},
                     ):
                         router_output = await run_llm_with_instructor(
                             api_key=settings.openai_api_key,
@@ -398,7 +418,7 @@ async def ai_response_for_question(request: AIChatRequest):
                 with using_attributes(
                     session_id=f"{session_id}",
                     user_id=str(request.user_id),
-                    metadata={"stage": "feedback"},
+                    metadata={"stage": "feedback", **metadata},
                 ):
                     stream = await stream_llm_with_instructor(
                         api_key=settings.openai_api_key,

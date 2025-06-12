@@ -1100,6 +1100,40 @@ async def get_task(task_id: int):
     return task_data
 
 
+async def get_task_metadata(task_id: int) -> Dict:
+    result = await execute_db_operation(
+        f"""
+        SELECT c.id as course_id, c.name as course_name, m.id as milestone_id, m.name as milestone_name, o.id as org_id, o.name as org_name
+        FROM {course_tasks_table_name} ct
+        JOIN {courses_table_name} c ON ct.course_id = c.id
+        JOIN {milestones_table_name} m ON ct.milestone_id = m.id
+        JOIN {organizations_table_name} o ON c.org_id = o.id
+        WHERE ct.task_id = ?
+        LIMIT 1
+        """,
+        (task_id,),
+        fetch_one=True,
+    )
+
+    if not result:
+        return None
+
+    return {
+        "course": {
+            "id": result[0],
+            "name": result[1],
+        },
+        "milestone": {
+            "id": result[2],
+            "name": result[3],
+        },
+        "org": {
+            "id": result[4],
+            "name": result[5],
+        },
+    }
+
+
 async def does_task_exist(task_id: int) -> bool:
     task = await execute_db_operation(
         f"""
