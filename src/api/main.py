@@ -10,6 +10,7 @@ from api.config import UPLOAD_FOLDER_NAME
 from api.routes import (
     auth,
     badge,
+    code,
     cohort,
     course,
     org,
@@ -119,6 +120,7 @@ app.include_router(cv_review.router, prefix="/cv_review", tags=["cv_review"])
 app.include_router(tag.router, prefix="/tags", tags=["tags"])
 app.include_router(milestone.router, prefix="/milestones", tags=["milestones"])
 app.include_router(scorecard.router, prefix="/scorecards", tags=["scorecards"])
+app.include_router(code.router, prefix="/code", tags=["code"])
 app.include_router(hva.router, prefix="/hva", tags=["hva"])
 app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
 

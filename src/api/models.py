@@ -670,3 +670,19 @@ class GenerateCourseStructureRequest(BaseModel):
     intended_audience: str
     instructions: Optional[str] = None
     reference_material_s3_key: str
+
+
+class LanguageCodeDraft(BaseModel):
+    language: str
+    value: str
+
+
+class SaveCodeDraftRequest(BaseModel):
+    user_id: int
+    question_id: int
+    code: List[LanguageCodeDraft]
+
+
+class CodeDraft(BaseModel):
+    id: int
+    code: List[LanguageCodeDraft]

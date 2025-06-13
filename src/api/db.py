@@ -43,6 +43,7 @@ from api.config import (
     course_generation_jobs_table_name,
     task_generation_jobs_table_name,
     org_api_keys_table_name,
+    code_drafts_table_name,
 )
 from api.models import (
     LeaderboardViewType,
@@ -626,6 +627,30 @@ async def create_task_generation_jobs_table(cursor):
     )
 
 
+async def create_code_drafts_table(cursor):
+    await cursor.execute(
+        f"""CREATE TABLE IF NOT EXISTS {code_drafts_table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                question_id INTEGER NOT NULL,
+                code TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, question_id),
+                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES {questions_table_name}(id) ON DELETE CASCADE
+            )"""
+    )
+
+    # Useful indexes for faster lookup
+    await cursor.execute(
+        f"""CREATE INDEX IF NOT EXISTS idx_code_drafts_user_id ON {code_drafts_table_name} (user_id)"""
+    )
+
+    await cursor.execute(
+        f"""CREATE INDEX IF NOT EXISTS idx_code_drafts_question_id ON {code_drafts_table_name} (question_id)"""
+    )
+
+
 async def init_db():
     # Ensure the database folder exists
     db_folder = os.path.dirname(sqlite_db_path)
@@ -640,74 +665,8 @@ async def init_db():
         cursor = await conn.cursor()
 
         if exists(sqlite_db_path):
-            if not await check_table_exists(organizations_table_name, cursor):
-                await create_organizations_table(cursor)
-
-            if not await check_table_exists(org_api_keys_table_name, cursor):
-                await create_org_api_keys_table(cursor)
-
-            if not await check_table_exists(users_table_name, cursor):
-                await create_users_table(cursor)
-
-            if not await check_table_exists(user_organizations_table_name, cursor):
-                await create_user_organizations_table(cursor)
-
-            if not await check_table_exists(cohorts_table_name, cursor):
-                await create_cohort_tables(cursor)
-
-            if not await check_table_exists(courses_table_name, cursor):
-                await create_courses_table(cursor)
-
-            if not await check_table_exists(course_cohorts_table_name, cursor):
-                await create_course_cohorts_table(cursor)
-
-            if not await check_table_exists(milestones_table_name, cursor):
-                await create_milestones_table(cursor)
-
-            if not await check_table_exists(tags_table_name, cursor):
-                await create_tag_tables(cursor)
-
-            if not await check_table_exists(badges_table_name, cursor):
-                await create_badges_table(cursor)
-
-            if not await check_table_exists(tasks_table_name, cursor):
-                await create_tasks_table(cursor)
-
-            if not await check_table_exists(questions_table_name, cursor):
-                await create_questions_table(cursor)
-
-            if not await check_table_exists(scorecards_table_name, cursor):
-                await create_scorecards_table(cursor)
-
-            if not await check_table_exists(question_scorecards_table_name, cursor):
-                await create_question_scorecards_table(cursor)
-
-            if not await check_table_exists(task_scoring_criteria_table_name, cursor):
-                await create_task_scoring_criteria_table(cursor)
-
-            if not await check_table_exists(tests_table_name, cursor):
-                await create_tests_table(cursor)
-
-            if not await check_table_exists(chat_history_table_name, cursor):
-                await create_chat_history_table(cursor)
-
-            if not await check_table_exists(task_completions_table_name, cursor):
-                await create_task_completion_table(cursor)
-
-            if not await check_table_exists(course_tasks_table_name, cursor):
-                await create_course_tasks_table(cursor)
-
-            if not await check_table_exists(course_milestones_table_name, cursor):
-                await create_course_milestones_table(cursor)
-
-            if not await check_table_exists(cv_review_usage_table_name, cursor):
-                await create_cv_review_usage_table(cursor)
-
-            if not await check_table_exists(course_generation_jobs_table_name, cursor):
-                await create_course_generation_jobs_table(cursor)
-
-            if not await check_table_exists(task_generation_jobs_table_name, cursor):
-                await create_task_generation_jobs_table(cursor)
+            if not await check_table_exists(code_drafts_table_name, cursor):
+                await create_code_drafts_table(cursor)
 
             await conn.commit()
             return
@@ -758,6 +717,8 @@ async def init_db():
             await create_course_generation_jobs_table(cursor)
 
             await create_task_generation_jobs_table(cursor)
+
+            await create_code_drafts_table(cursor)
 
             await conn.commit()
 
@@ -5190,3 +5151,45 @@ async def get_all_orgs() -> List[Dict]:
             }
             for row in await cursor.fetchall()
         ]
+
+
+async def upsert_user_code_draft(user_id: int, question_id: int, code: List[Dict]):
+    """Insert or update a code draft for a (user_id, question_id) pair."""
+
+    await execute_db_operation(
+        f"""
+        INSERT INTO {code_drafts_table_name} (user_id, question_id, code)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id, question_id) DO UPDATE SET
+            code = excluded.code,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, question_id, json.dumps(code)),
+    )
+
+
+async def get_user_code_draft(user_id: int, question_id: int):
+    """Retrieve the latest code draft for the given user & question pair."""
+
+    row = await execute_db_operation(
+        f"""SELECT id, code, updated_at FROM {code_drafts_table_name}
+            WHERE user_id = ? AND question_id = ?""",
+        (user_id, question_id),
+        fetch_one=True,
+    )
+
+    if not row:
+        return None
+
+    return {
+        "id": row[0],
+        "code": json.loads(row[1]),
+        "updated_at": row[2],
+    }
+
+
+async def delete_user_code_draft(user_id: int, question_id: int):
+    await execute_db_operation(
+        f"DELETE FROM {code_drafts_table_name} WHERE user_id = ? AND question_id = ?",
+        (user_id, question_id),
+    )
