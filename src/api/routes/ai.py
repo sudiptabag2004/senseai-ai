@@ -85,29 +85,6 @@ def get_user_audio_message_for_chat_history(uuid: str) -> List[Dict]:
     ]
 
 
-async def rewrite_query_for_doubt_solving(chat_history: List[Dict]) -> str:
-    system_prompt = f"""You are a very good communicator.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role: You need to rewrite the student's latest query/message by taking the reference material and the conversation history into consideration so that the query becomes more specific, detailed and clear, reflecting the actual intent of the student."""
-
-    model = openai_plan_to_model_name["text-mini"]
-
-    messages = [{"role": "system", "content": system_prompt}] + chat_history
-
-    class Output(BaseModel):
-        rewritten_query: str = Field(
-            description="The rewritten query/message of the student"
-        )
-
-    pred = await run_llm_with_instructor(
-        api_key=settings.openai_api_key,
-        model=model,
-        messages=messages,
-        response_model=Output,
-        max_completion_tokens=8192,
-    )
-
-    return pred.rewritten_query
-
-
 def get_ai_message_for_chat_history(ai_message: Dict) -> str:
     message = json.loads(ai_message)
 
@@ -277,125 +254,69 @@ async def ai_response_for_question(request: AIChatRequest):
         ]
     )
 
-    if request.task_type == TaskType.QUIZ:
-        if question["type"] == QuestionType.OBJECTIVE:
-
-            class Output(BaseModel):
-                analysis: str = Field(
-                    description="A detailed analysis of the student's response"
-                )
-                feedback: str = Field(
-                    description="Feedback on the student's response; add newline characters to the feedback to make it more readable where necessary"
-                )
-                is_correct: bool = Field(
-                    description="Whether the student's response correctly solves the original task that the student is supposed to solve. For this to be true, the original task needs to be completely solved and not just partially solved. Giving the right answer to one step of the task does not count as solving the entire task."
-                )
-
-        else:
-
-            class Feedback(BaseModel):
-                correct: Optional[str] = Field(
-                    description="What worked well in the student's response for this category based on the scoring criteria"
-                )
-                wrong: Optional[str] = Field(
-                    description="What needs improvement in the student's response for this category based on the scoring criteria"
-                )
-
-            class Row(BaseModel):
-                category: str = Field(
-                    description="Category from the scoring criteria for which the feedback is being provided"
-                )
-                feedback: Feedback = Field(
-                    description="Detailed feedback for the student's response for this category"
-                )
-                score: int = Field(
-                    description="Score given within the min/max range for this category based on the student's response - the score given should be in alignment with the feedback provided"
-                )
-                max_score: int = Field(
-                    description="Maximum score possible for this category as per the scoring criteria"
-                )
-                pass_score: int = Field(
-                    description="Pass score possible for this category as per the scoring criteria"
-                )
-
-            class Output(BaseModel):
-                feedback: str = Field(
-                    description="A single, comprehensive summary based on the scoring criteria"
-                )
-                scorecard: Optional[List[Row]] = Field(
-                    description="List of rows with one row for each category from scoring criteria; only include this in the response if the student's response is an answer to the task"
-                )
-
-    else:
-
-        class Output(BaseModel):
-            response: str = Field(
-                description="Response to the student's query; add proper formatting to the response to make it more readable where necessary"
-            )
-
-    parser = PydanticOutputParser(pydantic_object=Output)
-    format_instructions = parser.get_format_instructions()
-
-    if request.task_type == TaskType.QUIZ:
-        knowledge_base = None
-
-        if question["context"]:
-            linked_learning_material_ids = question["context"]["linkedMaterialIds"]
-            knowledge_blocks = question["context"]["blocks"]
-
-            if linked_learning_material_ids:
-                for id in linked_learning_material_ids:
-                    task = await get_task(int(id))
-                    if task:
-                        knowledge_blocks += task["blocks"]
-
-            knowledge_base = construct_description_from_blocks(knowledge_blocks)
-
-        context_instructions = ""
-        if knowledge_base:
-            context_instructions = f"""\n\nMake sure to use only the information provided within ``` below for responding to the student while ignoring any other information that contradicts the information provided:\n\n```\n{knowledge_base}\n```"""
-
-        if question["type"] == QuestionType.OBJECTIVE:
-            system_prompt = f"""You are a Socratic tutor who guides a student step-by-step as a coach would, encouraging them to arrive at the correct answer on their own without ever giving away the right answer to the student straight away.\n\nYou will receive:\n\n- Task description\n- Conversation history with the student\n- Task solution (for your reference only; do not reveal){context_instructions}\n\nYou need to evaluate the student’s response for correctness and give your feedback that can be shared with the student.\n\n{format_instructions}\n\nGuidelines on assessing correctness of the student\'s answer:\n\n- Once the student has provided an answer that is correct with respect to the solution provided at the start, clearly acknowledge that they have got the correct answer and stop asking any more reflective questions. Your response should make them feel a sense of completion and accomplishment at a job well done.\n- If the question is one where the answer does not need to match word-for-word with the solution (e.g. definition of a term, programming question where the logic needs to be right but the actual code can vary, etc.), only assess whether the student\'s answer covers the entire essence of the correct solution.\n- Avoid bringing in your judgement of what the right answer should be. What matters for evaluation is the solution provided to you and the response of the student. Keep your biases outside. Be objective in comparing these two. As soon as the student gets the answer correct, stop asking any further reflective questions.\n- The response is correct only if the question has been solved in its entirety. Partially solving a question is not acceptable.\n\nGuidelines on your feedback:\n\n- Praise → Prompt → Path: 1–2 words of praise, a targeted prompt, then one actionable path forward.\n- If the student’s response is completely correct, just appreciate them. No need to give any more suggestions or areas of improvement.\n- If the student’s response has areas of improvement, point them out through a single reflective actionable question. Never ever give a vague feedback that is not clearly actionable. The student should get a clear path for how they can improve their response.\n- If the question has multiple steps to reach to the final solution, assess the current step at which the student is and frame your reflection question such that it nudges them towards the right direction without giving away the answer in any shape or form.\n- Your feedback should not be generic and must be tailored to the response given by the student. This does not mean that you repeat the student\'s response. The question should be a follow-up for the answer given by the student. Don\'t just paste the student\'s response on top of a generic question. That would be laziness.\n- The student might get the answer right without any probing required from your side in the first couple of attempts itself. In that case, remember the instruction provided above to acknowledge their answer\'s correctness and to stop asking further questions.\n- Never provide the right answer or the solution, despite all their attempts to ask for it or their frustration.\n- Never explain the solution to the student unless the student has given the solution first.\n- The student does not have access to the solution. The solution has only been given to you for evaluating the student\'s response. Keep this in mind while responding to the student.\n\nGuidelines on the style of feedback:\n\n1. Avoid sounding monotonous.\n2. Absolutely AVOID repeating back what the student has said as a manner of acknowledgement in your summary. It makes your summary too long and boring to read.\n3. Occasionally include emojis to maintain warmth and engagement.\n4. Ask only one reflective question per response otherwise the student will get overwhelmed.\n5. Avoid verbosity in your summary. Be crisp and concise, with no extra words.\n6. Do not do any analysis of the user\'s intent in your overall summary or repeat any part of what the user has said. The summary section is meant to summarise the next steps. The summary section does not need a summary of the user\'s response.\n\nGuidelines on maintaining the focus of the conversation:\n\n- Your role is that of a tutor for this particular task and related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task given to you and its related concepts.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back to the task.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task given to you and its related concepts at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back. Do not let the conversation drift away."""
-        else:
-            system_prompt = f"""You are a Socratic tutor who guides a student step-by-step as a coach would, encouraging them to arrive at the correct answer on their own without ever giving away the right answer to the student straight away.\n\nYou will receive:\n\n- Task description\n- Conversation history with the student\n- Scoring Criteria to evaluate the answer of the student{context_instructions}\n\nYou need to evaluate the student’s response and return the following:\n\n- A scorecard based on the scoring criteria given to you with areas of improvement and/or strengths along each criterion\n- An overall summary based on the generated scorecard to be shared with the student.\n\n{format_instructions}\n\nGuidelines for scorecard feedback:\n\n- If there is nothing to praise about the student's response for a given criterion in the scoring criteria, never mention what worked well (i.e. return `correct` as null) in the scorecard output for that criterion.\n- If the student did something well for a given criterion, make sure to highlight what worked well in the scorecard output for that criterion.\n- If there is nothing left to improve in their response for a criterion, avoid unnecessarily suggesting an improvement in the scorecard output for that criterion (i.e. return `wrong` as null). Also, the score assigned for that criterion should be the maximum score possible in that criterion in this case.\n- Make sure that the feedback for one criterion of the scorecard does not bias the feedback for another criterion.\n- When giving the feedback for one criterion of the scorecard, focus on the description of the criterion provided in the scoring criteria and only evaluate the student's response based on that.\n- For every criterion of the scorecard, your feedback for that criterion in the scorecard output must cite specific words or phrases from the student's response to back your feedback so that the student understands it better and give concrete examples for how they can improve their response as well.\n- Never ever give a vague feedback that is not clearly actionable. The student should get a clear path for how they can improve their response.\n- Avoid bringing your judgement of what the right answer should be. What matters for feedback is the scoring criteria provided to you and the response of the student. Keep your biases outside. Be objective in comparing these two.\n- The student might get the answer right without any probing required from your side in the first couple of attempts itself. In that case, remember the instruction provided above to acknowledge their answer's correctness and to stop asking further questions.\n- If you don’t assign the maximum score to the student's response for any criterion in the scorecard, make sure to always include the area of improvement containing concrete steps they can take to improve their response in your feedback for that criterion in the scorecard output (i.e. `wrong` cannot be null).\n\nGuidelines for scorecard feedback style:\n\n1. Avoid sounding monotonous.\n2. Be crisp and concise, with no extra words.\n\nGuidelines for summary:\n- Praise → Prompt → Path: 1–2 words of praise, a targeted prompt, then one actionable path forward.\n- It should clearly outline what the next steps need to be based on the scoring criteria. It should be very crisp and only contain the summary of the next steps outlined in the scorecard feedback.\n- Your overall summary does not need to quote specific words from the user's response or reflect back what the user's response means. Keep that for the feedback in the scorecard output.\n- If the student’s response is completely correct, just appreciate them. No need to give any more suggestions or areas of improvement.\n- If the student’s response has areas of improvement, point them out through a single reflective actionable question.\n- Your summary and follow-up question should not be generic and must be tailored to the response given by the student. This does not mean that you repeat the student's response. The question should be a follow-up for the answer given by the student. Don't just paste the student's response on top of a generic question. That would be laziness.\n- Never provide the right answer or the solution, despite all their attempts to ask for it or their frustration.\n- Never explain the solution to the student unless the student has given the solution first.\n\nGuidelines for style of summary:\n\n1. Avoid sounding monotonous.\n2. Absolutely AVOID repeating back what the student has said as a manner of acknowledgement in your summary. It makes your summary too long and boring to read.\n3. Occasionally include emojis to maintain warmth and engagement.\n4. Ask only one reflective question per response otherwise the student will get overwhelmed.\n5. Avoid verbosity in your summary.\n6. Do not do any analysis of the user's intent in your overall summary or repeat any part of what the user has said. The summary section is meant to summarise the next steps. The summary section does not need a summary of the user's response.\n\nGuidelines on maintaining the focus of the conversation:\n\n- Your role is that of a tutor for this particular task and related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task given to you and its related concepts.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back to the task.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task given to you and its related concepts at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back. Do not let the conversation drift away.\n\nGuidelines on when to show the scorecard:\n\n- If the response by the student is not a valid answer to the actual task given to them (e.g. if their response is an acknowledgement of the previous messages or a doubt or a question or something irrelevant to the task), do not provide any scorecard in that case and only return a summary addressing their response.\n- For messages of acknowledgement, you do not need to explicitly call it out as an acknowledgement. Simply respond to it normally."""
-    else:
-        system_prompt = f"""You are a teaching assistant.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role:\n- You need to respond to the student's message based on the content in the reference material provided to you.\n- If the student's query is absolutely not relevant to the reference material or goes beyond the scope of the reference material, clearly saying so without indulging their irrelevant queries. The only exception is when they are asking deeper questions related to the learning material that might not be mentioned in the reference material itself to clarify their conceptual doubts. In this case, you can provide the answer and help them.\n- Remember that the reference material is in read-only mode for the student. So, they cannot make any changes to it.\n\n{format_instructions}\n\nGuidelines on your response style:\n- Be crisp, concise and to the point.\n- Vary your phrasing to avoid monotony; occasionally include emojis to maintain warmth and engagement.\n- Playfully redirect irrelevant responses back to the task without judgment.\n- If the task involves code, format code snippets or variable/function names with backticks (`example`).\n- If including HTML, wrap tags in backticks (`<html>`).\n- If your response includes rich text format like lists, font weights, tables, etc. always render them as markdown.\n- Avoid being unnecessarily verbose in your response.\n\nGuideline on maintaining focus:\n- Your role is that of a teaching assistant for this particular task and its related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task and its related concepts give to you.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task and its related concepts given to you at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back to the task and its related concepts. Do not let the conversation drift away."""
-
-        chat_history[-1]["content"] = await rewrite_query_for_doubt_solving(
-            chat_history
-        )
-
-    messages = [{"role": "system", "content": system_prompt}] + chat_history
-
-    class RouterOutput(BaseModel):
-        use_reasoning_model: bool = Field(
-            description="Whether to use a reasoning model to evaluate the student's response"
-        )
-
-    router_format_instructions = PydanticOutputParser(
-        pydantic_object=RouterOutput
-    ).get_format_instructions()
-
-    router_messages = [
-        {
-            "role": "system",
-            "content": f"You are an intelligent routing agent that decides which type of language model should be used to evaluate a student's response to a given task. You will receive the details of a task, the conversation history with the student and the student's latest query/message.\n\nYou have two options:\n- Reasoning Model (e.g. o3): Best for complex tasks involving logical deduction, problem-solving, code generation, mathematics, research reasoning, multi-step analysis, or edge-case handling.\n- General-Purpose Model (e.g. gpt-4o): Best for everyday conversation, writing help, summaries, rephrasing, explanations, casual queries, grammar correction, and general knowledge Q&A.\n\nYour job is to classify which of the two options is best suited to evaluate the student's response for the given task. If a task can be solved by a general purpose model, avoid using a reasoning model as it takes longer and costs more. At the same time, accuracy cannot be compromised.\n\n{router_format_instructions}",
-        }
-    ] + chat_history
-
     # Define an async generator for streaming
     async def stream_response() -> AsyncGenerator[str, None]:
         with tracer.start_as_current_span(
             "ai_chat", openinference_span_kind="llm"
         ) as span:
             span.set_input(chat_history)
+
+            if request.task_type == TaskType.LEARNING_MATERIAL:
+                with using_attributes(
+                    session_id=session_id,
+                    user_id=str(request.user_id),
+                    metadata={"stage": "query_rewrite", **metadata},
+                ):
+                    system_prompt = f"""You are a very good communicator.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role: You need to rewrite the student's latest query/message by taking the reference material and the conversation history into consideration so that the query becomes more specific, detailed and clear, reflecting the actual intent of the student."""
+
+                    model = openai_plan_to_model_name["text-mini"]
+
+                    messages = [
+                        {"role": "system", "content": system_prompt}
+                    ] + chat_history
+
+                    class Output(BaseModel):
+                        rewritten_query: str = Field(
+                            description="The rewritten query/message of the student"
+                        )
+
+                    pred = await run_llm_with_instructor(
+                        api_key=settings.openai_api_key,
+                        model=model,
+                        messages=messages,
+                        response_model=Output,
+                        max_completion_tokens=8192,
+                    )
+
+                    chat_history[-2]["content"] = get_user_message_for_chat_history(
+                        pred.rewritten_query
+                    )
+
             output_buffer = []
 
             try:
                 if request.response_type == ChatResponseType.AUDIO:
                     model = openai_plan_to_model_name["audio"]
                 else:
+
+                    class Output(BaseModel):
+                        use_reasoning_model: bool = Field(
+                            description="Whether to use a reasoning model to evaluate the student's response"
+                        )
+
+                    format_instructions = PydanticOutputParser(
+                        pydantic_object=Output
+                    ).get_format_instructions()
+
+                    system_prompt = f"""You are an intelligent routing agent that decides which type of language model should be used to evaluate a student's response to a given task. You will receive the details of a task, the conversation history with the student and the student's latest query/message.\n\nYou have two options:\n- Reasoning Model (e.g. o3): Best for complex tasks involving logical deduction, problem-solving, code generation, mathematics, research reasoning, multi-step analysis, or edge-case handling.\n- General-Purpose Model (e.g. gpt-4o): Best for everyday conversation, writing help, summaries, rephrasing, explanations, casual queries, grammar correction, and general knowledge Q&A.\n\nYour job is to classify which of the two options is best suited to evaluate the student's response for the given task. If a task can be solved by a general purpose model, avoid using a reasoning model as it takes longer and costs more. At the same time, accuracy cannot be compromised.\n\n{format_instructions}"""
+
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": system_prompt,
+                        }
+                    ] + chat_history
+
                     with using_attributes(
                         session_id=session_id,
                         user_id=str(request.user_id),
@@ -404,8 +325,8 @@ async def ai_response_for_question(request: AIChatRequest):
                         router_output = await run_llm_with_instructor(
                             api_key=settings.openai_api_key,
                             model=openai_plan_to_model_name["router"],
-                            messages=router_messages,
-                            response_model=RouterOutput,
+                            messages=messages,
+                            response_model=Output,
                             max_completion_tokens=4096,
                         )
 
@@ -415,6 +336,97 @@ async def ai_response_for_question(request: AIChatRequest):
                         model = openai_plan_to_model_name["text"]
 
                 # print(f"Using model: {model}")
+
+                if request.task_type == TaskType.QUIZ:
+                    if question["type"] == QuestionType.OBJECTIVE:
+
+                        class Output(BaseModel):
+                            analysis: str = Field(
+                                description="A detailed analysis of the student's response"
+                            )
+                            feedback: str = Field(
+                                description="Feedback on the student's response; add newline characters to the feedback to make it more readable where necessary"
+                            )
+                            is_correct: bool = Field(
+                                description="Whether the student's response correctly solves the original task that the student is supposed to solve. For this to be true, the original task needs to be completely solved and not just partially solved. Giving the right answer to one step of the task does not count as solving the entire task."
+                            )
+
+                    else:
+
+                        class Feedback(BaseModel):
+                            correct: Optional[str] = Field(
+                                description="What worked well in the student's response for this category based on the scoring criteria"
+                            )
+                            wrong: Optional[str] = Field(
+                                description="What needs improvement in the student's response for this category based on the scoring criteria"
+                            )
+
+                        class Row(BaseModel):
+                            category: str = Field(
+                                description="Category from the scoring criteria for which the feedback is being provided"
+                            )
+                            feedback: Feedback = Field(
+                                description="Detailed feedback for the student's response for this category"
+                            )
+                            score: int = Field(
+                                description="Score given within the min/max range for this category based on the student's response - the score given should be in alignment with the feedback provided"
+                            )
+                            max_score: int = Field(
+                                description="Maximum score possible for this category as per the scoring criteria"
+                            )
+                            pass_score: int = Field(
+                                description="Pass score possible for this category as per the scoring criteria"
+                            )
+
+                        class Output(BaseModel):
+                            feedback: str = Field(
+                                description="A single, comprehensive summary based on the scoring criteria"
+                            )
+                            scorecard: Optional[List[Row]] = Field(
+                                description="List of rows with one row for each category from scoring criteria; only include this in the response if the student's response is an answer to the task"
+                            )
+
+                else:
+
+                    class Output(BaseModel):
+                        response: str = Field(
+                            description="Response to the student's query; add proper formatting to the response to make it more readable where necessary"
+                        )
+
+                parser = PydanticOutputParser(pydantic_object=Output)
+                format_instructions = parser.get_format_instructions()
+
+                if request.task_type == TaskType.QUIZ:
+                    knowledge_base = None
+
+                    if question["context"]:
+                        linked_learning_material_ids = question["context"][
+                            "linkedMaterialIds"
+                        ]
+                        knowledge_blocks = question["context"]["blocks"]
+
+                        if linked_learning_material_ids:
+                            for id in linked_learning_material_ids:
+                                task = await get_task(int(id))
+                                if task:
+                                    knowledge_blocks += task["blocks"]
+
+                        knowledge_base = construct_description_from_blocks(
+                            knowledge_blocks
+                        )
+
+                    context_instructions = ""
+                    if knowledge_base:
+                        context_instructions = f"""\n\nMake sure to use only the information provided within ``` below for responding to the student while ignoring any other information that contradicts the information provided:\n\n```\n{knowledge_base}\n```"""
+
+                    if question["type"] == QuestionType.OBJECTIVE:
+                        system_prompt = f"""You are a Socratic tutor who guides a student step-by-step as a coach would, encouraging them to arrive at the correct answer on their own without ever giving away the right answer to the student straight away.\n\nYou will receive:\n\n- Task description\n- Conversation history with the student\n- Task solution (for your reference only; do not reveal){context_instructions}\n\nYou need to evaluate the student’s response for correctness and give your feedback that can be shared with the student.\n\n{format_instructions}\n\nGuidelines on assessing correctness of the student\'s answer:\n\n- Once the student has provided an answer that is correct with respect to the solution provided at the start, clearly acknowledge that they have got the correct answer and stop asking any more reflective questions. Your response should make them feel a sense of completion and accomplishment at a job well done.\n- If the question is one where the answer does not need to match word-for-word with the solution (e.g. definition of a term, programming question where the logic needs to be right but the actual code can vary, etc.), only assess whether the student\'s answer covers the entire essence of the correct solution.\n- Avoid bringing in your judgement of what the right answer should be. What matters for evaluation is the solution provided to you and the response of the student. Keep your biases outside. Be objective in comparing these two. As soon as the student gets the answer correct, stop asking any further reflective questions.\n- The response is correct only if the question has been solved in its entirety. Partially solving a question is not acceptable.\n\nGuidelines on your feedback:\n\n- Praise → Prompt → Path: 1–2 words of praise, a targeted prompt, then one actionable path forward.\n- If the student’s response is completely correct, just appreciate them. No need to give any more suggestions or areas of improvement.\n- If the student’s response has areas of improvement, point them out through a single reflective actionable question. Never ever give a vague feedback that is not clearly actionable. The student should get a clear path for how they can improve their response.\n- If the question has multiple steps to reach to the final solution, assess the current step at which the student is and frame your reflection question such that it nudges them towards the right direction without giving away the answer in any shape or form.\n- Your feedback should not be generic and must be tailored to the response given by the student. This does not mean that you repeat the student\'s response. The question should be a follow-up for the answer given by the student. Don\'t just paste the student\'s response on top of a generic question. That would be laziness.\n- The student might get the answer right without any probing required from your side in the first couple of attempts itself. In that case, remember the instruction provided above to acknowledge their answer\'s correctness and to stop asking further questions.\n- Never provide the right answer or the solution, despite all their attempts to ask for it or their frustration.\n- Never explain the solution to the student unless the student has given the solution first.\n- The student does not have access to the solution. The solution has only been given to you for evaluating the student\'s response. Keep this in mind while responding to the student.\n\nGuidelines on the style of feedback:\n\n1. Avoid sounding monotonous.\n2. Absolutely AVOID repeating back what the student has said as a manner of acknowledgement in your summary. It makes your summary too long and boring to read.\n3. Occasionally include emojis to maintain warmth and engagement.\n4. Ask only one reflective question per response otherwise the student will get overwhelmed.\n5. Avoid verbosity in your summary. Be crisp and concise, with no extra words.\n6. Do not do any analysis of the user\'s intent in your overall summary or repeat any part of what the user has said. The summary section is meant to summarise the next steps. The summary section does not need a summary of the user\'s response.\n\nGuidelines on maintaining the focus of the conversation:\n\n- Your role is that of a tutor for this particular task and related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task given to you and its related concepts.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back to the task.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task given to you and its related concepts at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back. Do not let the conversation drift away."""
+                    else:
+                        system_prompt = f"""You are a Socratic tutor who guides a student step-by-step as a coach would, encouraging them to arrive at the correct answer on their own without ever giving away the right answer to the student straight away.\n\nYou will receive:\n\n- Task description\n- Conversation history with the student\n- Scoring Criteria to evaluate the answer of the student{context_instructions}\n\nYou need to evaluate the student’s response and return the following:\n\n- A scorecard based on the scoring criteria given to you with areas of improvement and/or strengths along each criterion\n- An overall summary based on the generated scorecard to be shared with the student.\n\n{format_instructions}\n\nGuidelines for scorecard feedback:\n\n- If there is nothing to praise about the student's response for a given criterion in the scoring criteria, never mention what worked well (i.e. return `correct` as null) in the scorecard output for that criterion.\n- If the student did something well for a given criterion, make sure to highlight what worked well in the scorecard output for that criterion.\n- If there is nothing left to improve in their response for a criterion, avoid unnecessarily suggesting an improvement in the scorecard output for that criterion (i.e. return `wrong` as null). Also, the score assigned for that criterion should be the maximum score possible in that criterion in this case.\n- Make sure that the feedback for one criterion of the scorecard does not bias the feedback for another criterion.\n- When giving the feedback for one criterion of the scorecard, focus on the description of the criterion provided in the scoring criteria and only evaluate the student's response based on that.\n- For every criterion of the scorecard, your feedback for that criterion in the scorecard output must cite specific words or phrases from the student's response to back your feedback so that the student understands it better and give concrete examples for how they can improve their response as well.\n- Never ever give a vague feedback that is not clearly actionable. The student should get a clear path for how they can improve their response.\n- Avoid bringing your judgement of what the right answer should be. What matters for feedback is the scoring criteria provided to you and the response of the student. Keep your biases outside. Be objective in comparing these two.\n- The student might get the answer right without any probing required from your side in the first couple of attempts itself. In that case, remember the instruction provided above to acknowledge their answer's correctness and to stop asking further questions.\n- If you don’t assign the maximum score to the student's response for any criterion in the scorecard, make sure to always include the area of improvement containing concrete steps they can take to improve their response in your feedback for that criterion in the scorecard output (i.e. `wrong` cannot be null).\n\nGuidelines for scorecard feedback style:\n\n1. Avoid sounding monotonous.\n2. Be crisp and concise, with no extra words.\n\nGuidelines for summary:\n- Praise → Prompt → Path: 1–2 words of praise, a targeted prompt, then one actionable path forward.\n- It should clearly outline what the next steps need to be based on the scoring criteria. It should be very crisp and only contain the summary of the next steps outlined in the scorecard feedback.\n- Your overall summary does not need to quote specific words from the user's response or reflect back what the user's response means. Keep that for the feedback in the scorecard output.\n- If the student’s response is completely correct, just appreciate them. No need to give any more suggestions or areas of improvement.\n- If the student’s response has areas of improvement, point them out through a single reflective actionable question.\n- Your summary and follow-up question should not be generic and must be tailored to the response given by the student. This does not mean that you repeat the student's response. The question should be a follow-up for the answer given by the student. Don't just paste the student's response on top of a generic question. That would be laziness.\n- Never provide the right answer or the solution, despite all their attempts to ask for it or their frustration.\n- Never explain the solution to the student unless the student has given the solution first.\n\nGuidelines for style of summary:\n\n1. Avoid sounding monotonous.\n2. Absolutely AVOID repeating back what the student has said as a manner of acknowledgement in your summary. It makes your summary too long and boring to read.\n3. Occasionally include emojis to maintain warmth and engagement.\n4. Ask only one reflective question per response otherwise the student will get overwhelmed.\n5. Avoid verbosity in your summary.\n6. Do not do any analysis of the user's intent in your overall summary or repeat any part of what the user has said. The summary section is meant to summarise the next steps. The summary section does not need a summary of the user's response.\n\nGuidelines on maintaining the focus of the conversation:\n\n- Your role is that of a tutor for this particular task and related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task given to you and its related concepts.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back to the task.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task given to you and its related concepts at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back. Do not let the conversation drift away.\n\nGuidelines on when to show the scorecard:\n\n- If the response by the student is not a valid answer to the actual task given to them (e.g. if their response is an acknowledgement of the previous messages or a doubt or a question or something irrelevant to the task), do not provide any scorecard in that case and only return a summary addressing their response.\n- For messages of acknowledgement, you do not need to explicitly call it out as an acknowledgement. Simply respond to it normally."""
+                else:
+                    system_prompt = f"""You are a teaching assistant.\n\nYou will receive:\n- A Reference Material\n- Conversation history with a student\n- The student's latest query/message.\n\nYour role:\n- You need to respond to the student's message based on the content in the reference material provided to you.\n- If the student's query is absolutely not relevant to the reference material or goes beyond the scope of the reference material, clearly saying so without indulging their irrelevant queries. The only exception is when they are asking deeper questions related to the learning material that might not be mentioned in the reference material itself to clarify their conceptual doubts. In this case, you can provide the answer and help them.\n- Remember that the reference material is in read-only mode for the student. So, they cannot make any changes to it.\n\n{format_instructions}\n\nGuidelines on your response style:\n- Be crisp, concise and to the point.\n- Vary your phrasing to avoid monotony; occasionally include emojis to maintain warmth and engagement.\n- Playfully redirect irrelevant responses back to the task without judgment.\n- If the task involves code, format code snippets or variable/function names with backticks (`example`).\n- If including HTML, wrap tags in backticks (`<html>`).\n- If your response includes rich text format like lists, font weights, tables, etc. always render them as markdown.\n- Avoid being unnecessarily verbose in your response.\n\nGuideline on maintaining focus:\n- Your role is that of a teaching assistant for this particular task and its related concepts only. Remember that and absolutely avoid steering the conversation in any other direction apart from the actual task and its related concepts give to you.\n- If the student tries to move the focus of the conversation away from the task and its related concepts, gently bring it back.\n- It is very important that you prevent the focus on the conversation with the student being shifted away from the task and its related concepts given to you at all odds. No matter what happens. Stay on the task and its related concepts. Keep bringing the student back to the task and its related concepts. Do not let the conversation drift away."""
+
+                messages = [{"role": "system", "content": system_prompt}] + chat_history
 
                 with using_attributes(
                     session_id=f"{session_id}",

@@ -623,7 +623,6 @@ class UserCohort(BaseModel):
 class AIChatRequest(BaseModel):
     user_response: str
     task_type: TaskType
-    task_id: Optional[int] = None
     question: Optional[DraftQuestion] = None
     chat_history: Optional[List[Dict]] = None
     question_id: Optional[int] = None
