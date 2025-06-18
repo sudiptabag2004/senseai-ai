@@ -26,6 +26,9 @@ The Slack webhook URL for sending notifications to the user signup channel.
 ### SLACK_COURSE_CREATED_WEBHOOK_URL (optional)
 The Slack webhook URL for sending notifications about new courses created.
 
+### SLACK_USAGE_STATS_WEBHOOK_URL (optional)
+The Slack webhook URL for sending platform usage statistics notifications.
+
 ### PHOENIX_ENDPOINT (optional)
 The endpoint for the self-hosted Phoenix instance. This is only used for local development.
 

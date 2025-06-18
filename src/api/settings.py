@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     env: str | None = None
     slack_user_signup_webhook_url: str | None = None
     slack_course_created_webhook_url: str | None = None
+    slack_usage_stats_webhook_url: str | None = None
     phoenix_endpoint: str | None = None
     phoenix_api_key: str | None = None
 

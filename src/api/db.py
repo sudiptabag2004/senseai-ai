@@ -7,7 +7,7 @@ from enum import Enum
 import itertools
 import secrets
 import uuid
-from typing import List, Any, Tuple, Dict, Literal
+from typing import List, Any, Tuple, Dict, Literal, Optional
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 from api.config import (
@@ -62,6 +62,7 @@ from api.slack import (
     send_slack_notification_for_new_user,
     send_slack_notification_for_new_org,
     send_slack_notification_for_new_course,
+    send_slack_notification_for_usage_stats,
 )
 from api.utils import (
     get_date_from_str,
@@ -5050,22 +5051,6 @@ async def update_user_email(email_1: str, email_2: str) -> None:
     )
 
 
-async def migrate_scorecard_table():
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        await cursor.execute(
-            f"ALTER TABLE {scorecards_table_name} ADD COLUMN status TEXT"
-        )
-
-        # Update all existing scorecards to have status 'published'
-        await cursor.execute(
-            f"UPDATE {scorecards_table_name} SET status = 'published' WHERE status IS NULL"
-        )
-
-        await conn.commit()
-
-
 async def duplicate_course_to_org(course_id: int, org_id: int):
     course = await get_course(course_id)
 
@@ -5193,3 +5178,47 @@ async def delete_user_code_draft(user_id: int, question_id: int):
         f"DELETE FROM {code_drafts_table_name} WHERE user_id = ? AND question_id = ?",
         (user_id, question_id),
     )
+
+
+async def get_usage_summary_by_organization(
+    filter_period: Optional[str] = None,
+) -> List[Dict]:
+    """Get usage summary by organization from chat history."""
+
+    if filter_period not in ["last_day", "last_month", "last_year"]:
+        raise ValueError("Invalid filter period")
+
+    # Build the date filter condition based on the filter_period
+    date_filter = ""
+    if filter_period == "last_day":
+        date_filter = "AND ch.created_at >= datetime('now', '-1 day')"
+    elif filter_period == "last_month":
+        date_filter = "AND ch.created_at >= datetime('now', '-1 month')"
+    elif filter_period == "last_year":
+        date_filter = "AND ch.created_at >= datetime('now', '-1 year')"
+
+    rows = await execute_db_operation(
+        f"""
+        SELECT 
+            o.id as org_id,
+            o.name as org_name,
+            COUNT(ch.id) as user_message_count
+        FROM {chat_history_table_name} ch
+        JOIN {questions_table_name} q ON ch.question_id = q.id
+        JOIN {tasks_table_name} t ON q.task_id = t.id
+        JOIN {organizations_table_name} o ON t.org_id = o.id
+        WHERE ch.role = 'user' {date_filter}
+        GROUP BY o.id, o.name
+        ORDER BY user_message_count DESC
+        """,
+        fetch_all=True,
+    )
+
+    return [
+        {
+            "org_id": row[0],
+            "org_name": row[1],
+            "user_message_count": row[2],
+        }
+        for row in rows
+    ]
