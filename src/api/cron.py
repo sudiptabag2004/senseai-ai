@@ -1,5 +1,15 @@
+from typing import Dict
 from api.db import get_usage_summary_by_organization
 from api.slack import send_slack_notification_for_usage_stats
+from api.utils.phoenix import get_raw_traces
+
+
+def get_model_summary_stats(filter_period: str) -> Dict[str, int]:
+    df = get_raw_traces(filter_period)
+
+    # Group by model name and count occurrences
+    model_counts = df.groupby("attributes.llm.model_name").size().to_dict()
+    return model_counts
 
 
 async def send_usage_summary_stats():
@@ -11,9 +21,18 @@ async def send_usage_summary_stats():
     """
     try:
         # Get usage statistics for different time periods
-        last_day_stats = await get_usage_summary_by_organization("last_day")
-        current_month_stats = await get_usage_summary_by_organization("current_month")
-        current_year_stats = await get_usage_summary_by_organization("current_year")
+        last_day_stats = {
+            "org": await get_usage_summary_by_organization("last_day"),
+            "model": get_model_summary_stats("last_day"),
+        }
+        current_month_stats = {
+            "org": await get_usage_summary_by_organization("current_month"),
+            "model": get_model_summary_stats("current_month"),
+        }
+        current_year_stats = {
+            "org": await get_usage_summary_by_organization("current_year"),
+            "model": get_model_summary_stats("current_year"),
+        }
 
         # Send the statistics via Slack webhook
         await send_slack_notification_for_usage_stats(

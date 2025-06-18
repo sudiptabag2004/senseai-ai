@@ -107,9 +107,9 @@ async def send_slack_notification_for_new_course(
 
 
 async def send_slack_notification_for_usage_stats(
-    last_day_stats: List[Dict],
-    current_month_stats: List[Dict],
-    current_year_stats: List[Dict],
+    last_day_stats: Dict[str, List[Dict]],
+    current_month_stats: Dict[str, List[Dict]],
+    current_year_stats: Dict[str, List[Dict]],
 ):
     """
     Send Slack notification with usage statistics for different time periods.
@@ -123,48 +123,97 @@ async def send_slack_notification_for_usage_stats(
     if not settings.slack_usage_stats_webhook_url:
         return
 
-    def format_stats(stats: List[Dict], period: str) -> str:
-        if not stats:
-            return f"📊 *{period}*: No usage data"
-
-        total_messages = sum(org["user_message_count"] for org in stats)
-        top_orgs = stats[:5]  # Show top 5 organizations
-
+    def format_period_stats(
+        org_stats: List[Dict], model_stats: Dict[str, int], period: str
+    ) -> str:
         # Use different emojis for different time periods
         emoji_map = {
             "Last 24 Hours": "⚡",
-            "Last 30 Days": "📈",
-            "Last 12 Months": "📊",
+            "This Month": "📈",
+            "This Year": "📊",
         }
         emoji = emoji_map.get(period, "📊")
-        formatted = f"{emoji} *{period}* (Total: {total_messages:,} messages):\n"
-        formatted += "```\n"  # Start code block for table formatting
-        formatted += f"{'Organization':<50} {'Messages':>10}\n"
-        formatted += f"{'-' * 50} {'-' * 10}\n"
 
-        for org in top_orgs:
-            org_name = (
-                org["org_name"][:28] + ".."
-                if len(org["org_name"]) > 30
-                else org["org_name"]
+        if not org_stats:
+            total_messages = 0
+        else:
+            total_messages = sum(org["user_message_count"] for org in org_stats)
+
+        formatted = f"{emoji} *{period}* (Total: {total_messages:,} messages)\n\n"
+
+        # Organization stats column
+        if not org_stats:
+            org_section = "📊 *Organizations*: No usage data\n"
+        else:
+            top_orgs = org_stats[:5]  # Show top 5 organizations
+
+            org_section = "```\n"
+            org_section += f"{'Organization':<30} {'Messages':>8}\n"
+            org_section += f"{'-' * 30} {'-' * 8}\n"
+
+            for org in top_orgs:
+                org_name = (
+                    org["org_name"][:25] + ".."
+                    if len(org["org_name"]) > 27
+                    else org["org_name"]
+                )
+                org_section += f"{org_name:<30} {org['user_message_count']:>8,}\n"
+
+            if len(org_stats) > 5:
+                remaining_count = len(org_stats) - 5
+                remaining_messages = sum(
+                    org["user_message_count"] for org in org_stats[5:]
+                )
+                org_section += (
+                    f"{f'+{remaining_count} more':<30} {remaining_messages:>8,}\n"
+                )
+
+            org_section += "```\n"
+
+        # Model stats column
+        if not model_stats:
+            model_section = "🤖 *Models*: No model data\n"
+        else:
+            sorted_models = sorted(
+                model_stats.items(), key=lambda x: x[1], reverse=True
             )
-            formatted += f"{org_name:<50} {org['user_message_count']:>10,}\n"
+            top_models = sorted_models[:5]  # Show top 5 models
 
-        if len(stats) > 5:
-            remaining_count = len(stats) - 5
-            remaining_messages = sum(org["user_message_count"] for org in stats[5:])
-            formatted += (
-                f"{f'+{remaining_count} more orgs':<50} {remaining_messages:>10,}\n"
-            )
+            model_section = "```\n"
+            model_section += f"{'Model':<50} {'Count':>8}\n"
+            model_section += f"{'-' * 50} {'-' * 8}\n"
 
-        formatted += "```\n"  # End code block
+            for model_name, count in top_models:
+                model_display = (
+                    model_name[:25] + ".." if len(model_name) > 27 else model_name
+                )
+                model_section += f"{model_display:<50} {count:>8,}\n"
+
+            if len(sorted_models) > 5:
+                remaining_count = len(sorted_models) - 5
+                remaining_calls = sum(count for _, count in sorted_models[5:])
+                model_section += (
+                    f"{f'+{remaining_count} more':<50} {remaining_calls:>8,}\n"
+                )
+
+            model_section += "```\n"
+
+        # Combine both sections side by side conceptually, but Slack doesn't support true columns
+        # So we'll display them sequentially but clearly separated
+        formatted += org_section + "\n" + model_section
+
         return formatted
 
-    # Format the message
-    message_text = "🚀 *Usage Summary*\n\n"
-    message_text += format_stats(last_day_stats, "Last 24 Hours") + "\n"
-    message_text += format_stats(current_month_stats, "This Month") + "\n"
-    message_text += format_stats(current_year_stats, "This Year")
+    # Send separate messages for each time period
+    periods = [
+        ("Last 24 Hours", last_day_stats),
+        ("This Month", current_month_stats),
+        ("This Year", current_year_stats),
+    ]
+
+    message_text = ""
+    for period_name, stats in periods:
+        message_text += format_period_stats(stats["org"], stats["model"], period_name)
 
     message = {"text": message_text}
 

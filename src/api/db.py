@@ -5185,7 +5185,11 @@ async def get_usage_summary_by_organization(
 ) -> List[Dict]:
     """Get usage summary by organization from chat history."""
 
-    if filter_period not in ["last_day", "current_month", "current_year"]:
+    if filter_period and filter_period not in [
+        "last_day",
+        "current_month",
+        "current_year",
+    ]:
         raise ValueError("Invalid filter period")
 
     # Build the date filter condition based on the filter_period
