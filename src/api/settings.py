@@ -44,6 +44,8 @@ tracer_provider = register(
     project_name=f"sensai-{settings.env}",
     auto_instrument=True,
     batch=True,
-    endpoint=settings.phoenix_endpoint,
+    endpoint=(
+        f"{settings.phoenix_endpoint}/v1/traces" if settings.phoenix_endpoint else None
+    ),
 )
 tracer = tracer_provider.get_tracer(__name__)

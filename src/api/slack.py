@@ -108,16 +108,16 @@ async def send_slack_notification_for_new_course(
 
 async def send_slack_notification_for_usage_stats(
     last_day_stats: List[Dict],
-    last_month_stats: List[Dict],
-    last_year_stats: List[Dict],
+    current_month_stats: List[Dict],
+    current_year_stats: List[Dict],
 ):
     """
     Send Slack notification with usage statistics for different time periods.
 
     Args:
         last_day_stats: Usage stats for the last day
-        last_month_stats: Usage stats for the last month
-        last_year_stats: Usage stats for the last year
+        current_month_stats: Usage stats for the current month
+        current_year_stats: Usage stats for the current year
     """
     # Check if Slack webhook URL is configured
     if not settings.slack_usage_stats_webhook_url:
@@ -163,8 +163,8 @@ async def send_slack_notification_for_usage_stats(
     # Format the message
     message_text = "🚀 *Usage Summary*\n\n"
     message_text += format_stats(last_day_stats, "Last 24 Hours") + "\n"
-    message_text += format_stats(last_month_stats, "Last 30 Days") + "\n"
-    message_text += format_stats(last_year_stats, "Last 12 Months")
+    message_text += format_stats(current_month_stats, "This Month") + "\n"
+    message_text += format_stats(current_year_stats, "This Year")
 
     message = {"text": message_text}
 

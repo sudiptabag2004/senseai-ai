@@ -12,12 +12,12 @@ async def send_usage_summary_stats():
     try:
         # Get usage statistics for different time periods
         last_day_stats = await get_usage_summary_by_organization("last_day")
-        last_month_stats = await get_usage_summary_by_organization("last_month")
-        last_year_stats = await get_usage_summary_by_organization("last_year")
+        current_month_stats = await get_usage_summary_by_organization("current_month")
+        current_year_stats = await get_usage_summary_by_organization("current_year")
 
         # Send the statistics via Slack webhook
         await send_slack_notification_for_usage_stats(
-            last_day_stats, last_month_stats, last_year_stats
+            last_day_stats, current_month_stats, current_year_stats
         )
 
     except Exception as e:
