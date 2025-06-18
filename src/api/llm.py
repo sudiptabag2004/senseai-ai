@@ -40,6 +40,7 @@ def validate_openai_api_key(openai_api_key: str) -> bool:
         return None
 
 
+@backoff.on_exception(backoff.expo, Exception, max_tries=5, factor=2)
 async def run_llm_with_instructor(
     api_key: str,
     model: str,
