@@ -268,6 +268,10 @@ def convert_feedback_span_to_conversations(row):
 def save_daily_traces():
     from phoenix.client import Client
 
+    if settings.env != "production":
+        # only run in production
+        return
+
     # Process previous day from 00:00:00 to 23:59:59
     previous_day = datetime.now() - timedelta(days=1)
     start_date = previous_day.replace(hour=0, minute=0, second=0, microsecond=0)
