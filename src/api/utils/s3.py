@@ -9,13 +9,18 @@ from api.settings import settings
 def upload_file_to_s3(
     file_path: str,
     key: str,
+    content_type: str = None,
 ):
     bucket_name = settings.s3_bucket_name
 
     session = boto3.Session()
     s3_client = session.client("s3")
 
-    response = s3_client.upload_file(file_path, bucket_name, key)
+    extra_args = {}
+    if content_type:
+        extra_args["ContentType"] = content_type
+
+    response = s3_client.upload_file(file_path, bucket_name, key, ExtraArgs=extra_args)
 
     if response is not None:
         raise Exception(f"Failed to upload to S3. Response: {response}")
