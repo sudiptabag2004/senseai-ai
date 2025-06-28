@@ -35,8 +35,6 @@ RUN wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-2/w
 # Verify wkhtmltopdf installation
 RUN wkhtmltopdf --version
 
-COPY streamlit-1.41.0-py2.py3-none-any.whl ./
-
 # Copy requirements.txt to the container
 COPY requirements.txt ./
 
