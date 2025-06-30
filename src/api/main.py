@@ -9,16 +9,13 @@ from os.path import exists
 from api.config import UPLOAD_FOLDER_NAME
 from api.routes import (
     auth,
-    badge,
     code,
     cohort,
     course,
     org,
-    tag,
     task,
     chat,
     user,
-    cv_review,
     milestone,
     hva,
     file,
