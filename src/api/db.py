@@ -8,7 +8,8 @@ import itertools
 import secrets
 import uuid
 from typing import List, Any, Tuple, Dict, Literal, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta 
+from dateutil.relativedelta import relativedelta
 import pandas as pd
 from api.config import (
     sqlite_db_path,
@@ -178,6 +179,7 @@ async def create_cohort_tables(cursor):
                 user_id INTEGER NOT NULL,
                 cohort_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
+                joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, cohort_id),
                 FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
                 FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
@@ -283,6 +285,10 @@ async def create_course_cohorts_table(cursor):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 course_id INTEGER NOT NULL,
                 cohort_id INTEGER NOT NULL,
+                is_drip_enabled BOOLEAN DEFAULT FALSE,
+                frequency_value INTEGER,
+                frequency_unit TEXT,
+                publish_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(course_id, cohort_id),
                 FOREIGN KEY (course_id) REFERENCES {courses_table_name}(id) ON DELETE CASCADE,
@@ -3403,17 +3409,57 @@ def delete_all_courses_for_org(org_id: int):
     )
 
 
-async def add_course_to_cohorts(course_id: int, cohort_ids: List[int]):
+async def add_course_to_cohorts(
+    course_id: int, 
+    cohort_ids: List[int], 
+    is_drip_enabled: Optional[bool] = False,
+    frequency_value: Optional[int] = None,
+    frequency_unit: Optional[str] = None,
+    publish_at: Optional[datetime] = None
+):
+    values = []
+    for cohort_id in cohort_ids:
+        values.append((
+            course_id, 
+            cohort_id,
+            is_drip_enabled,
+            frequency_value,
+            frequency_unit,
+            publish_at
+        ))
+    
     await execute_many_db_operation(
-        f"INSERT INTO {course_cohorts_table_name} (course_id, cohort_id) VALUES (?, ?)",
-        [(course_id, cohort_id) for cohort_id in cohort_ids],
+        f"""INSERT INTO {course_cohorts_table_name} 
+            (course_id, cohort_id, is_drip_enabled, frequency_value, frequency_unit, publish_at) 
+            VALUES (?, ?, ?, ?, ?, ?)""",
+        values
     )
 
 
-async def add_courses_to_cohort(cohort_id: int, course_ids: List[int]):
+async def add_courses_to_cohort(
+    cohort_id: int, 
+    course_ids: List[int],
+    is_drip_enabled: Optional[bool] = False,
+    frequency_value: Optional[int] = None,
+    frequency_unit: Optional[str] = None,
+    publish_at: Optional[datetime] = None
+):
+    values = []
+    for course_id in course_ids:
+        values.append((
+            course_id, 
+            cohort_id,
+            is_drip_enabled,
+            frequency_value,
+            frequency_unit,
+            publish_at
+        ))
+    
     await execute_many_db_operation(
-        f"INSERT INTO {course_cohorts_table_name} (course_id, cohort_id) VALUES (?, ?)",
-        [(course_id, cohort_id) for course_id in course_ids],
+        f"""INSERT INTO {course_cohorts_table_name} 
+            (course_id, cohort_id, is_drip_enabled, frequency_value, frequency_unit, publish_at) 
+            VALUES (?, ?, ?, ?, ?, ?)""",
+        values
     )
 
 
@@ -3431,10 +3477,65 @@ async def remove_courses_from_cohort(cohort_id: int, course_ids: List[int]):
     )
 
 
-async def get_courses_for_cohort(cohort_id: int, include_tree: bool = False):
+async def calculate_milestone_unlock_dates(course_details: Dict, drip_config: Dict, joined_at: datetime | None = None):
+    if not drip_config or not drip_config.get("is_drip_enabled"):
+        # All milestones unlocked
+        for milestone in course_details["milestones"]:
+            milestone["unlock_at"] = None
+        return course_details
+
+    start_date = None
+    if drip_config.get("publish_at"):
+        publish_at = drip_config["publish_at"]
+        start_date = datetime.fromisoformat(publish_at)
+    else:
+        start_date = joined_at
+
+    # Ensure start_date is always timezone-aware (UTC)
+    if start_date and start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+
+    today = datetime.now(timezone.utc)
+    freq_value = drip_config["frequency_value"]
+    freq_unit = drip_config["frequency_unit"]
+    non_empty_module_count = 0
+
+    for milestone in course_details["milestones"]:
+        milestone_tasks = milestone.get("tasks", [])
+        
+        # Skip empty milestones
+        if not milestone_tasks or not start_date:
+            milestone["unlock_at"] = None
+            continue
+            
+        unlock_date = start_date
+        if non_empty_module_count > 0:
+            if freq_unit == "minute":
+                unlock_date = unlock_date + timedelta(minutes=freq_value * non_empty_module_count)
+            elif freq_unit == "hour":
+                unlock_date = unlock_date + timedelta(hours=freq_value * non_empty_module_count)
+            elif freq_unit == "day":
+                unlock_date = unlock_date + timedelta(days=freq_value * non_empty_module_count)
+            elif freq_unit == "week":
+                unlock_date = unlock_date + timedelta(weeks=freq_value * non_empty_module_count)
+            elif freq_unit == "month":
+                unlock_date = unlock_date + relativedelta(months=freq_value * non_empty_module_count)
+            elif freq_unit == "year":
+                unlock_date = unlock_date + relativedelta(years=freq_value * non_empty_module_count)
+            else:
+                raise ValueError(f"Invalid frequency unit: {freq_unit}")
+
+        non_empty_module_count += 1
+        is_locked = today < unlock_date
+        unlock_at = unlock_date.isoformat() if is_locked else None
+        milestone["unlock_at"] = unlock_at
+
+    return course_details
+
+async def get_courses_for_cohort(cohort_id: int, include_tree: bool = False, joined_at: datetime | None = None):
     courses = await execute_db_operation(
         f"""
-        SELECT c.id, c.name 
+        SELECT c.id, c.name, cc.is_drip_enabled, cc.frequency_value, cc.frequency_unit, cc.publish_at
         FROM {courses_table_name} c
         JOIN {course_cohorts_table_name} cc ON c.id = cc.course_id
         WHERE cc.cohort_id = ?
@@ -3442,13 +3543,24 @@ async def get_courses_for_cohort(cohort_id: int, include_tree: bool = False):
         (cohort_id,),
         fetch_all=True,
     )
-    courses = [{"id": course[0], "name": course[1]} for course in courses]
+    courses = [{
+        "id": course[0], 
+        "name": course[1],
+        "drip_config": {
+            "is_drip_enabled": course[2],
+            "frequency_value": course[3],
+            "frequency_unit": course[4],
+            "publish_at": course[5],
+        }
+    } for course in courses]
 
     if not include_tree:
         return courses
 
     for index, course in enumerate(courses):
-        courses[index] = await get_course(course["id"])
+        course_details = await get_course(course["id"])
+        course_details = await calculate_milestone_unlock_dates(course_details, course["drip_config"], joined_at)
+        courses[index] = course_details
 
     return courses
 
@@ -3456,7 +3568,7 @@ async def get_courses_for_cohort(cohort_id: int, include_tree: bool = False):
 async def get_cohorts_for_course(course_id: int):
     cohorts = await execute_db_operation(
         f"""
-        SELECT ch.id, ch.name 
+        SELECT ch.id, ch.name, cc.is_drip_enabled, cc.frequency_value, cc.frequency_unit, cc.publish_at
         FROM {cohorts_table_name} ch
         JOIN {course_cohorts_table_name} cc ON ch.id = cc.cohort_id
         WHERE cc.course_id = ?
@@ -3465,7 +3577,16 @@ async def get_cohorts_for_course(course_id: int):
         fetch_all=True,
     )
 
-    return [{"id": cohort[0], "name": cohort[1]} for cohort in cohorts]
+    return [{
+        "id": cohort[0], 
+        "name": cohort[1],
+        "drip_config": {
+            "is_drip_enabled": cohort[2],
+            "frequency_value": cohort[3],
+            "frequency_unit": cohort[4],
+            "publish_at": cohort[5],
+        }
+    } for cohort in cohorts]
 
 
 def drop_course_cohorts_table():
@@ -3627,7 +3748,7 @@ async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
     Get all the cohorts in the organization that the user is a member in
     """
     cohorts = await execute_db_operation(
-        f"""SELECT c.id, c.name, uc.role
+        f"""SELECT c.id, c.name, uc.role, uc.joined_at
             FROM {cohorts_table_name} c
             JOIN {user_cohorts_table_name} uc ON c.id = uc.cohort_id
             WHERE uc.user_id = ? AND c.org_id = ?""",
@@ -3643,6 +3764,7 @@ async def get_user_org_cohorts(user_id: int, org_id: int) -> List[UserCohort]:
             "id": cohort[0],
             "name": cohort[1],
             "role": cohort[2],
+            "joined_at": cohort[3],
         }
         for cohort in cohorts
     ]
@@ -4534,3 +4656,47 @@ async def delete_useless_tables():
         await cursor.execute(f"DROP TABLE IF EXISTS {badges_table_name}")
         await cursor.execute(f"DROP TABLE IF EXISTS {task_scoring_criteria_table_name}")
         await cursor.execute(f"DROP TABLE IF EXISTS {cv_review_usage_table_name}")
+
+
+async def migrate_user_and_course_cohorts_tables():
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+        await cursor.execute(f"PRAGMA table_info({user_cohorts_table_name})")
+        user_columns = [col[1] for col in await cursor.fetchall()]
+        
+        if 'joined_at' not in user_columns:
+            await cursor.execute(f"DROP TABLE IF EXISTS {user_cohorts_table_name}_temp")
+            await cursor.execute(f"""
+                CREATE TABLE {user_cohorts_table_name}_temp (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    cohort_id INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, cohort_id),
+                    FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
+                    FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
+                )
+            """)
+            await cursor.execute(f"INSERT INTO {user_cohorts_table_name}_temp (id, user_id, cohort_id, role) SELECT id, user_id, cohort_id, role FROM {user_cohorts_table_name}")
+            await cursor.execute(f"DROP TABLE {user_cohorts_table_name}")
+            await cursor.execute(f"ALTER TABLE {user_cohorts_table_name}_temp RENAME TO {user_cohorts_table_name}")
+            
+            # Recreate the indexes that were lost during table recreation
+            await cursor.execute(f"CREATE INDEX idx_user_cohort_user_id ON {user_cohorts_table_name} (user_id)")
+            await cursor.execute(f"CREATE INDEX idx_user_cohort_cohort_id ON {user_cohorts_table_name} (cohort_id)")
+        
+        await cursor.execute(f"PRAGMA table_info({course_cohorts_table_name})")
+        course_columns = [col[1] for col in await cursor.fetchall()]
+        
+        for col, col_type, default in [
+            ('is_drip_enabled', 'BOOLEAN', 'FALSE'),
+            ('frequency_value', 'INTEGER', None),
+            ('frequency_unit', 'TEXT', None),
+            ('publish_at', 'DATETIME', None)
+        ]:
+            if col not in course_columns:
+                default_str = f" DEFAULT {default}" if default else ""
+                await cursor.execute(f"ALTER TABLE {course_cohorts_table_name} ADD COLUMN {col} {col_type}{default_str}")
+        
+        await conn.commit()

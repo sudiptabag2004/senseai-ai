@@ -2,7 +2,6 @@ import pytest
 from fastapi import status
 from unittest.mock import patch, MagicMock
 
-
 @pytest.mark.asyncio
 async def test_get_all_cohorts_for_org(client, mock_db):
     """
@@ -332,13 +331,28 @@ async def test_add_courses_to_cohort(client, mock_db):
     """
     with patch("api.routes.cohort.add_courses_to_cohort_in_db") as mock_add:
         cohort_id = 1
-        request_body = {"course_ids": [1, 2, 3]}
+        request_body = {
+            "course_ids": [1, 2, 3],
+            "drip_config": {
+                "is_drip_enabled": True,
+                "frequency_value": 1,
+                "frequency_unit": "day",
+                "publish_at": None
+            }
+        }
 
         response = client.post(f"/cohorts/{cohort_id}/courses", json=request_body)
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {"success": True}
-        mock_add.assert_called_with(cohort_id, request_body["course_ids"])
+        mock_add.assert_called_with(
+            cohort_id, 
+            request_body["course_ids"],
+            is_drip_enabled=request_body["drip_config"]["is_drip_enabled"],
+            frequency_value=request_body["drip_config"]["frequency_value"],
+            frequency_unit=request_body["drip_config"]["frequency_unit"],
+            publish_at=request_body["drip_config"]["publish_at"]
+        )
 
 
 @pytest.mark.asyncio
@@ -370,8 +384,26 @@ async def test_get_courses_for_cohort(client, mock_db):
 
         # Test with include_tree=False first
         simple_courses = [
-            {"id": 1, "name": "Course 1"},
-            {"id": 2, "name": "Course 2"},
+            {
+                "id": 1, 
+                "name": "Course 1",
+                "drip_config": {
+                    "is_drip_enabled": False,
+                    "frequency_value": None,
+                    "frequency_unit": None,
+                    "publish_at": None
+                }
+            },
+            {
+                "id": 2, 
+                "name": "Course 2",
+                "drip_config": {
+                    "is_drip_enabled": True,
+                    "frequency_value": 1,
+                    "frequency_unit": "day",
+                    "publish_at": None
+                }
+            },
         ]
 
         # Make sure the return value matches what we expect to test against
@@ -383,7 +415,7 @@ async def test_get_courses_for_cohort(client, mock_db):
         # The test fails because the implementation doesn't actually return the same
         # object that we passed into the mock, so just test against the response directly
         assert response.json() == simple_courses
-        mock_get_courses.assert_called_with(cohort_id, False)
+        mock_get_courses.assert_called_with(cohort_id, False, None)
 
         # Now test with include_tree=True
         mock_get_courses.reset_mock()
@@ -398,7 +430,7 @@ async def test_get_courses_for_cohort(client, mock_db):
         assert response.status_code == status.HTTP_200_OK
         # Verify the response matches what the API is actually returning
         assert response.json() == simple_courses
-        mock_get_courses.assert_called_with(cohort_id, True)
+        mock_get_courses.assert_called_with(cohort_id, True, None)
 
 
 @pytest.mark.asyncio

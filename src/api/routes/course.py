@@ -35,6 +35,7 @@ from api.models import (
     AddMilestoneToCourseResponse,
     SwapMilestoneOrderingRequest,
     SwapTaskOrderingRequest,
+    CourseCohort,
 )
 
 router = APIRouter()
@@ -101,7 +102,14 @@ async def delete_course(course_id: int):
 
 @router.post("/{course_id}/cohorts")
 async def add_course_to_cohorts(course_id: int, request: AddCourseToCohortsRequest):
-    await add_course_to_cohorts_in_db(course_id, request.cohort_ids)
+    await add_course_to_cohorts_in_db(
+        course_id, 
+        request.cohort_ids,
+        is_drip_enabled=request.drip_config.is_drip_enabled,
+        frequency_value=request.drip_config.frequency_value,
+        frequency_unit=request.drip_config.frequency_unit,
+        publish_at=request.drip_config.publish_at,
+    )
     return {"success": True}
 
 
@@ -114,7 +122,7 @@ async def remove_course_from_cohorts(
 
 
 @router.get("/{course_id}/cohorts")
-async def get_cohorts_for_course(course_id: int) -> List[Dict]:
+async def get_cohorts_for_course(course_id: int) -> List[CourseCohort]:
     return await get_cohorts_for_course_from_db(course_id)
 
 
