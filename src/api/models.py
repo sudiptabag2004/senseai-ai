@@ -107,10 +107,6 @@ class CreateCohortGroupRequest(BaseModel):
     member_ids: List[int]
 
 
-class UpdateCohortGroupRequest(BaseModel):
-    name: str
-
-
 class AddMembersToCohortGroupRequest(BaseModel):
     member_ids: List[int]
 
@@ -123,8 +119,16 @@ class RemoveCoursesFromCohortRequest(BaseModel):
     course_ids: List[int]
 
 
+class DripConfig(BaseModel):
+    is_drip_enabled: Optional[bool] = False
+    frequency_value: Optional[int] = None
+    frequency_unit: Optional[str] = None
+    publish_at: Optional[datetime] = None
+
+
 class AddCoursesToCohortRequest(BaseModel):
     course_ids: List[int]
+    drip_config: Optional[DripConfig] = DripConfig()
 
 
 class CreateCourseRequest(BaseModel):
@@ -141,11 +145,20 @@ class Course(BaseModel):
     name: str
 
 
+class CourseCohort(Course):
+    drip_config: DripConfig
+
+
+class CohortCourse(Course):
+    drip_config: DripConfig
+
+
 class Milestone(BaseModel):
     id: int
     name: str | None
     color: Optional[str] = None
     ordering: Optional[int] = None
+    unlock_at: Optional[datetime] = None
 
 
 class TaskType(Enum):
@@ -405,6 +418,7 @@ class UserCourse(Course):
 
 class AddCourseToCohortsRequest(BaseModel):
     cohort_ids: List[int]
+    drip_config: Optional[DripConfig] = DripConfig()
 
 
 class RemoveCourseFromCohortsRequest(BaseModel):
@@ -618,6 +632,7 @@ class UserCohort(BaseModel):
     id: int
     name: str
     role: Literal[UserCourseRole.LEARNER, UserCourseRole.MENTOR]
+    joined_at: Optional[datetime] = None
 
 
 class AIChatRequest(BaseModel):

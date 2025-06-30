@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
 
@@ -36,7 +37,7 @@ from api.models import (
     RemoveCoursesFromCohortRequest,
     Streaks,
     LeaderboardViewType,
-    Course,
+    CohortCourse,
     CourseWithMilestonesAndTasks,
     UserCourseRole,
 )
@@ -104,7 +105,14 @@ async def update_cohort_name(cohort_id: int, request: UpdateCohortRequest):
 
 @router.post("/{cohort_id}/courses")
 async def add_courses_to_cohort(cohort_id: int, request: AddCoursesToCohortRequest):
-    await add_courses_to_cohort_in_db(cohort_id, request.course_ids)
+    await add_courses_to_cohort_in_db(
+        cohort_id, 
+        request.course_ids,
+        is_drip_enabled=request.drip_config.is_drip_enabled,
+        frequency_value=request.drip_config.frequency_value,
+        frequency_unit=request.drip_config.frequency_unit,
+        publish_at=request.drip_config.publish_at,
+    )
     return {"success": True}
 
 
@@ -117,12 +125,12 @@ async def remove_courses_from_cohort(
 
 
 @router.get(
-    "/{cohort_id}/courses", response_model=List[CourseWithMilestonesAndTasks | Course]
+    "/{cohort_id}/courses", response_model=List[CourseWithMilestonesAndTasks | CohortCourse]
 )
 async def get_courses_for_cohort(
-    cohort_id: int, include_tree: bool = False
-) -> List[CourseWithMilestonesAndTasks | Course]:
-    return await get_courses_for_cohort_from_db(cohort_id, include_tree)
+    cohort_id: int, include_tree: bool = False, joined_at: datetime | None = None
+) -> List[CourseWithMilestonesAndTasks | CohortCourse]:
+    return await get_courses_for_cohort_from_db(cohort_id, include_tree, joined_at)
 
 
 @router.get(
