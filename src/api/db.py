@@ -15,20 +15,12 @@ from api.config import (
     chat_history_table_name,
     tasks_table_name,
     questions_table_name,
-    tests_table_name,
     cohorts_table_name,
-    groups_table_name,
-    user_groups_table_name,
     user_cohorts_table_name,
     milestones_table_name,
-    tags_table_name,
-    task_tags_table_name,
     users_table_name,
-    badges_table_name,
-    cv_review_usage_table_name,
     organizations_table_name,
     user_organizations_table_name,
-    task_scoring_criteria_table_name,
     courses_table_name,
     course_cohorts_table_name,
     course_tasks_table_name,
@@ -87,25 +79,6 @@ from api.models import (
     BaseScorecard,
     ScorecardStatus,
 )
-
-
-async def create_tests_table(cursor):
-    await cursor.execute(
-        f"""
-            CREATE TABLE IF NOT EXISTS {tests_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                input TEXT NOT NULL,  -- This will store a JSON-encoded list of strings
-                output TEXT NOT NULL,
-                description TEXT,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
-            )
-            """
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_test_task_id ON {tests_table_name} (task_id)"""
-    )
 
 
 async def create_organizations_table(cursor):
@@ -183,26 +156,6 @@ async def create_user_organizations_table(cursor):
     )
 
 
-async def create_badges_table(cursor):
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {badges_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                value TEXT NOT NULL,
-                type TEXT NOT NULL,
-                image_path TEXT NOT NULL,
-                bg_color TEXT NOT NULL,
-                cohort_id INTEGER NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE,
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_badge_user_id ON {badges_table_name} (user_id)"""
-    )
-
-
 async def create_cohort_tables(cursor):
     # Create a table to store cohorts
     await cursor.execute(
@@ -237,40 +190,6 @@ async def create_cohort_tables(cursor):
 
     await cursor.execute(
         f"""CREATE INDEX idx_user_cohort_cohort_id ON {user_cohorts_table_name} (cohort_id)"""
-    )
-
-    # Create a table to store groups
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {groups_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cohort_id INTEGER NOT NULL,
-                name TEXT,
-                FOREIGN KEY (cohort_id) REFERENCES {cohorts_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_group_cohort_id ON {groups_table_name} (cohort_id)"""
-    )
-
-    # Create a table to store user groups
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {user_groups_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                group_id INTEGER NOT NULL,
-                UNIQUE(user_id, group_id),
-                FOREIGN KEY (group_id) REFERENCES {groups_table_name}(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_user_group_user_id ON {user_groups_table_name} (user_id)"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_user_group_group_id ON {user_groups_table_name} (group_id)"""
     )
 
 
@@ -339,38 +258,6 @@ async def create_milestones_table(cursor):
 
     await cursor.execute(
         f"""CREATE INDEX idx_milestone_org_id ON {milestones_table_name} (org_id)"""
-    )
-
-
-async def create_tag_tables(cursor):
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {tags_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                org_id INTEGER NOT NULL,
-                FOREIGN KEY (org_id) REFERENCES {organizations_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_tag_org_id ON {tags_table_name} (org_id)"""
-    )
-
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {task_tags_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                tag_id INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(task_id, tag_id),
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE,
-                FOREIGN KEY (tag_id) REFERENCES {tags_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_task_tag_task_id ON {task_tags_table_name} (task_id)"""
     )
 
 
@@ -500,24 +387,6 @@ async def create_question_scorecards_table(cursor):
     )
 
 
-async def create_task_scoring_criteria_table(cursor):
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {task_scoring_criteria_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                category TEXT NOT NULL,
-                description TEXT NOT NULL,
-                min_score INTEGER NOT NULL,
-                max_score INTEGER NOT NULL,
-                FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
-            )"""
-    )
-
-    await cursor.execute(
-        f"""CREATE INDEX idx_scoring_criteria_task_id ON {task_scoring_criteria_table_name} (task_id)"""
-    )
-
-
 async def create_chat_history_table(cursor):
     await cursor.execute(
         f"""
@@ -569,20 +438,6 @@ async def create_task_completion_table(cursor):
 
     await cursor.execute(
         f"""CREATE INDEX idx_task_completion_question_id ON {task_completions_table_name} (question_id)"""
-    )
-
-
-async def create_cv_review_usage_table(cursor):
-    await cursor.execute(
-        f"""CREATE TABLE IF NOT EXISTS {cv_review_usage_table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                ai_review TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES {users_table_name}(id) ON DELETE CASCADE
-            )
-            """
     )
 
 
@@ -683,15 +538,11 @@ async def init_db():
 
             await create_milestones_table(cursor)
 
-            await create_tag_tables(cursor)
-
             await create_cohort_tables(cursor)
 
             await create_courses_table(cursor)
 
             await create_course_cohorts_table(cursor)
-
-            await create_badges_table(cursor)
 
             await create_tasks_table(cursor)
 
@@ -701,19 +552,13 @@ async def init_db():
 
             await create_question_scorecards_table(cursor)
 
-            await create_task_scoring_criteria_table(cursor)
-
             await create_chat_history_table(cursor)
 
             await create_task_completion_table(cursor)
 
-            await create_tests_table(cursor)
-
             await create_course_tasks_table(cursor)
 
             await create_course_milestones_table(cursor)
-
-            await create_cv_review_usage_table(cursor)
 
             await create_course_generation_jobs_table(cursor)
 
@@ -727,26 +572,6 @@ async def init_db():
             # delete db
             os.remove(sqlite_db_path)
             raise exception
-
-
-async def add_tags_to_task(task_id: int, tag_ids_to_add: List):
-    if not tag_ids_to_add:
-        return
-
-    await execute_many_db_operation(
-        f"INSERT INTO {task_tags_table_name} (task_id, tag_id) VALUES (?, ?)",
-        [(task_id, tag_id) for tag_id in tag_ids_to_add],
-    )
-
-
-async def remove_tags_from_task(task_id: int, tag_ids_to_remove: List):
-    if not tag_ids_to_remove:
-        return
-
-    await execute_db_operation(
-        f"DELETE FROM {task_tags_table_name} WHERE task_id = ? AND tag_id IN ({','.join(map(str, tag_ids_to_remove))})",
-        (task_id,),
-    )
 
 
 async def get_org_id_for_course(course_id: int):
@@ -1402,55 +1227,6 @@ async def duplicate_task(task_id: int, course_id: int, milestone_id: int) -> int
         "task": task,
         "ordering": visible_ordering,
     }
-
-
-async def get_scoring_criteria_for_task(task_id: int):
-    rows = await execute_db_operation(
-        f"SELECT id, category, description, min_score, max_score FROM {task_scoring_criteria_table_name} WHERE task_id = ?",
-        (task_id,),
-        fetch_all=True,
-    )
-
-    return [
-        {
-            "id": row[0],
-            "category": row[1],
-            "description": row[2],
-            "range": [row[3], row[4]],
-        }
-        for row in rows
-    ]
-
-
-async def get_scoring_criteria_for_tasks(task_ids: List[int]):
-    rows = await execute_db_operation(
-        f"""
-        SELECT id, category, description, min_score, max_score, task_id 
-        FROM {task_scoring_criteria_table_name} 
-        WHERE task_id IN ({','.join(map(str, task_ids))})
-        """,
-        fetch_all=True,
-    )
-
-    # Group scoring criteria by task_id
-    criteria_by_task = {}
-    for row in rows:
-        task_id = row[5]
-
-        if task_id not in criteria_by_task:
-            criteria_by_task[task_id] = []
-
-        criteria_by_task[task_id].append(
-            {
-                "id": row[0],
-                "category": row[1],
-                "description": row[2],
-                "range": [row[3], row[4]],
-            }
-        )
-
-    # Return criteria in same order as input task_ids
-    return [criteria_by_task.get(task_id, []) for task_id in task_ids]
 
 
 async def delete_task(task_id: int):
@@ -2173,64 +1949,18 @@ async def get_cohort_streaks(
     return streaks
 
 
-async def update_tests_for_task(task_id: int, tests: List[dict]):
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Delete existing tests for the task
-        await cursor.execute(
-            f"DELETE FROM {tests_table_name} WHERE task_id = ?",
-            (task_id,),
-        )
-
-        # Insert new tests
-        for test in tests:
-            await cursor.execute(
-                f"""
-                INSERT INTO {tests_table_name} (task_id, input, output, description)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    json.dumps(test["input"]),
-                    test["output"],
-                    test.get("description", None),
-                ),
-            )
-
-        await conn.commit()
-
-
-def delete_all_tests():
-    execute_db_operation(f"DELETE FROM {tests_table_name}")
-
-
-def drop_tests_table():
-    execute_db_operation(f"DROP TABLE IF EXISTS {tests_table_name}")
-
-
 def drop_users_table():
     execute_db_operation(f"DELETE FROM {users_table_name}")
     execute_db_operation(f"DROP TABLE IF EXISTS {users_table_name}")
 
 
 def delete_all_cohort_info():
-    execute_db_operation(f"DELETE FROM {user_groups_table_name}")
-    execute_db_operation(f"DELETE FROM {groups_table_name}")
     execute_db_operation(f"DELETE FROM {cohorts_table_name}")
 
 
 async def delete_cohort(cohort_id: int):
     await execute_multiple_db_operations(
         [
-            (
-                f"DELETE FROM {user_groups_table_name} WHERE group_id IN (SELECT id FROM {groups_table_name} WHERE cohort_id = ?)",
-                (cohort_id,),
-            ),
-            (
-                f"DELETE FROM {groups_table_name} WHERE cohort_id = ?",
-                (cohort_id,),
-            ),
             (
                 f"DELETE FROM {user_cohorts_table_name} WHERE cohort_id = ?",
                 (cohort_id,),
@@ -2249,8 +1979,6 @@ async def delete_cohort(cohort_id: int):
 
 def drop_cohorts_table():
     execute_db_operation(f"DROP TABLE IF EXISTS {cohorts_table_name}")
-    execute_db_operation(f"DROP TABLE IF EXISTS {groups_table_name}")
-    execute_db_operation(f"DROP TABLE IF EXISTS {user_groups_table_name}")
 
 
 async def create_cohort(name: str, org_id: int) -> int:
@@ -2455,86 +2183,6 @@ async def add_members_to_cohort(
         await conn.commit()
 
 
-async def update_cohort_group_name(group_id: int, new_name: str):
-    await execute_db_operation(
-        f"UPDATE {groups_table_name} SET name = ? WHERE id = ?",
-        params=(new_name, group_id),
-    )
-
-
-async def add_members_to_cohort_group(cursor, group_id: int, member_ids: List[int]):
-    # Check if any members already exist in the group using the same connection
-    await cursor.execute(
-        f"""
-        SELECT 1 FROM {user_groups_table_name} 
-        WHERE group_id = ? AND user_id IN ({','.join(['?' for _ in member_ids])})
-        """,
-        (group_id, *member_ids),
-    )
-    member_exists = await cursor.fetchone()
-
-    if member_exists:
-        raise Exception("Member already exists in group")
-
-    await cursor.executemany(
-        f"INSERT INTO {user_groups_table_name} (user_id, group_id) VALUES (?, ?)",
-        [(member_id, group_id) for member_id in member_ids],
-    )
-
-
-async def remove_members_from_cohort_group(group_id: int, member_ids: List[int]):
-    all_members_exist = await execute_db_operation(
-        f"""
-        SELECT 1 FROM {user_groups_table_name} 
-        WHERE group_id = ? AND user_id IN ({','.join(['?' for _ in member_ids])})
-        """,
-        (group_id, *member_ids),
-        fetch_all=True,
-    )
-
-    if len(all_members_exist) != len(member_ids):
-        raise Exception("One or more members are not in the group")
-
-    await execute_db_operation(
-        f"DELETE FROM {user_groups_table_name} WHERE group_id = ? AND user_id IN ({','.join(['?' for _ in member_ids])})",
-        (group_id, *member_ids),
-    )
-
-
-async def create_cohort_group(cohort_id: int, name: str, member_ids: List[int]):
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Create the group
-        await cursor.execute(
-            f"""
-            INSERT INTO {groups_table_name} (name, cohort_id)
-            VALUES (?, ?)
-            """,
-            (name, cohort_id),
-        )
-        group_id = cursor.lastrowid
-
-        await add_members_to_cohort_group(
-            cursor,
-            group_id,
-            member_ids,
-        )
-
-        await conn.commit()
-
-        return group_id
-
-
-async def delete_cohort_group(group_id: int):
-    await execute_multiple_db_operations(
-        [
-            (f"DELETE FROM {user_groups_table_name} WHERE group_id = ?", (group_id,)),
-            (f"DELETE FROM {groups_table_name} WHERE id = ?", (group_id,)),
-        ]
-    )
-
-
 async def remove_members_from_cohort(cohort_id: int, member_ids: List[int]):
     members_in_cohort = await execute_db_operation(
         f"""
@@ -2550,17 +2198,6 @@ async def remove_members_from_cohort(cohort_id: int, member_ids: List[int]):
 
     await execute_multiple_db_operations(
         [
-            (
-                f"""
-            DELETE FROM {user_groups_table_name} 
-            WHERE user_id IN ({','.join(['?' for _ in member_ids])})
-            AND group_id IN (
-                SELECT id FROM {groups_table_name} 
-                WHERE cohort_id = ?
-            )
-            """,
-                (*member_ids, cohort_id),
-            ),
             (
                 f"""
             DELETE FROM {user_cohorts_table_name}
@@ -2619,27 +2256,6 @@ async def get_cohort_by_id(cohort_id: int):
     if not cohort:
         return None
 
-    # Get groups and their members
-    groups = await execute_db_operation(
-        f"""
-        SELECT 
-            g.id,
-            g.name,
-            GROUP_CONCAT(COALESCE(u.id, '')) as user_ids,
-            GROUP_CONCAT(COALESCE(u.email, '')) as user_emails,
-            GROUP_CONCAT(COALESCE(uc.role, '')) as user_roles
-        FROM {groups_table_name} g
-        LEFT JOIN {user_groups_table_name} ug ON g.id = ug.group_id 
-        LEFT JOIN {users_table_name} u ON ug.user_id = u.id
-        LEFT JOIN {user_cohorts_table_name} uc ON uc.user_id = u.id AND uc.cohort_id = g.cohort_id
-        WHERE g.cohort_id = ?
-        GROUP BY g.id, g.name
-        ORDER BY g.id
-        """,
-        (cohort_id,),
-        fetch_all=True,
-    )
-
     # Get all users and their roles in the cohort
     members = await execute_db_operation(
         f"""
@@ -2660,22 +2276,6 @@ async def get_cohort_by_id(cohort_id: int):
         "members": [
             {"id": member[0], "email": member[1], "role": member[2]}
             for member in members
-        ],
-        "groups": [
-            {
-                "id": group[0],
-                "name": group[1],
-                "members": [
-                    {"id": int(user_id), "email": user_email, "role": user_role}
-                    for user_id, user_email, user_role in zip(
-                        group[2].split(","),
-                        group[3].split(","),
-                        group[4].split(","),
-                    )
-                    if user_id != ""
-                ],
-            }
-            for group in groups
         ],
     }
 
@@ -2714,51 +2314,6 @@ def format_user_cohort_group(group: Tuple):
         "name": group[1],
         "learners": learners,
     }
-
-
-async def get_mentor_cohort_groups(user_id: int, cohort_id: int):
-    groups = await execute_db_operation(
-        f"""
-        WITH mentor_groups AS (
-            SELECT g.id as group_id, g.name as group_name, g.cohort_id as cohort_id
-            FROM {user_groups_table_name} ug
-            JOIN {groups_table_name} g ON ug.group_id = g.id
-            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = g.cohort_id
-            WHERE ug.user_id = ? AND uc.role = '{group_role_mentor}' AND g.cohort_id = ?
-        ),
-        learners AS (
-            SELECT mg.group_id, mg.group_name, GROUP_CONCAT(u.email) as learner_emails, GROUP_CONCAT(u.id) as learner_ids
-            FROM mentor_groups mg
-            JOIN {user_groups_table_name} ug ON ug.group_id = mg.group_id 
-            JOIN {users_table_name} u ON u.id = ug.user_id
-            JOIN {user_cohorts_table_name} uc ON uc.user_id = ug.user_id AND uc.cohort_id = mg.cohort_id
-            WHERE uc.role = '{group_role_learner}'
-            GROUP BY mg.group_id, mg.group_name
-        )
-        SELECT group_id, group_name, learner_ids, learner_emails
-        FROM learners
-        """,
-        params=(user_id, cohort_id),
-        fetch_all=True,
-    )
-
-    return [format_user_cohort_group(group) for group in groups]
-
-
-async def get_cohort_group_ids_for_users(cohort_id: int, user_ids: List[int]):
-    groups = await execute_db_operation(
-        f"""
-        SELECT g.id
-        FROM {groups_table_name} g
-        JOIN {user_groups_table_name} ug ON ug.group_id = g.id
-        JOIN {users_table_name} u ON u.id = ug.user_id
-        WHERE g.cohort_id = ? AND ug.user_id IN ({','.join(['?' for _ in user_ids])})
-        GROUP BY g.id, g.name
-        """,
-        params=(cohort_id, *user_ids),
-        fetch_all=True,
-    )
-    return [group[0] for group in groups]
 
 
 def convert_milestone_db_to_dict(milestone: Tuple) -> Dict:
@@ -3117,147 +2672,6 @@ async def get_user_cohorts(user_id: int) -> List[Dict]:
     ]
 
 
-async def create_badge_for_user(
-    user_id: int,
-    value: str,
-    badge_type: str,
-    image_path: str,
-    bg_color: str,
-    cohort_id: int,
-) -> int:
-    return await execute_db_operation(
-        f"INSERT INTO {badges_table_name} (user_id, value, type, image_path, bg_color, cohort_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, value, badge_type, image_path, bg_color, cohort_id),
-        get_last_row_id=True,
-    )
-
-
-async def update_badge(
-    badge_id: int, value: str, badge_type: str, image_path: str, bg_color: str
-):
-    await execute_db_operation(
-        f"UPDATE {badges_table_name} SET value = ?, type = ?, image_path = ?, bg_color = ? WHERE id = ?",
-        (value, badge_type, image_path, bg_color, badge_id),
-    )
-
-
-def convert_badge_db_to_dict(badge: Tuple):
-    if badge is None:
-        return
-
-    output = {
-        "id": badge[0],
-        "user_id": badge[1],
-        "value": badge[2],
-        "type": badge[3],
-        "image_path": badge[4],
-        "bg_color": badge[5],
-    }
-
-    if len(badge) > 6:
-        output["cohort_name"] = badge[6]
-        output["org_name"] = badge[7]
-
-    return output
-
-
-async def get_badge_by_id(badge_id: int) -> Dict:
-    badge = await execute_db_operation(
-        f"SELECT b.id, b.user_id, b.value, b.type, b.image_path, b.bg_color, c.name, o.name FROM {badges_table_name} b LEFT JOIN {cohorts_table_name} c ON c.id = b.cohort_id LEFT JOIN {organizations_table_name} o ON o.id = c.org_id WHERE b.id = ?",
-        (badge_id,),
-        fetch_one=True,
-    )
-
-    return convert_badge_db_to_dict(badge)
-
-
-async def get_badges_by_user_id(user_id: int) -> List[Dict]:
-    badges = await execute_db_operation(
-        f"SELECT b.id, b.user_id, b.value, b.type, b.image_path, b.bg_color, c.name, o.name FROM {badges_table_name} b LEFT JOIN {cohorts_table_name} c ON c.id = b.cohort_id LEFT JOIN {organizations_table_name} o ON o.id = c.org_id WHERE b.user_id = ? ORDER BY b.id DESC",
-        (user_id,),
-        fetch_all=True,
-    )
-
-    return [convert_badge_db_to_dict(badge) for badge in badges]
-
-
-async def get_cohort_badge_by_type_and_user_id(
-    user_id: int, badge_type: str, cohort_id: int
-) -> Dict:
-    badge = await execute_db_operation(
-        f"SELECT id, user_id, value, type, image_path, bg_color FROM {badges_table_name} WHERE user_id = ? AND type = ? AND cohort_id = ?",
-        (user_id, badge_type, cohort_id),
-        fetch_one=True,
-    )
-
-    return convert_badge_db_to_dict(badge)
-
-
-async def delete_badge_by_id(badge_id: int):
-    await execute_db_operation(
-        f"DELETE FROM {badges_table_name} WHERE id = ?",
-        (badge_id,),
-    )
-
-
-def clear_badges_table():
-    execute_db_operation(f"DELETE FROM {badges_table_name}")
-
-
-def drop_badges_table():
-    execute_multiple_db_operations(
-        [
-            (f"DELETE FROM {badges_table_name}", ()),
-            (f"DROP TABLE IF EXISTS {badges_table_name}", ()),
-        ]
-    )
-
-
-async def add_cv_review_usage(user_id: int, role: str, ai_review: str):
-    await execute_db_operation(
-        f"INSERT INTO {cv_review_usage_table_name} (user_id, role, ai_review) VALUES (?, ?, ?)",
-        (user_id, role, ai_review),
-    )
-
-
-def transform_cv_review_usage_to_dict(cv_review_usage: Tuple):
-    return {
-        "id": cv_review_usage[0],
-        "user_id": cv_review_usage[1],
-        "user_email": cv_review_usage[2],
-        "role": cv_review_usage[3],
-        "ai_review": cv_review_usage[4],
-        "created_at": convert_utc_to_ist(
-            datetime.fromisoformat(cv_review_usage[5])
-        ).isoformat(),
-    }
-
-
-def drop_cv_review_usage_table():
-    execute_multiple_db_operations(
-        [
-            (f"DELETE FROM {cv_review_usage_table_name}", ()),
-            (f"DROP TABLE IF EXISTS {cv_review_usage_table_name}", ()),
-        ]
-    )
-
-
-async def get_all_cv_review_usage():
-    all_cv_review_usage = await execute_db_operation(
-        f"""
-        SELECT cv.id, cv.user_id, u.email, cv.role, cv.ai_review , cv.created_at
-        FROM {cv_review_usage_table_name} cv
-        JOIN users u ON cv.user_id = u.id
-        """,
-        fetch_all=True,
-    )
-
-    return [
-        transform_cv_review_usage_to_dict(cv_review_usage)
-        for cv_review_usage in all_cv_review_usage
-    ]
-
-
 def drop_user_organizations_table():
     execute_multiple_db_operations(
         [
@@ -3535,95 +2949,6 @@ async def get_org_members(org_id: int):
     ]
 
 
-def drop_task_tags_table():
-    commands = [
-        (f"DELETE FROM {task_tags_table_name}", ()),
-        (f"DROP TABLE IF EXISTS {task_tags_table_name}", ()),
-    ]
-    execute_multiple_db_operations(commands)
-
-
-def drop_tags_table():
-    drop_task_tags_table()
-
-    commands = [
-        (f"DELETE FROM {tags_table_name}", ()),
-        (f"DROP TABLE IF EXISTS {tags_table_name}", ()),
-    ]
-    execute_multiple_db_operations(commands)
-
-
-async def create_tag(tag_name: str, org_id: int):
-    await execute_db_operation(
-        f"INSERT INTO {tags_table_name} (name, org_id) VALUES (?, ?)",
-        (tag_name, org_id),
-    )
-
-
-async def create_bulk_tags(tag_names: List[str], org_id: int) -> bool:
-    if not tag_names:
-        return False
-
-    async with get_new_db_connection() as conn:
-        cursor = await conn.cursor()
-
-        # Get existing tags
-        await cursor.execute(
-            f"SELECT name FROM {tags_table_name} WHERE org_id = ?", (org_id,)
-        )
-        existing_tags = {row[0] for row in await cursor.fetchall()}
-
-        # Filter out tags that already exist
-        new_tags = [tag for tag in tag_names if tag not in existing_tags]
-
-        has_new_tags = len(new_tags) > 0
-
-        # Insert new tags
-        if new_tags:
-            await cursor.executemany(
-                f"INSERT INTO {tags_table_name} (name, org_id) VALUES (?, ?)",
-                [(tag, org_id) for tag in new_tags],
-            )
-
-            await conn.commit()
-            return has_new_tags
-
-
-def convert_tag_db_to_dict(tag: Tuple) -> Dict:
-    return {
-        "id": tag[0],
-        "name": tag[1],
-        "created_at": convert_utc_to_ist(datetime.fromisoformat(tag[2])).isoformat(),
-    }
-
-
-async def get_all_tags() -> List[Dict]:
-    tags = await execute_db_operation(
-        f"SELECT * FROM {tags_table_name}", fetch_all=True
-    )
-
-    return [convert_tag_db_to_dict(tag) for tag in tags]
-
-
-async def get_all_tags_for_org(org_id: int) -> List[Dict]:
-    tags = await execute_db_operation(
-        f"SELECT * FROM {tags_table_name} WHERE org_id = ?", (org_id,), fetch_all=True
-    )
-
-    return [convert_tag_db_to_dict(tag) for tag in tags]
-
-
-async def delete_tag(tag_id: int):
-    await execute_db_operation(f"DELETE FROM {tags_table_name} WHERE id = ?", (tag_id,))
-
-
-def transfer_badge_to_user(prev_user_id: int, new_user_id: int):
-    execute_db_operation(
-        f"UPDATE {badges_table_name} SET user_id = ? WHERE user_id = ?",
-        (new_user_id, prev_user_id),
-    )
-
-
 def transfer_chat_history_to_user(prev_user_id: int, new_user_id: int):
     execute_db_operation(
         f"UPDATE {chat_history_table_name} SET user_id = ? WHERE user_id = ?",
@@ -3880,48 +3205,6 @@ async def swap_task_ordering_for_course(course_id: int, task_1_id: int, task_2_i
     await execute_many_db_operation(
         f"UPDATE {course_tasks_table_name} SET ordering = ? WHERE id = ?",
         params_list=update_params,
-    )
-
-
-async def remove_scoring_criteria_from_task(scoring_criteria_ids: List[int]):
-    if not scoring_criteria_ids:
-        return
-
-    await execute_db_operation(
-        f"""DELETE FROM {task_scoring_criteria_table_name} 
-            WHERE id IN ({', '.join(map(str, scoring_criteria_ids))})"""
-    )
-
-
-async def add_scoring_criteria_to_tasks(
-    task_ids: List[int], scoring_criteria: List[Dict]
-):
-    if not scoring_criteria:
-        return
-
-    params = list(
-        itertools.chain(
-            *[
-                [
-                    (
-                        task_id,
-                        criterion["category"],
-                        criterion["description"],
-                        criterion["range"][0],
-                        criterion["range"][1],
-                    )
-                    for criterion in scoring_criteria
-                ]
-                for task_id in task_ids
-            ]
-        )
-    )
-
-    await execute_many_db_operation(
-        f"""INSERT INTO {task_scoring_criteria_table_name} 
-            (task_id, category, description, min_score, max_score) 
-            VALUES (?, ?, ?, ?, ?)""",
-        params_list=params,
     )
 
 
@@ -5226,3 +4509,28 @@ async def get_usage_summary_by_organization(
         }
         for row in rows
     ]
+
+
+async def delete_useless_tables():
+    from api.config import (
+        tags_table_name,
+        task_tags_table_name,
+        groups_table_name,
+        user_groups_table_name,
+        badges_table_name,
+        task_scoring_criteria_table_name,
+        cv_review_usage_table_name,
+        tests_table_name,
+    )
+
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+
+        await cursor.execute(f"DROP TABLE IF EXISTS {tags_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {task_tags_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {tests_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {groups_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {user_groups_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {badges_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {task_scoring_criteria_table_name}")
+        await cursor.execute(f"DROP TABLE IF EXISTS {cv_review_usage_table_name}")
