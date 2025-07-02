@@ -2,9 +2,8 @@
 from fastapi import APIRouter, HTTPException, Body
 import traceback
 from typing import List, Dict, Annotated
-from api.db import (
+from api.db.org import (
     create_organization_with_user,
-    get_user_organizations,
     get_org_by_id as get_org_by_id_from_db,
     update_org as update_org_in_db,
     update_org_openai_api_key as update_org_openai_api_key_in_db,

@@ -5,13 +5,16 @@ from api.models import (
     CourseWithMilestonesAndTaskDetails,
     TaskType,
 )
-from api.db import (
+from api.db.chat import (
     get_all_chat_history as get_all_chat_history_from_db,
+)
+from api.db.course import (
     get_course as get_course_from_db,
-    get_task as get_task_from_db,
-    get_org_id_from_api_key,
     get_course_org_id,
 )
+from api.db.task import get_task as get_task_from_db
+from api.db.org import get_org_id_from_api_key
+
 
 app = FastAPI()
 

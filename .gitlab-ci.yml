@@ -11,7 +11,7 @@ test:
     - pip install -r requirements-dev.txt
     - cp src/api/.env.example src/api/.env
   script:
-    - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml 
+    - python -m pytest tests/ -v --cov=src --cov-report=xml:coverage.xml --cov-config=pytest.ini
     - |
       # Pick the right variable for every pipeline type
       BRANCH_NAME="${CI_COMMIT_REF_NAME:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"

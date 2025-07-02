@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
-from api.db import (
+from api.db.chat import (
     store_messages as store_messages_in_db,
     get_all_chat_history as get_all_chat_history_from_db,
     get_task_chat_history_for_user as get_task_chat_history_for_user_from_db,

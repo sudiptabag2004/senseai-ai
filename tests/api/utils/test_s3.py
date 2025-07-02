@@ -30,6 +30,27 @@ class TestS3Utils:
         mock_s3_client.upload_file.assert_called_once()
 
     @patch("src.api.utils.s3.boto3.Session")
+    def test_upload_file_to_s3_with_content_type(self, mock_session):
+        """Test successful file upload to S3 with content type."""
+        # Setup mocks
+        mock_s3_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_s3_client
+        mock_s3_client.upload_file.return_value = None  # Successful upload returns None
+
+        # Call the function with content_type parameter
+        result = upload_file_to_s3(
+            "/path/to/file.json", "test/file.json", content_type="application/json"
+        )
+
+        # Check results
+        assert result == "test/file.json"
+        mock_session.return_value.client.assert_called_once_with("s3")
+
+        # Verify upload_file was called with ExtraArgs containing ContentType
+        call_args = mock_s3_client.upload_file.call_args
+        assert call_args[1]["ExtraArgs"]["ContentType"] == "application/json"
+
+    @patch("src.api.utils.s3.boto3.Session")
     def test_upload_file_to_s3_failure(self, mock_session):
         """Test file upload to S3 with an error."""
         # Setup mocks

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
 
 import numpy as np
-from api.db import (
+from api.db.cohort import (
     get_all_cohorts_for_org as get_all_cohorts_for_org_from_db,
     create_cohort as create_cohort_in_db,
     get_cohort_by_id as get_cohort_by_id_from_db,
@@ -14,14 +14,16 @@ from api.db import (
     update_cohort_name as update_cohort_name_in_db,
     add_courses_to_cohort as add_courses_to_cohort_in_db,
     remove_courses_from_cohort as remove_courses_from_cohort_in_db,
-    get_courses_for_cohort as get_courses_for_cohort_from_db,
     get_cohort_analytics_metrics_for_tasks as get_cohort_analytics_metrics_for_tasks_from_db,
     get_cohort_attempt_data_for_tasks as get_cohort_attempt_data_for_tasks_from_db,
+)
+from api.db.course import get_courses_for_cohort as get_courses_for_cohort_from_db
+from api.db.analytics import (
     get_cohort_completion as get_cohort_completion_from_db,
     get_cohort_course_attempt_data as get_cohort_course_attempt_data_from_db,
     get_cohort_streaks as get_cohort_streaks_from_db,
-    get_course as get_course_from_db,
 )
+from api.db.course import get_course as get_course_from_db
 from api.models import (
     CreateCohortRequest,
     CreateCohortGroupRequest,
@@ -106,7 +108,7 @@ async def update_cohort_name(cohort_id: int, request: UpdateCohortRequest):
 @router.post("/{cohort_id}/courses")
 async def add_courses_to_cohort(cohort_id: int, request: AddCoursesToCohortRequest):
     await add_courses_to_cohort_in_db(
-        cohort_id, 
+        cohort_id,
         request.course_ids,
         is_drip_enabled=request.drip_config.is_drip_enabled,
         frequency_value=request.drip_config.frequency_value,
@@ -125,7 +127,8 @@ async def remove_courses_from_cohort(
 
 
 @router.get(
-    "/{cohort_id}/courses", response_model=List[CourseWithMilestonesAndTasks | CohortCourse]
+    "/{cohort_id}/courses",
+    response_model=List[CourseWithMilestonesAndTasks | CohortCourse],
 )
 async def get_courses_for_cohort(
     cohort_id: int, include_tree: bool = False, joined_at: datetime | None = None

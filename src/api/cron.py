@@ -1,5 +1,5 @@
 from typing import Dict
-from api.db import get_usage_summary_by_organization
+from api.db.analytics import get_usage_summary_by_organization
 from api.slack import send_slack_notification_for_usage_stats
 from api.utils.phoenix import get_raw_traces, save_daily_traces
 

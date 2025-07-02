@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
-from api.db import (
-    insert_or_return_user,
-)
+from api.db.user import insert_or_return_user
 from api.utils.db import get_new_db_connection
 from api.models import UserLoginData
 from google.oauth2 import id_token

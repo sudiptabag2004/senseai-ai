@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
-from api.db import (
+from api.db.milestone import (
     get_all_milestones_for_org as get_all_milestones_for_org_from_db,
     update_milestone as update_milestone_in_db,
     delete_milestone as delete_milestone_from_db,
     get_user_metrics_for_all_milestones as get_user_metrics_for_all_milestones_from_db,
-    get_milestones_for_course as get_milestones_for_course_from_db,
 )
+from api.db.course import get_milestones_for_course as get_milestones_for_course_from_db
 from api.models import UpdateMilestoneRequest
 
 router = APIRouter()
