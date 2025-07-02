@@ -1,5 +1,5 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from api.db import publish_scheduled_tasks
+from api.db.task import publish_scheduled_tasks
 from api.cron import send_usage_summary_stats, save_daily_traces
 from api.settings import settings
 from datetime import timezone, timedelta
@@ -27,4 +27,4 @@ async def daily_usage_stats():
 
 @scheduler.scheduled_job("cron", hour=10, minute=0, timezone=ist_timezone)
 async def daily_traces():
-    await save_daily_traces()
+    save_daily_traces()

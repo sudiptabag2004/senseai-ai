@@ -60,6 +60,7 @@ async def test_get_course(client, mock_db):
                     "name": "Module 1",
                     "color": "#2d3748",
                     "ordering": 1,
+                    "unlock_at": None,
                     "tasks": [
                         {
                             "id": 1,
@@ -208,7 +209,14 @@ async def test_add_course_to_cohorts(client, mock_db):
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {"success": True}
-        mock_add_to_cohorts.assert_called_with(course_id, request_body["cohort_ids"])
+        mock_add_to_cohorts.assert_called_with(
+            course_id,
+            request_body["cohort_ids"],
+            is_drip_enabled=False,
+            frequency_value=None,
+            frequency_unit=None,
+            publish_at=None,
+        )
 
 
 @pytest.mark.asyncio
@@ -238,8 +246,26 @@ async def test_get_cohorts_for_course(client, mock_db):
     with patch("api.routes.course.get_cohorts_for_course_from_db") as mock_get_cohorts:
         course_id = 1
         expected_cohorts = [
-            {"id": 1, "name": "Cohort 1"},
-            {"id": 2, "name": "Cohort 2"},
+            {
+                "id": 1,
+                "name": "Cohort 1",
+                "drip_config": {
+                    "is_drip_enabled": False,
+                    "frequency_value": None,
+                    "frequency_unit": None,
+                    "publish_at": None,
+                },
+            },
+            {
+                "id": 2,
+                "name": "Cohort 2",
+                "drip_config": {
+                    "is_drip_enabled": False,
+                    "frequency_value": None,
+                    "frequency_unit": None,
+                    "publish_at": None,
+                },
+            },
         ]
 
         # Test successful retrieval

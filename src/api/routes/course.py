@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
-from api.db import (
+from api.db.course import (
     create_course as create_course_in_db,
     get_all_courses_for_org as get_all_courses_for_org_from_db,
     delete_course as delete_course_in_db,
-    add_course_to_cohorts as add_course_to_cohorts_in_db,
-    remove_course_from_cohorts as remove_course_from_cohorts_from_db,
     get_courses_for_cohort as get_courses_for_cohort_from_db,
     get_cohorts_for_course as get_cohorts_for_course_from_db,
     get_tasks_for_course as get_tasks_for_course_from_db,
@@ -18,6 +16,10 @@ from api.db import (
     get_course as get_course_from_db,
     swap_milestone_ordering_for_course as swap_milestone_ordering_for_course_in_db,
     swap_task_ordering_for_course as swap_task_ordering_for_course_in_db,
+)
+from api.db.cohort import (
+    add_course_to_cohorts as add_course_to_cohorts_in_db,
+    remove_course_from_cohorts as remove_course_from_cohorts_from_db,
 )
 from api.models import (
     CreateCourseRequest,
@@ -103,7 +105,7 @@ async def delete_course(course_id: int):
 @router.post("/{course_id}/cohorts")
 async def add_course_to_cohorts(course_id: int, request: AddCourseToCohortsRequest):
     await add_course_to_cohorts_in_db(
-        course_id, 
+        course_id,
         request.cohort_ids,
         is_drip_enabled=request.drip_config.is_drip_enabled,
         frequency_value=request.drip_config.frequency_value,

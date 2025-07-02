@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from typing import List
-from api.db import (
+from api.db.task import (
     get_all_scorecards_for_org as get_all_scorecards_for_org_from_db,
     update_scorecard as update_scorecard_from_db,
     create_scorecard as create_scorecard_from_db,

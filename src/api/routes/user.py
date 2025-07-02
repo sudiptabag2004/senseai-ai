@@ -2,18 +2,18 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict
 from datetime import datetime
-from api.db import (
+from api.db.user import (
     get_user_by_id as get_user_by_id_from_db,
     update_user as update_user_in_db,
     get_user_cohorts as get_user_cohorts_from_db,
     get_user_activity_for_year as get_user_activity_for_year_from_db,
     get_user_active_in_last_n_days as get_user_active_in_last_n_days_from_db,
     get_user_streak as get_user_streak_from_db,
-    is_user_in_cohort as is_user_in_cohort_from_db,
-    get_user_courses as get_user_courses_from_db,
     get_user_organizations,
     get_user_org_cohorts as get_user_org_cohorts_from_db,
 )
+from api.db.course import get_user_courses as get_user_courses_from_db
+from api.db.cohort import is_user_in_cohort as is_user_in_cohort_from_db
 from api.utils.db import get_new_db_connection
 from api.models import UserCourse, UserCohort, GetUserStreakResponse
 

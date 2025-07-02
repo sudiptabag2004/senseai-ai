@@ -173,8 +173,7 @@ class TaskType(Enum):
             return self.value == other
         elif isinstance(other, TaskType):
             return self.value == other.value
-
-        raise NotImplementedError()
+        return False
 
 
 class TaskStatus(Enum):
@@ -190,7 +189,7 @@ class TaskStatus(Enum):
         elif isinstance(other, TaskStatus):
             return self.value == other.value
 
-        raise NotImplementedError()
+        return False
 
 
 class Task(BaseModel):
@@ -230,7 +229,7 @@ class TaskInputType(Enum):
         elif isinstance(other, TaskInputType):
             return self.value == other.value
 
-        raise NotImplementedError()
+        return False
 
 
 class TaskAIResponseType(Enum):
@@ -246,7 +245,7 @@ class TaskAIResponseType(Enum):
         elif isinstance(other, TaskAIResponseType):
             return self.value == other.value
 
-        raise NotImplementedError()
+        return False
 
 
 class QuestionType(Enum):
@@ -261,6 +260,8 @@ class QuestionType(Enum):
             return self.value == other
         elif isinstance(other, QuestionType):
             return self.value == other.value
+
+        return False
 
 
 class ScorecardCriterion(BaseModel):
@@ -284,7 +285,7 @@ class ScorecardStatus(Enum):
         elif isinstance(other, ScorecardStatus):
             return self.value == other.value
 
-        raise NotImplementedError()
+        return False
 
 
 class BaseScorecard(BaseModel):
@@ -341,6 +342,7 @@ class GenerateCourseJobStatus(str, Enum):
             return self.value == other
         elif isinstance(other, GenerateCourseJobStatus):
             return self.value == other.value
+        return self == other
 
 
 class GenerateTaskJobStatus(str, Enum):
@@ -357,7 +359,7 @@ class GenerateTaskJobStatus(str, Enum):
         elif isinstance(other, GenerateTaskJobStatus):
             return self.value == other.value
 
-        raise NotImplementedError()
+        return False
 
 
 class MilestoneTask(Task):
@@ -402,6 +404,8 @@ class UserCourseRole(str, Enum):
             return self.value == other
         elif isinstance(other, UserCourseRole):
             return self.value == other.value
+
+        return False
 
 
 class Organization(BaseModel):
@@ -489,8 +493,7 @@ class LeaderboardViewType(Enum):
             return self.value == other
         elif isinstance(other, LeaderboardViewType):
             return self.value == other.value
-
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class CreateDraftTaskRequest(BaseModel):

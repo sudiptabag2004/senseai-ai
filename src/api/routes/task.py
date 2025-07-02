@@ -1,11 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict
-from api.db import (
+from api.db.task import (
     get_solved_tasks_for_user as get_solved_tasks_for_user_from_db,
     get_task as get_task_from_db,
     delete_task as delete_task_in_db,
     delete_tasks as delete_tasks_in_db,
-    get_courses_for_tasks as get_courses_for_tasks_from_db,
     create_draft_task_for_course as create_draft_task_for_course_in_db,
     update_learning_material_task as update_learning_material_task_in_db,
     update_draft_quiz as update_draft_quiz_in_db,
@@ -20,9 +19,6 @@ from api.models import (
     QuizTask,
     LeaderboardViewType,
     UpdateDraftQuizRequest,
-    TaskTagsRequest,
-    AddScoringCriteriaToTasksRequest,
-    UpdateTaskTestsRequest,
     CreateDraftTaskRequest,
     TaskCourseResponse,
     CreateDraftTaskResponse,
@@ -124,13 +120,6 @@ async def duplicate_task(
     return await duplicate_task_in_db(
         request.task_id, request.course_id, request.milestone_id
     )
-
-
-@router.get("/courses")
-async def get_courses_for_tasks(
-    task_ids: List[int] = Query(...),
-) -> List[TaskCourseResponse]:
-    return await get_courses_for_tasks_from_db(task_ids)
 
 
 @router.delete("/{task_id}")

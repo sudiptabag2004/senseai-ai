@@ -102,6 +102,31 @@ async def test_get_upload_presigned_url_client_error(client, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_get_upload_presigned_url_unexpected_error(client, mock_db):
+    """
+    Test getting a presigned URL when an unexpected error occurs
+    """
+    with patch("api.routes.file.boto3.client") as mock_boto3_client, patch(
+        "api.routes.file.settings.s3_folder_name", "test-folder"
+    ), patch("api.routes.file.settings.s3_bucket_name", "test-bucket"), patch(
+        "api.routes.file.traceback.print_exc"
+    ) as mock_traceback:
+
+        # Setup mocks to raise unexpected error
+        mock_boto3_client.side_effect = ValueError("Unexpected error")
+
+        request_body = {"content_type": "image/jpeg"}
+
+        # Make request
+        response = client.put("/file/presigned-url/create", json=request_body)
+
+        # Assert response
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "An unexpected error occurred"}
+        mock_traceback.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_get_download_presigned_url_success(client, mock_db):
     """
     Test getting a presigned URL for downloading a file successfully
@@ -197,6 +222,34 @@ async def test_get_download_presigned_url_client_error(client, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_get_download_presigned_url_unexpected_error(client, mock_db):
+    """
+    Test getting a download presigned URL when an unexpected error occurs
+    """
+    with patch("api.routes.file.boto3.client") as mock_boto3_client, patch(
+        "api.routes.file.settings.s3_folder_name", "test-folder"
+    ), patch("api.routes.file.settings.s3_bucket_name", "test-bucket"), patch(
+        "api.routes.file.traceback.print_exc"
+    ) as mock_traceback:
+
+        # Setup mocks to raise unexpected error
+        mock_boto3_client.side_effect = RuntimeError("Unexpected runtime error")
+
+        uuid = "test-uuid"
+        file_extension = "jpeg"
+
+        # Make request
+        response = client.get(
+            f"/file/presigned-url/get?uuid={uuid}&file_extension={file_extension}"
+        )
+
+        # Assert response
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "An unexpected error occurred"}
+        mock_traceback.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_upload_file_locally_success(client, mock_db):
     """
     Test uploading a file locally successfully
@@ -236,7 +289,9 @@ async def test_upload_file_locally_error(client, mock_db):
     """
     Test uploading a file locally with an error
     """
-    with patch("api.routes.file.os.makedirs") as mock_makedirs:
+    with patch("api.routes.file.os.makedirs") as mock_makedirs, patch(
+        "api.routes.file.traceback.print_exc"
+    ) as mock_traceback:
         # Setup mocks to raise error
         mock_makedirs.side_effect = Exception("File system error")
 
@@ -250,6 +305,7 @@ async def test_upload_file_locally_error(client, mock_db):
         # Assert response
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.json() == {"detail": "Failed to upload file locally"}
+        mock_traceback.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -307,3 +363,29 @@ async def test_download_file_locally_file_not_found(client, mock_db):
         # Assert response
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json() == {"detail": "File not found"}
+
+
+@pytest.mark.asyncio
+async def test_download_file_locally_unexpected_error(client, mock_db):
+    """
+    Test downloading a file locally when an unexpected error occurs
+    """
+    with patch("api.routes.file.os.path.exists") as mock_exists, patch(
+        "api.routes.file.settings.local_upload_folder", "/tmp/uploads"
+    ), patch("api.routes.file.traceback.print_exc") as mock_traceback:
+
+        # Setup mocks to raise unexpected error
+        mock_exists.side_effect = RuntimeError("Unexpected file system error")
+
+        uuid = "test-uuid"
+        file_extension = "jpeg"
+
+        # Make request
+        response = client.get(
+            f"/file/download-local/?uuid={uuid}&file_extension={file_extension}"
+        )
+
+        # Assert response
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Failed to download file locally"}
+        mock_traceback.assert_called_once()

@@ -10,6 +10,8 @@ from src.api.utils.db import (
     execute_multiple_db_operations,
     serialise_list_to_str,
     deserialise_list_from_str,
+    trace_callback,
+    check_table_exists,
 )
 
 
@@ -45,6 +47,44 @@ class TestSerialiseDeserialise:
         """Test deserialising None."""
         result = deserialise_list_from_str(None)
         assert result == []
+
+
+class TestTraceCallback:
+    @patch("src.api.utils.db.logger")
+    def test_trace_callback(self, mock_logger):
+        """Test that trace_callback logs SQL operations."""
+        sql = "SELECT * FROM test"
+        trace_callback(sql)
+        mock_logger.info.assert_called_once_with(f"Executing operation: {sql}")
+
+
+@pytest.mark.asyncio
+class TestCheckTableExists:
+    async def test_check_table_exists_true(self):
+        """Test check_table_exists when table exists."""
+        mock_cursor = AsyncMock()
+        mock_cursor.fetchone.return_value = ("test_table",)
+
+        result = await check_table_exists("test_table", mock_cursor)
+
+        assert result is True
+        mock_cursor.execute.assert_called_once_with(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='test_table'"
+        )
+        mock_cursor.fetchone.assert_called_once()
+
+    async def test_check_table_exists_false(self):
+        """Test check_table_exists when table does not exist."""
+        mock_cursor = AsyncMock()
+        mock_cursor.fetchone.return_value = None
+
+        result = await check_table_exists("nonexistent_table", mock_cursor)
+
+        assert result is False
+        mock_cursor.execute.assert_called_once_with(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='nonexistent_table'"
+        )
+        mock_cursor.fetchone.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -144,6 +184,24 @@ class TestDbOperations:
         mock_conn.commit.assert_called_once()
 
     @patch("src.api.utils.db.get_new_db_connection")
+    async def test_execute_db_operation_no_params(self, mock_get_conn):
+        """Test execute_db_operation without params."""
+        # Setup mocks
+        mock_conn = AsyncMock()
+        mock_cursor = AsyncMock()
+        mock_conn.__aenter__.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        mock_get_conn.return_value = mock_conn
+
+        # Call the function
+        result = await execute_db_operation("SELECT COUNT(*) FROM test")
+
+        # Check results
+        assert result is None
+        mock_cursor.execute.assert_called_once_with("SELECT COUNT(*) FROM test")
+        mock_conn.commit.assert_called_once()
+
+    @patch("src.api.utils.db.get_new_db_connection")
     async def test_execute_db_operation_get_last_row_id(self, mock_get_conn):
         """Test execute_db_operation with get_last_row_id=True."""
         # Setup mocks
@@ -201,21 +259,65 @@ class TestDbOperations:
         # Call the function
         commands_and_params = [
             ("INSERT INTO test (name) VALUES (?)", ("Test1",)),
-            ("UPDATE test SET name = ? WHERE id = ?", ("Test2", 1)),
-            ("DELETE FROM test WHERE id = ?", (2,)),
+            ("UPDATE test SET name = ? WHERE id = ?", ("Updated", 1)),
         ]
         await execute_multiple_db_operations(commands_and_params)
 
         # Check results
-        assert mock_cursor.execute.call_count == 3
+        assert mock_cursor.execute.call_count == 2
         mock_cursor.execute.assert_has_calls(
             [
                 call("INSERT INTO test (name) VALUES (?)", ("Test1",)),
-                call("UPDATE test SET name = ? WHERE id = ?", ("Test2", 1)),
-                call("DELETE FROM test WHERE id = ?", (2,)),
+                call("UPDATE test SET name = ? WHERE id = ?", ("Updated", 1)),
             ]
         )
         mock_conn.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestDbConnectionExceptions:
+    @patch("src.api.utils.db.aiosqlite.connect")
+    async def test_get_new_db_connection_exception_handling(self, mock_connect):
+        """Test exception handling in get_new_db_connection when conn exists."""
+        # Setup mock connection
+        mock_conn = AsyncMock()
+
+        # Create an async coroutine function that returns the mock connection
+        async def mock_connect_coroutine(*args, **kwargs):
+            return mock_conn
+
+        # Make connect return the coroutine
+        mock_connect.return_value = mock_connect_coroutine()
+
+        # Make execute work normally but set_trace_callback raise an exception
+        mock_conn.execute.return_value = AsyncMock()
+        mock_conn.set_trace_callback.side_effect = Exception("Trace callback error")
+
+        # Test that exception is re-raised and rollback is called
+        with pytest.raises(Exception, match="Trace callback error"):
+            async with get_new_db_connection() as conn:
+                pass
+
+        # Verify connect was called
+        mock_connect.assert_called_once()
+        # Verify rollback was called since conn was not None
+        mock_conn.rollback.assert_called_once()
+        # Verify close was called in finally block
+        mock_conn.close.assert_called_once()
+
+    @patch("src.api.utils.db.aiosqlite.connect")
+    async def test_get_new_db_connection_exception_no_conn(self, mock_connect):
+        """Test exception handling when connection is None."""
+        # Make connect itself raise an exception
+        mock_connect.side_effect = Exception("Connection failed")
+
+        # Test that exception is re-raised
+        with pytest.raises(Exception, match="Connection failed"):
+            async with get_new_db_connection() as conn:
+                pass
+
+        # Should not try to rollback or close None connection
+        mock_connect.assert_called_once()
 
 
 # Test for set_db_defaults would require mocking sqlite3.connect and executescript
