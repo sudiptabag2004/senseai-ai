@@ -292,6 +292,7 @@ async def create_questions_table(cursor):
                 max_attempts INTEGER,
                 is_feedback_shown BOOLEAN NOT NULL,
                 context TEXT,
+                title TEXT NOT NULL,
                 FOREIGN KEY (task_id) REFERENCES {tasks_table_name}(id) ON DELETE CASCADE
             )"""
     )

@@ -10,6 +10,8 @@ from api.db.course import (
     add_course_modules,
 )
 from api.models import TaskStatus, TaskType, QuestionType, TaskAIResponseType
+from api.utils.db import get_new_db_connection
+from api.config import questions_table_name
 
 
 def convert_content_to_blocks(content: str) -> List[Dict]:
@@ -184,3 +186,20 @@ async def migrate_task_description_to_blocks(course_details: Dict):
         # break
 
     return course_details
+
+
+async def add_title_column_to_questions():
+    """
+    Migration: Adds a 'title' column to the questions table and updates all existing rows
+    to have title = f"Question {position+1}".
+    """
+    async with get_new_db_connection() as conn:
+        cursor = await conn.cursor()
+        # Check if 'title' column already exists
+        await cursor.execute(f"PRAGMA table_info({questions_table_name})")
+        columns = [col[1] for col in await cursor.fetchall()]
+        if "title" not in columns:
+            await cursor.execute(f"ALTER TABLE {questions_table_name} ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+        # Update all rows to set title = 'Question {position+1}'
+        await cursor.execute(f"UPDATE {questions_table_name} SET title = 'Question ' || (position + 1)")
+        await conn.commit()        

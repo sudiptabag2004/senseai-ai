@@ -190,6 +190,7 @@ class TestTaskOperations:
             '["python", "javascript"]',  # coding_language
             3,  # max_attempts
             True,  # is_feedback_shown
+            "question",  # title
         )
 
         mock_scorecard = {
@@ -215,6 +216,7 @@ class TestTaskOperations:
             "max_attempts": 3,
             "is_feedback_shown": True,
             "scorecard": mock_scorecard,
+            "title": "question",
         }
 
         assert result == expected
@@ -459,9 +461,6 @@ class TestTaskOperations:
         mock_conn_instance.__aenter__.return_value = mock_conn_instance
         mock_db_conn.return_value = mock_conn_instance
 
-        mock_task = {"id": 1, "title": "Updated Quiz"}
-        mock_get_task.return_value = mock_task
-
         questions = [
             {
                 "type": "multiple_choice",
@@ -474,8 +473,12 @@ class TestTaskOperations:
                 "max_attempts": 1,
                 "is_feedback_shown": True,
                 "scorecard_id": None,
+                "title": "question",
             }
         ]
+
+        mock_task = {"id": 1, "title": "Updated Quiz", "questions": questions}
+        mock_get_task.return_value = mock_task
 
         result = await update_draft_quiz(1, "Updated Quiz", questions, None)
 
@@ -522,9 +525,6 @@ class TestTaskOperations:
         mock_conn_instance.__aenter__.return_value = mock_conn_instance
         mock_db_conn.return_value = mock_conn_instance
 
-        mock_task = {"id": 1, "title": "Updated Quiz"}
-        mock_get_task.return_value = mock_task
-
         questions = [
             {
                 "id": 1,
@@ -536,6 +536,7 @@ class TestTaskOperations:
                 "coding_languages": None,
                 "context": None,
                 "scorecard_id": None,
+                "title": "question",
             }
         ]
 
@@ -545,6 +546,9 @@ class TestTaskOperations:
                 return questions[0]
 
         mock_questions = [MockQuestion()]
+
+        mock_task = {"id": 1, "title": "Updated Quiz", "questions": questions}
+        mock_get_task.return_value = mock_task
 
         result = await update_published_quiz(1, "Updated Quiz", mock_questions, None)
 
@@ -907,9 +911,6 @@ class TestTaskOperations:
         mock_conn_instance.__aenter__.return_value = mock_conn_instance
         mock_db_conn.return_value = mock_conn_instance
 
-        mock_task = {"id": 1, "title": "Test Quiz"}
-        mock_get_task.return_value = mock_task
-
         # Create a question with a scorecard_id but no existing mapping
         from pydantic import BaseModel
         from typing import List, Optional
@@ -924,6 +925,7 @@ class TestTaskOperations:
             coding_languages: Optional[List] = None
             context: Optional[List] = None
             scorecard_id: Optional[int] = None
+            title: str = "question"
 
             def model_dump(self):
                 return {
@@ -936,11 +938,15 @@ class TestTaskOperations:
                     "coding_languages": self.coding_languages,
                     "context": self.context,
                     "scorecard_id": self.scorecard_id,
+                    "title": self.title,
                 }
 
         # Question with scorecard_id but no existing mapping
         question_with_new_scorecard = MockQuestion(id=1, scorecard_id=456)
         questions = [question_with_new_scorecard]
+
+        mock_task = {"id": 1, "title": "Test Quiz", "questions": [question_with_new_scorecard.model_dump()]}
+        mock_get_task.return_value = mock_task
 
         result = await update_published_quiz(1, "Test Quiz", questions, datetime.now())
 
@@ -1039,6 +1045,7 @@ class TestTaskUtilities:
             '["python"]',  # coding_languages
             3,  # max_attempts
             True,  # is_feedback_shown
+            "question",  # title
         )
 
         result = convert_question_db_to_dict(question_tuple)
@@ -1055,6 +1062,7 @@ class TestTaskUtilities:
             "coding_languages": ["python"],
             "max_attempts": 3,
             "is_feedback_shown": True,
+            "title": "question",
         }
 
         assert result == expected
@@ -1073,6 +1081,7 @@ class TestTaskUtilities:
             None,  # coding_languages
             1,  # max_attempts
             False,  # is_feedback_shown
+            "question",  # title
         )
 
         result = convert_question_db_to_dict(question_tuple)
@@ -1089,6 +1098,7 @@ class TestTaskUtilities:
             "coding_languages": None,
             "max_attempts": 1,
             "is_feedback_shown": False,
+            "title": "question",
         }
 
         assert result == expected
@@ -1454,9 +1464,6 @@ class TestTaskDuplication:
         mock_conn_instance.__aenter__.return_value = mock_conn_instance
         mock_db_conn.return_value = mock_conn_instance
 
-        mock_task = {"id": 1, "title": "Updated Quiz"}
-        mock_get_task.return_value = mock_task
-
         questions = [
             {
                 "type": "multiple_choice",
@@ -1469,12 +1476,17 @@ class TestTaskDuplication:
                 "max_attempts": 1,
                 "is_feedback_shown": True,
                 "scorecard_id": 789,  # This will trigger publishing
+                "title": "question",
             }
         ]
+
+        mock_task = {"id": 1, "title": "Updated Quiz", "questions": questions}
+        mock_get_task.return_value = mock_task
 
         result = await update_draft_quiz(1, "Updated Quiz", questions, None)
 
         assert result == mock_task
+
 
     @patch("src.api.db.task.execute_db_operation")
     async def test_publish_scheduled_tasks_empty(self, mock_execute):
@@ -1586,6 +1598,7 @@ class TestTaskDuplication:
             max_attempts: int = 3
             is_feedback_shown: bool = True
             scorecard_id: Optional[int] = None
+            title: str = "question"
 
             def model_dump(self):
                 return {
@@ -1599,16 +1612,20 @@ class TestTaskDuplication:
                     "max_attempts": self.max_attempts,
                     "is_feedback_shown": self.is_feedback_shown,
                     "scorecard_id": self.scorecard_id,
+                    "title": self.title,
                 }
 
         pydantic_question = MockQuestion()
         questions = [pydantic_question]  # This will trigger the model_dump() call
+        
+        mock_task = {"id": 1, "title": "Test Quiz", "questions": [pydantic_question.model_dump()]}
+        mock_get_task.return_value = mock_task
 
         result = await update_draft_quiz(
             1, "Test Quiz", questions, datetime.now(), TaskStatus.DRAFT
         )
 
-        assert result is not None
+        assert result["questions"][0]["title"] == "question"
 
     @patch("src.api.db.task.does_task_exist")
     @patch("src.api.db.task.get_new_db_connection")
@@ -1642,6 +1659,7 @@ class TestTaskDuplication:
                     "coding_languages": None,
                     "context": None,
                     "scorecard_id": 123,  # Existing scorecard mapping
+                    "title": "question",
                 }
             ],
         }
@@ -1660,6 +1678,7 @@ class TestTaskDuplication:
             coding_languages: Optional[List] = None
             context: Optional[List] = None
             scorecard_id: Optional[int] = None
+            title: str = "question"
 
             def model_dump(self):
                 return {
@@ -1672,6 +1691,7 @@ class TestTaskDuplication:
                     "coding_languages": self.coding_languages,
                     "context": self.context,
                     "scorecard_id": self.scorecard_id,
+                    "title": self.title,
                 }
 
         # Question with new scorecard mapping
@@ -1686,3 +1706,5 @@ class TestTaskDuplication:
         )
 
         assert result is not None
+        assert result["questions"][0]["title"] == "question"
+

@@ -340,11 +340,13 @@ class TestModelDefaults:
             context=None,
             coding_languages=None,
             scorecard_id=None,
+            title="question",
         )
         assert question.answer is None
         assert question.context is None
         assert question.coding_languages is None
         assert question.scorecard_id is None
+        assert question.title == "question"
 
     def test_published_question_with_optional_fields(self):
         """Test PublishedQuestion with optional fields."""
@@ -360,11 +362,13 @@ class TestModelDefaults:
             scorecard_id=None,
             max_attempts=None,
             is_feedback_shown=None,
+            title="question",
         )
         assert question.scorecard_id is None
         assert question.max_attempts is None
         assert question.is_feedback_shown is None
-
+        assert question.title == "question"
+        
     def test_milestone_with_optional_fields(self):
         """Test Milestone with optional fields."""
         milestone = Milestone(
@@ -458,6 +462,7 @@ class TestModelInstantiation:
             response_type=TaskAIResponseType.CHAT,
             context=None,
             coding_languages=None,
+            title="question",
         )
         task = QuizTask(
             id=1,
@@ -471,6 +476,7 @@ class TestModelInstantiation:
         assert task.title == "Quiz Task"
         assert task.type == TaskType.QUIZ
         assert len(task.questions) == 1
+        assert task.questions[0].title == "question"
 
     def test_user_streak(self):
         """Test UserStreak instantiation."""
