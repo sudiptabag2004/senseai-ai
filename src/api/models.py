@@ -315,6 +315,7 @@ class DraftQuestion(BaseModel):
     context: Dict | None
     coding_languages: List[str] | None
     scorecard_id: Optional[int] = None
+    title: str
 
 
 class PublishedQuestion(DraftQuestion):
@@ -541,6 +542,7 @@ class UpdateQuestionRequest(BaseModel):
     context: Dict | None
     response_type: TaskAIResponseType | None
     type: QuestionType | None
+    title: str
 
 
 class UpdatePublishedQuizRequest(BaseModel):

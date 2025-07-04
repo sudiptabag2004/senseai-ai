@@ -191,6 +191,7 @@ class TestGetTasksForCourse:
                         "coding_languages": None,
                         "max_attempts": None,
                         "is_feedback_shown": True,
+                        "title": "question",
                     }
                 ],
             },  # Quiz
@@ -207,6 +208,7 @@ class TestGetTasksForCourse:
         assert len(result["milestones"][0]["tasks"]) == 2
         assert "blocks" in result["milestones"][0]["tasks"][0]
         assert "questions" in result["milestones"][0]["tasks"][1]
+        assert result["milestones"][0]["tasks"][1]["questions"][0]["title"] == "question"
 
     @patch("src.api.public.get_org_id_from_api_key")
     def test_get_tasks_for_course_invalid_api_key(self, mock_get_org_id):

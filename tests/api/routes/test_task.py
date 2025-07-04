@@ -227,6 +227,7 @@ async def test_update_draft_quiz(client, mock_db):
                     "generation_model": None,
                     "max_attempts": 3,
                     "is_feedback_shown": True,
+                    "title": "Test question",
                 }
             ],
             "scheduled_publish_at": "2023-05-01T10:00:00Z",
@@ -259,6 +260,7 @@ async def test_update_draft_quiz(client, mock_db):
                     "scorecard_id": None,
                     "max_attempts": 3,
                     "is_feedback_shown": True,
+                    "title": "Test question",
                 }
             ],
             "type": "quiz",
@@ -278,6 +280,7 @@ async def test_update_draft_quiz(client, mock_db):
         assert result["title"] == expected_response["title"]
         assert result["type"] == expected_response["type"]
         assert result["status"] == expected_response["status"]
+        assert result["questions"][0]["title"] == expected_response["questions"][0]["title"]
 
         # The request is processed by Pydantic models, so we need to check with ANY
         mock_update.assert_called_with(
@@ -328,6 +331,7 @@ async def test_update_published_quiz(client, mock_db):
                     "context": None,
                     "coding_languages": None,
                     "scorecard_id": None,
+                    "title": "Test question",
                 }
             ],
             "scheduled_publish_at": "2023-05-01T10:00:00Z",
@@ -351,6 +355,7 @@ async def test_update_published_quiz(client, mock_db):
         assert result["id"] == expected_response["id"]
         assert result["title"] == expected_response["title"]
         assert result["type"] == expected_response["type"]
+        assert result["questions"][0]["title"] == expected_response["questions"][0]["title"]
 
         # The request is processed by Pydantic models, so we need to check with ANY
         mock_update.assert_called_with(
