@@ -1,0 +1,28 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['D:\\_extra\\hyperverge\\sensai-ai\\src']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [28164] using WatchFiles
+INFO:     Started server process [6068]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+OpenTelemetry Tracing Details
+|  Phoenix Project: sensai-None
+|  Span Processor: BatchSpanProcessor
+|  Collector Endpoint: http://localhost:6006/v1/traces
+|  Transport: HTTP + protobuf
+|  Transport Headers: {}
+|  
+|  Using a default SpanProcessor. `add_span_processor` will overwrite this default.
+|  
+|  `register` has set this TracerProvider as the global OpenTelemetry default.
+|  To disable this behavior, call `register` with `set_global_tracer_provider=False`.
+
+INFO:     127.0.0.1:53207 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53213 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53380 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53381 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53632 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53799 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53800 - "GET /status HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53801 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53803 - "GET /health HTTP/1.1" 200 OK
