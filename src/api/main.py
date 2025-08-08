@@ -32,6 +32,18 @@ from api.settings import settings
 import bugsnag
 from bugsnag.asgi import BugsnagMiddleware
 
+from pydantic import BaseModel
+import sqlite3
+import openai
+
+DB_PATH = "/Users/sudiptabag/Code/hyper/senseai-ai/src/db/db.sqlite"
+
+class PlagiarismEvent(BaseModel):
+    email: str
+    timestamp: str
+    code: str
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -85,6 +97,46 @@ if settings.bugsnag_api_key:
         response = await call_next(request)
         return response
 
+@app.post("/api/plagiarism-event")
+async def save_plagiarism_event(event: PlagiarismEvent):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO plagiarism_events (email, timestamp, code) VALUES (?, ?, ?)",
+        (event.email, event.timestamp, event.code)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+@app.get("/api/plagiarism-events")
+async def get_plagiarism_events(email: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT timestamp, code FROM plagiarism_events WHERE email = ? ORDER BY timestamp DESC",
+        (email,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return {"events": [ {"timestamp": row[0], "code": row[1]} for row in rows ]}
+
+@app.get("/api/all-codes")
+async def get_all_codes(exclude_email: str = None):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if exclude_email:
+        cursor.execute(
+            "SELECT email, code FROM plagiarism_events WHERE email != ? AND code IS NOT NULL",
+            (exclude_email,)
+        )
+    else:
+        cursor.execute(
+            "SELECT email, code FROM plagiarism_events WHERE code IS NOT NULL"
+        )
+    rows = cursor.fetchall()
+    conn.close()
+    return {"codes": [{"email": row[0], "code": row[1]} for row in rows]}
 
 # Add CORS middleware to allow cross-origin requests (for frontend to access backend)
 app.add_middleware(
@@ -122,3 +174,23 @@ app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/")
+async def root():
+    return {"message": "API is running"}
+
+@app.post("/api/similarity-analysis")
+async def similarity_analysis(request: Request):
+    body = await request.json()
+    prompt = body.get("prompt")
+    if not prompt:
+        return {"error": "No prompt provided."}
+    client = openai.OpenAI(api_key="sk-5xjOFi1j09BA54E5z_OW_A")
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300,
+        temperature=0.7
+    )
+    return {"content": response.choices[0].message.content}
+
